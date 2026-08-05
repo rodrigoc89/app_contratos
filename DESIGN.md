@@ -236,7 +236,7 @@ isolation — and the legal rules are the part that actually matters here.
 | Database | PostgreSQL |
 | Frontend | React + Vite, as an installable PWA (**see §5.1**) |
 | PDF | Server-side HTML → PDF |
-| Hosting | DonWeb Cloud Server (**see §10**) |
+| Hosting | HostGator VPS, 2 vCPU / 4 GB (**see §10**) |
 
 ### 5.1 Frontend
 
@@ -433,15 +433,14 @@ layer, not just in the UI.
 
 ---
 
-## 10. Hosting — open risk
+## 10. Hosting
 
-**Verify which DonWeb product IES.NET actually has before building further.**
+**Decided: a HostGator VPS.** Chosen over DonWeb on price.
 
-Shared web hosting (cPanel, aimed at PHP/WordPress) **cannot run NestJS** — a
-Node application needs its own long-lived process and a port to listen on.
-
-This is the one dependency that can stall a deploy for a week if discovered
-late.
+The one hard constraint behind that choice: shared web hosting (cPanel, aimed
+at PHP/WordPress) **cannot run NestJS** — a Node application needs its own
+long-lived process and a port to listen on. Any plan considered here must give
+root access to a real instance.
 
 ### Required capabilities (non-negotiable)
 
@@ -516,43 +515,63 @@ and the requirement drops to **2 vCPU / 2 GB RAM / 40 GB disk**. That is a
 real cost saving, paid for with a hand-built layout that will not match the
 paper original as closely.
 
-### DonWeb catalogue check (August 2026)
+### HostGator catalogue check (August 2026)
 
-DonWeb sells two different things. Only one of them works:
+HostGator's VPS line is fixed tiers, not build-to-order. The entry tier
+already matches §10's sizing:
 
-| Product | Verdict |
-|---|---|
-| **Alojamiento Web** (shared, cPanel, from ~ARS 3.200/mo) | ❌ Cannot run NestJS |
-| **Cloud Server** (from ~ARS 4.621/mo) | ✅ Meets every requirement |
+| Plan | Specs | Verdict |
+|---|---|---|
+| Shared / cPanel hosting | — | ❌ Cannot run NestJS |
+| **Snappy 2000** | 2 vCPU / 4 GB RAM / 100 GB NVMe | ✅ Exactly the target sizing |
+| Snappy 4000 | 4 vCPU / 8 GB RAM / 200 GB NVMe | Headroom, not needed today |
 
-The Cloud Server line is **build-to-order**, not fixed tiers — vCPU, RAM,
-storage and transfer are configured independently, so §10's sizing maps
-directly onto it. Confirmed capabilities:
+**Target: Snappy 2000.** Around USD 35/mo promotional, renewing near USD 54 —
+confirm both numbers at purchase, and confirm which regional HostGator entity
+sells to Argentina, since pricing and support differ between them.
 
-- **Root SSH access** and choice of Linux distribution
-- 100% SSD NVMe storage, 10 GB minimum, up to 480 GB (plus Cloud Volumes)
-- 300 Mb/s dedicated symmetric link, 1 TB monthly transfer
-- Two dedicated public IPs (IPv4 + IPv6)
-- Vertical scaling in minutes without rebuilding the server
-- Weekly automatic backups included; daily backups with 30-copy retention as a
-  paid add-on; 2 free snapshots with 28-day retention
+Confirmed capabilities: full root access, dedicated IP, AMD EPYC hardware,
+free Let's Encrypt TLS.
 
-**Target configuration: 2 vCPU / 4 GB RAM / 80 GB NVMe.**
+**Do not buy the cPanel add-on.** It is roughly USD 12/mo and this deployment
+has no use for it: the server is provisioned over SSH, and cPanel on the box
+would only add an attack surface and a background service competing for the
+RAM that Chromium needs.
 
-The exact price for that combination is not published on the plan page — it
-has to be read from the configurator. The advertised ARS 4.621/mo entry price
-corresponds to the minimum build (1 vCPU / 1 GB), not to this one.
+**Renewal pricing is the real cost.** The promotional rate applies to the
+first term only. Budget against the renewal figure, and check whether a longer
+prepaid term is cheaper than monthly — that is usually where the saving
+against DonWeb actually is or is not.
 
-**Datacentre location is an advantage here.** DonWeb's datacentres are in
-Rosario, Santa Fe. Latency to Santiago del Estero is domestic, and the signed
-contracts — personal data of Argentine customers under Ley 25.326 — never
-leave the country. For an archive of legal documents that is a better default
-than a foreign region.
+### Consequence of a foreign datacentre
 
-**Backup caveat.** The included weekly backup is not sufficient for this
-archive, and even the paid daily option still lives inside DonWeb. Provider-
-level backup protects against disk failure, not against an account problem.
-Keep an independent copy of the PDF archive outside DonWeb entirely.
+HostGator's datacentres are in the United States. Two things follow.
+
+**Latency** is not a problem. Signing is a handful of requests and the office
+panel is low-traffic; a few hundred milliseconds is invisible in this
+workflow.
+
+**Data residency deserves one deliberate decision.** These contracts are the
+personal data of Argentine customers — name, DNI, home address — under Ley
+25.326, whose default rule is that personal data may not be transferred to a
+country without an adequate level of protection, as declared by the AAIP. The
+United States has historically not been on that list; a joint declaration in
+November 2025 announced recognition of the US as adequate, but what governs is
+the formal AAIP instrument, so this should be checked at deploy time rather
+than assumed.
+
+This is not a blocker, and the mitigation is cheap. Ley 25.326 admits the
+transfer with the data subject's consent or under the AAIP's model contractual
+clauses — and this system already has the customer signing a document. **Add a
+clause to the template covering storage and international transfer**, which is
+good practice regardless of where the server ends up. Publish it as a new
+template version (§4), so contracts signed before and after remain
+distinguishable.
+
+**Backup caveat.** Provider-level backup protects against disk failure, not
+against an account problem. Keep an independent copy of the database and the
+PDF archive outside HostGator entirely — and given the residency point above,
+an Argentine location for that copy is the better default.
 
 ### Operational guardrails
 
@@ -598,14 +617,17 @@ Meta business verification starts **now**, in parallel with Phase 1.
 
 ## 13. Open questions
 
-1. Which DonWeb Cloud Server configuration is contracted, and what does
-   2 vCPU / 4 GB / 80 GB actually cost in the configurator? (§10)
+1. Does the contract template need a personal-data clause covering storage and
+   international transfer, now that the server is outside Argentina? (§10)
 
 ### Resolved
 
 - Correcting a signed contract → **annul and re-sign**, never edit (§3).
 - Frontend stack → **React + Vite** as a PWA (§5.1).
-- Hosting → **DonWeb Cloud Server**, not shared hosting (§10).
+- Hosting → **HostGator VPS (Snappy 2000)**, not shared hosting (§10).
+- Typos in the source contract (`ósea`, `El incumpliendo`, …) → **left
+  verbatim** at the client's decision. The template transcribes the paper
+  document as it is.
 - **No photo of the DNI.** The transcribed number is sufficient. The system
   therefore never stores an image of an identity document, which keeps it out
   of the heavier custody obligations that holding scanned ID documents would
