@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { ConflictoDeEstado } from "../../shared/domain/ConflictoDeEstado";
 import { DomainError } from "../../shared/domain/DomainError";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import { Comodatario } from "./Comodatario";
@@ -627,6 +628,175 @@ describe("Contrato", () => {
       expect(firmado().estaVencidoAl(FechaCalendario.desdeIso("2036-08-05"))).toBe(
         true,
       );
+    });
+  });
+
+  /**
+   * The refusals a caller cannot fix by correcting a field: nothing about the
+   * request is wrong, the contract is simply past — or short of — the moment
+   * where the operation means anything. Those are 409, everything else is 400,
+   * and the *type* is what says which.
+   *
+   * The `toThrow(DomainError)` assertions above keep passing by inheritance,
+   * which is precisely why these have to be written separately: without them
+   * nothing in the suite would notice a state guard that threw the base class.
+   */
+  describe("state conflicts are typed, not phrased", () => {
+    const DOCUMENTOS = [
+      {
+        documento: "condiciones_generales" as const,
+        ruta: "contratos/1042/condiciones.pdf",
+        sha256: "a".repeat(64),
+      },
+      {
+        documento: "comodato" as const,
+        ruta: "contratos/1042/comodato.pdf",
+        sha256: "b".repeat(64),
+      },
+    ];
+
+    const sellado = (): Contrato => {
+      const contrato = firmado();
+      contrato.registrarDocumentos(DOCUMENTOS);
+      return contrato;
+    };
+
+    const dadoDeBaja = (): Contrato => {
+      const contrato = firmado();
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
+      return contrato;
+    };
+
+    it("editing the customer of a signed contract", () => {
+      expect(() => firmado().actualizarComodatario(otroComodatario())).toThrow(
+        ConflictoDeEstado,
+      );
+    });
+
+    it("editing the equipment of a signed contract", () => {
+      expect(() => firmado().actualizarEquipos(equipos())).toThrow(
+        ConflictoDeEstado,
+      );
+    });
+
+    it("signing a contract that is already signed", () => {
+      expect(() => firmado().firmar({ ...DATOS_FIRMA, numero: 1043 })).toThrow(
+        ConflictoDeEstado,
+      );
+    });
+
+    it("sealing the documents of a draft", () => {
+      expect(() => borrador().registrarDocumentos(DOCUMENTOS)).toThrow(
+        ConflictoDeEstado,
+      );
+    });
+
+    it("re-sealing documents that were already registered", () => {
+      expect(() => sellado().registrarDocumentos(DOCUMENTOS)).toThrow(
+        ConflictoDeEstado,
+      );
+    });
+
+    it("terminating a contract that is not in force", () => {
+      expect(() =>
+        borrador().darDeBaja({ motivo: "Deuda", fecha: FIRMA }),
+      ).toThrow(ConflictoDeEstado);
+    });
+
+    it("annulling a contract that is not in force", () => {
+      expect(() =>
+        dadoDeBaja().anular({ motivo: "Error", fecha: FIRMA }),
+      ).toThrow(ConflictoDeEstado);
+    });
+
+    it("recording a return for a contract that was never terminated", () => {
+      expect(() => firmado().registrarRestitucion({ fecha: FIRMA })).toThrow(
+        ConflictoDeEstado,
+      );
+    });
+
+    it("recording the return of the equipment twice", () => {
+      const contrato = dadoDeBaja();
+      contrato.registrarRestitucion({ fecha: FIRMA });
+
+      expect(() => contrato.registrarRestitucion({ fecha: FIRMA })).toThrow(
+        ConflictoDeEstado,
+      );
+    });
+
+    /**
+     * The other half of the contract. A bad field is a bad field no matter what
+     * state the contract is in, and answering 409 to it would tell the
+     * technician to reload a screen instead of fixing what they typed.
+     */
+    describe("input errors stay plain rule violations", () => {
+      const noEsConflicto = (operacion: () => unknown): void => {
+        expect(operacion).toThrow(DomainError);
+        expect(operacion).not.toThrow(ConflictoDeEstado);
+      };
+
+      it("a contract number the server would never assign", () => {
+        noEsConflicto(() => borrador().firmar({ ...DATOS_FIRMA, numero: 0 }));
+      });
+
+      it("a missing signature", () => {
+        noEsConflicto(() =>
+          borrador().firmar({ ...DATOS_FIRMA, firmas: [firmaDe("comodato")] }),
+        );
+      });
+
+      it("a document path that escapes the store", () => {
+        noEsConflicto(() =>
+          firmado().registrarDocumentos([
+            DOCUMENTOS[0] as (typeof DOCUMENTOS)[0],
+            {
+              ...(DOCUMENTOS[1] as (typeof DOCUMENTOS)[1]),
+              ruta: "../../etc/passwd",
+            },
+          ]),
+        );
+      });
+
+      it("a hash that is not a SHA-256", () => {
+        noEsConflicto(() =>
+          firmado().registrarDocumentos([
+            DOCUMENTOS[0] as (typeof DOCUMENTOS)[0],
+            { ...(DOCUMENTOS[1] as (typeof DOCUMENTOS)[1]), sha256: "corto" },
+          ]),
+        );
+      });
+
+      it("a termination with no reason", () => {
+        noEsConflicto(() => firmado().darDeBaja({ motivo: "  ", fecha: FIRMA }));
+      });
+
+      /**
+       * The closest call in the whole taxonomy: the date is rejected *because
+       * of* stored state, so it looks like a conflict. It is not — the contract
+       * is in exactly the right state for a termination, one field of the
+       * request is wrong, and sending a different date fixes it. That is 400.
+       */
+      it("a termination dated before the signature", () => {
+        noEsConflicto(() =>
+          firmado().darDeBaja({
+            motivo: "Deuda",
+            fecha: FechaCalendario.desdeIso("2026-08-03"),
+          }),
+        );
+      });
+
+      it("a restitution dated before the termination", () => {
+        noEsConflicto(() => {
+          const contrato = firmado();
+          contrato.darDeBaja({
+            motivo: "Deuda",
+            fecha: FechaCalendario.desdeIso("2027-03-10"),
+          });
+          contrato.registrarRestitucion({
+            fecha: FechaCalendario.desdeIso("2027-03-09"),
+          });
+        });
+      });
     });
   });
 });

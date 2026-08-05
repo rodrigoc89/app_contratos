@@ -1,5 +1,6 @@
-import { DomainError } from "../../shared/domain/DomainError";
+import { ConflictoDeEstado } from "../../shared/domain/ConflictoDeEstado";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
+import { RecursoNoEncontrado } from "../../shared/domain/RecursoNoEncontrado";
 import type { ContextoDeFirma } from "../domain/ContextoDeFirma";
 import { Contrato } from "../domain/Contrato";
 import type { FirmaCapturada } from "../domain/FirmaCapturada";
@@ -43,13 +44,24 @@ export class FirmarContrato {
   async ejecutar(comando: ComandoFirmarContrato): Promise<Contrato> {
     const contrato = await this.contratos.porId(comando.contratoId);
     if (contrato === null) {
-      throw new DomainError(
+      throw new RecursoNoEncontrado(
         `No existe el contrato ${comando.contratoId}.`,
       );
     }
 
+    // Retry safety. The tablet is on a field connection, so a request that
+    // times out *after* this method already sealed the contract will be sent
+    // again. `ConflictoDeEstado` — not a plain `DomainError` — is what makes
+    // that second attempt a 409: retrying it will fail forever, there is no
+    // field to correct, and the technician has to reload the screen and see
+    // that the contract is already signed.
+    //
+    // The aggregate's own `firmar()` raises the same type. This guard is here
+    // so the refusal costs no contract number and no PDF render, and it has
+    // to speak the same language or the status would depend on which of the
+    // two noticed first.
     if (contrato.estaFirmado) {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         `El contrato ${comando.contratoId} no se puede firmar porque ya está ${contrato.estado}.`,
       );
     }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { ConflictoDeEstado } from "../../shared/domain/ConflictoDeEstado";
 import { DomainError } from "../../shared/domain/DomainError";
+import { EstadoAlmacenadoInconsistente } from "../../shared/domain/EstadoAlmacenadoInconsistente";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import { Comodatario } from "./Comodatario";
 import { ContextoDeFirma } from "./ContextoDeFirma";
@@ -254,6 +256,46 @@ describe("Contrato.rehidratar", () => {
       expect(() =>
         Contrato.rehidratar({ ...vigentePersistido(), numero: null }),
       ).toThrow(/inconsistente|almacenad/i);
+    });
+
+    /**
+     * Corrupt stored state is not something a caller did and not something a
+     * caller can undo, so it must not be typed as either. Nobody sent a bad
+     * field (400) and no operation arrived at the wrong moment (409) — the row
+     * itself describes a contract that could never have been built. It carries
+     * its own type so the HTTP layer can answer 500 and log it in full.
+     */
+    it.each([
+      ["a signed contract with no number", { numero: null }],
+      ["a signed contract with no term", { plazo: null }],
+      ["a signed contract with no signature date", { fechaFirma: null }],
+      ["a signed contract with no template version", { plantillaVersionId: null }],
+      ["a signed contract with no signatory", { firmanteId: null }],
+      ["a signed contract with no signing context", { contexto: null }],
+      ["a signed contract missing a signature", { firmas: [firmaDe("comodato")] }],
+    ] as const)("types %s as corrupt storage, not as bad input", (_, parche) => {
+      const rehidratar = (): Contrato =>
+        Contrato.rehidratar({ ...vigentePersistido(), ...parche });
+
+      expect(rehidratar).toThrow(EstadoAlmacenadoInconsistente);
+      expect(rehidratar).not.toThrow(ConflictoDeEstado);
+    });
+
+    it("types a corrupt draft as corrupt storage too", () => {
+      expect(() =>
+        Contrato.rehidratar({ ...borradorPersistido(), numero: 1042 }),
+      ).toThrow(EstadoAlmacenadoInconsistente);
+    });
+
+    it("types a terminated contract with no reason as corrupt storage", () => {
+      expect(() =>
+        Contrato.rehidratar({
+          ...vigentePersistido(),
+          estado: "dado_de_baja",
+          motivoBaja: null,
+          fechaBaja: FIRMA,
+        }),
+      ).toThrow(EstadoAlmacenadoInconsistente);
     });
   });
 

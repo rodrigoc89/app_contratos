@@ -1,4 +1,6 @@
+import { ConflictoDeEstado } from "../../shared/domain/ConflictoDeEstado";
 import { DomainError } from "../../shared/domain/DomainError";
+import { EstadoAlmacenadoInconsistente } from "../../shared/domain/EstadoAlmacenadoInconsistente";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import { textoRequerido } from "../../shared/domain/texto";
 import {
@@ -196,8 +198,13 @@ export class Contrato {
   }
 
   private static validarEstadoPersistido(estado: EstadoPersistido): void {
+    // Not a `DomainError` and not a `ConflictoDeEstado`: nobody sent anything
+    // wrong and no operation arrived at the wrong moment — the stored row
+    // describes a contract this class could never have produced. Answering the
+    // caller 400 or 409 would ask a technician to fix a broken row. See
+    // `EstadoAlmacenadoInconsistente`.
     const inconsistente = (detalle: string): never => {
-      throw new DomainError(
+      throw new EstadoAlmacenadoInconsistente(
         `El contrato almacenado ${estado.id} es inconsistente: ${detalle}.`,
       );
     };
@@ -275,7 +282,7 @@ export class Contrato {
 
   private exigirBorrador(): void {
     if (this._estado !== "borrador") {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         "Un contrato firmado no se modifica: si tiene un dato mal cargado, se anula y se firma uno nuevo.",
       );
     }
@@ -285,7 +292,7 @@ export class Contrato {
 
   firmar(datos: DatosFirma): void {
     if (this._estado !== "borrador") {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         `El contrato no se puede firmar porque ya está ${this._estado}.`,
       );
     }
@@ -332,12 +339,12 @@ export class Contrato {
    */
   registrarDocumentos(documentos: readonly DocumentoContrato[]): void {
     if (!this.estaFirmado) {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         "No se pueden registrar documentos de un borrador: todavía no hay contrato firmado.",
       );
     }
     if (this._documentos.length > 0) {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         "Los documentos de este contrato ya fueron registrados: volver a sellarlo reemplazaría la evidencia.",
       );
     }
@@ -403,7 +410,7 @@ export class Contrato {
 
   darDeBaja(datos: DatosBaja): void {
     if (this._estado !== "vigente") {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         `Solo se puede dar de baja un contrato vigente; este está ${this._estado}.`,
       );
     }
@@ -419,7 +426,7 @@ export class Contrato {
 
   anular(datos: DatosAnulacion): void {
     if (this._estado !== "vigente") {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         `Solo se puede anular un contrato vigente; este está ${this._estado}.`,
       );
     }
@@ -441,15 +448,18 @@ export class Contrato {
    */
   registrarRestitucion(datos: DatosRestitucion): void {
     if (this._estado !== "dado_de_baja") {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         `Solo se registra la restitución de un contrato dado de baja; este está ${this._estado}.`,
       );
     }
     if (this._fechaRestitucion !== null) {
-      throw new DomainError(
+      throw new ConflictoDeEstado(
         "La restitución de los equipos ya fue registrada para este contrato.",
       );
     }
+    // Not a conflict: the contract is in exactly the right state to take a
+    // restitution, one field of the request is simply wrong. A different date
+    // works, which is what makes this a 400.
     if (this._fechaBaja !== null && datos.fecha.esAnteriorA(this._fechaBaja)) {
       throw new DomainError(
         "La fecha de restitución no puede ser anterior a la baja del contrato.",

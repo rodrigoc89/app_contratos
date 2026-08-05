@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { FirmanteComodante } from "../../firmantes/domain/FirmanteComodante";
 import { PlantillaContrato } from "../../plantillas/domain/PlantillaContrato";
+import { ConflictoDeEstado } from "../../shared/domain/ConflictoDeEstado";
 import { DomainError } from "../../shared/domain/DomainError";
+import { RecursoNoEncontrado } from "../../shared/domain/RecursoNoEncontrado";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import { Comodatario } from "../domain/Comodatario";
 import { ContextoDeFirma } from "../domain/ContextoDeFirma";
@@ -226,11 +228,54 @@ describe("FirmarContrato", () => {
       await expect(ejecutar()).rejects.toThrow(DomainError);
     });
 
+    /**
+     * A contract id that names nothing is not a bad field: 404, so the tablet
+     * shows "that contract no longer exists" instead of asking the technician
+     * to correct a form that is already correct.
+     */
+    it("reports a contract that does not exist as not found", async () => {
+      await expect(ejecutar()).rejects.toThrow(RecursoNoEncontrado);
+    });
+
     it("fails when the contract was already signed", async () => {
       contratos.agregar(nuevoBorrador());
       await ejecutar();
 
       await expect(ejecutar()).rejects.toThrow(DomainError);
+    });
+
+    /**
+     * Retry safety. The tablet is on a field connection: a `POST /firmar`
+     * that times out *after* the server sealed the contract will be sent
+     * again, and the second attempt has to be refused as a state conflict —
+     * 409, "someone already did this" — not as bad input the technician could
+     * fix by retyping.
+     *
+     * `ConflictoDeEstado` is what carries that to the HTTP layer, and the
+     * aggregate already throws it from `firmar()`. This use case guards
+     * earlier, before spending a contract number and a PDF render on a
+     * request it is going to refuse, so it has to speak the same language.
+     */
+    it("refuses a retried signature as a state conflict, not as bad input", async () => {
+      contratos.agregar(nuevoBorrador());
+      await ejecutar();
+
+      await expect(ejecutar()).rejects.toThrow(ConflictoDeEstado);
+    });
+
+    it("neither double-signs nor burns a second number on a retry", async () => {
+      contratos.agregar(nuevoBorrador());
+      const primero = await ejecutar();
+
+      await expect(ejecutar()).rejects.toThrow(ConflictoDeEstado);
+
+      const almacenado = await contratos.porId(ID);
+      expect(almacenado?.numero).toBe(primero.numero);
+      expect(almacenado?.firmas).toHaveLength(2);
+      expect(almacenado?.documentos).toHaveLength(2);
+      // One save, and the sequence never advanced a second time.
+      expect(contratos.guardados).toHaveLength(1);
+      expect(await contratos.siguienteNumero()).toBe(1043);
     });
 
     it("fails when a signature is missing", async () => {
