@@ -7,15 +7,15 @@ import { defineConfig } from "vitest/config";
  * this setting has nothing to conflict with and cannot leak into either of
  * them.
  *
- * `passWithNoTests` is on because this PR answers D1 (does Vite consume
- * `@contratos/esquemas` as raw TypeScript?) via a real `vite build` and
- * `tsc --noEmit`, not a unit test — the first behavioural spec in this
- * package lands with the app shell in PR2.
+ * `passWithNoTests` stays on: it protected PR1 (verified by `vite build` and
+ * `tsc --noEmit` instead of a unit test) and costs nothing now that real
+ * specs exist — it only matters again if a future slice adds no spec files.
  */
 export default defineConfig({
   test: {
     include: ["src/**/*.spec.ts", "src/**/*.spec.tsx"],
     environment: "jsdom",
+    setupFiles: ["./src/tests/configuracionPruebas.ts"],
     passWithNoTests: true,
   },
 });
