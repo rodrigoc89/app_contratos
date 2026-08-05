@@ -454,6 +454,28 @@ late.
 - Automated, offsite, **restore-tested** backups of the database *and* the PDF
   archive
 
+### Fonts must be installed before the first render
+
+A bare Ubuntu Server has **no TrueType fonts at all**. Chromium then draws
+every character as a `□` — the classic tofu box — and the contract renders as
+a page of squares that still hashes fine and still gets signed.
+
+The deploy must run, before the first contract is ever rendered:
+
+```
+apt-get install -y fonts-dejavu-core fonts-liberation
+fc-cache -f -v
+```
+
+Spanish accents and `ñ` are what break first, so a smoke test after deploy
+should render a contract and confirm the text extracts back correctly rather
+than trusting that it looks right.
+
+Chromium also needs `--no-sandbox --disable-setuid-sandbox` to launch as a
+non-root user. That is acceptable here because the browser only ever renders
+HTML this system generated itself — a stored template plus server-controlled
+values — and never navigates to untrusted or network content.
+
 ### Sizing
 
 Load is genuinely low — a handful of installations per day plus occasional
