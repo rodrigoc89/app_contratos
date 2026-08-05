@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DatosSesion } from "@contratos/esquemas";
+import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
 
+import { guardarBorradorLocal, leerBorradorLocal } from "../../almacenamiento/borradorLocal";
 import { borrarTokenDeRefrescoGuardado, obtenerTokenDeRefrescoGuardado } from "./almacenSesion";
 import { establecerSesion, limpiarSesion, obtenerSesionActual } from "./estadoSesion";
 import { cerrarSesion, iniciarSesion } from "./sesion";
@@ -103,5 +104,30 @@ describe("cerrarSesion (scenario 9)", () => {
 
     expect(fetchSimulado).not.toHaveBeenCalled();
     expect(obtenerSesionActual()).toBeNull();
+  });
+
+  it("also clears the local borrador draft — DESIGN.md D8, a customer's name/DNI/address must not outlive the session on a shared tablet", async () => {
+    const valoresDePrueba: DatosCrearContrato = {
+      comodatario: {
+        nombreCompleto: "Ana López",
+        dni: "30123456",
+        domicilioCalle: "San Martín 123",
+        ciudad: "Santiago del Estero",
+        whatsapp: "385 4123456",
+      },
+      equipos: {
+        antenaModelo: "Ubiquiti LiteBeam",
+        antenaMac: "AC:8B:A9:12:34:56",
+        poe: true,
+        canoMetros: 7.5,
+      },
+    };
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: valoresDePrueba });
+    establecerSesion(sesionFalsa("expirada"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+
+    await cerrarSesion();
+
+    expect(leerBorradorLocal()).toBeNull();
   });
 });
