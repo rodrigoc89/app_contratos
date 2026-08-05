@@ -1,0 +1,282 @@
+// Prisma schema for the comodato contracts persistence layer.
+//
+// This models the domain described in DESIGN.md and apps/api/src, but owns no
+// domain logic itself: it is the storage shape the (not-yet-written)
+// repository implementations will map to and from the domain classes in
+// apps/api/src/contratos/domain, apps/api/src/plantillas/domain and
+// apps/api/src/firmantes/domain.
+//
+// Naming: snake_case in Postgres (tables and columns), camelCase in the
+// generated Prisma client, via @@map / @map.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- plantillas
+
+/// An immutable, versioned row of contract text (plantillas/domain/PlantillaContrato).
+/// Never edited — a new template creates a new row. Signed contracts keep a
+/// foreign key to the exact version they were rendered from, so historical
+/// contracts keep rendering the prices that were in force when they were signed.
+model PlantillaContrato {
+  id            String   @id @default(uuid())
+  version       String   @unique
+  contenidoHtml String   @map("contenido_html")
+  /// Calendar date the version takes effect. A wall-calendar date, never a
+  /// timestamp: DESIGN.md picks the version in force by comparing this against
+  /// the contract's signing date, both calendar dates.
+  vigenteDesde  DateTime @map("vigente_desde") @db.Date
+  /// Optional integrity checksum of contenidoHtml (DESIGN.md §4). Nullable
+  /// because computing and filling it is a repository/mapper concern, out of
+  /// scope here.
+  checksum      String?
+  creadoEn      DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  contratos Contrato[]
+
+  @@map("plantillas_contrato")
+}
+
+// ---------------------------------------------------------------- firmantes
+
+/// The comodante signatory with its pre-loaded signature image
+/// (firmantes/domain/FirmanteComodante). Versioned like the template and
+/// never edited in place — contracts reference the exact version stamped on
+/// them by foreign key.
+model FirmanteComodante {
+  id             String   @id @default(uuid())
+  version        String   @unique
+  nombreCompleto String   @map("nombre_completo")
+  dni            String
+  /// Base64 PNG of a real person's handwritten signature. DESIGN.md §4:
+  /// never expose it through the public frontend or public-read storage —
+  /// it is read server-side only, during PDF generation.
+  imagenFirmaPng String   @map("imagen_firma_png")
+  /// Exactly one signatory is active at a time; enforced by the partial
+  /// unique index below rather than by application discipline.
+  activo         Boolean  @default(false)
+  creadoEn       DateTime @default(now()) @map("creado_en") @db.Timestamptz
+
+  contratos Contrato[]
+
+  /// Only enforces "at most one row with activo = true" through a plain
+  /// index here; the partial *unique* constraint that actually enforces it
+  /// is added as raw SQL in the migration (see migration.sql) because a
+  /// filtered unique index cannot be expressed reliably in this Prisma
+  /// version's schema language.
+  @@index([activo], map: "idx_firmantes_comodante_activo")
+  @@map("firmantes_comodante")
+}
+
+// ----------------------------------------------------------------- contrato
+
+/// Contract lifecycle state (Contrato.ts EstadoContrato). Postgres enum, not
+/// a free-text column, so an invalid state can't be written directly.
+enum EstadoContrato {
+  borrador
+  vigente
+  dado_de_baja
+  anulado
+
+  @@map("estado_contrato")
+}
+
+/// The two documents a customer signs (FirmaCapturada.ts / Contrato.ts
+/// TipoDocumentoFirmado). The customer signs both, on separate signature
+/// blocks — DESIGN.md §1 — so this is not a free-text label.
+enum TipoDocumentoFirmado {
+  condiciones_generales
+  comodato
+
+  @@map("tipo_documento_firmado")
+}
+
+/// Append-only event types (Contrato.ts TipoEventoContrato).
+enum TipoEventoContrato {
+  creado
+  firmado
+  dado_de_baja
+  anulado
+  equipos_restituidos
+
+  @@map("tipo_evento_contrato")
+}
+
+/// The comodato agreement — aggregate root (contratos/domain/Contrato.ts).
+///
+/// Once `firmar()` seals it, the domain refuses further edits to the fields
+/// below; this table mirrors that split: the "borrador" columns are always
+/// present, the "firma" columns are null until signed, and the immutable
+/// evidence (signatures, rendered documents, events) lives in child tables
+/// owned by the contract, never inlined here.
+model Contrato {
+  id String @id @default(uuid())
+
+  /// Allocated from the `contrato_numero_seq` Postgres sequence (see the
+  /// migration) by the repository's `siguienteNumero()`, never by a column
+  /// default — it must stay null for every draft and only ever be assigned
+  /// once, at signing.
+  numero Int? @unique
+
+  estado EstadoContrato @default(borrador)
+
+  // ---- comodatario (Comodatario.ts) — present from the draft onward -------
+  comodatarioNombreCompleto String @map("comodatario_nombre_completo")
+  /// Normalised digits only (Dni.ts). Indexed: the office panel's primary
+  /// customer lookup.
+  comodatarioDni            String @map("comodatario_dni")
+  comodatarioDomicilioCalle String @map("comodatario_domicilio_calle")
+  comodatarioCiudad         String @map("comodatario_ciudad")
+  /// E.164 form (NumeroWhatsapp.ts `valor`); its own parsing recovers the
+  /// national number, so no other shape needs to be stored. `provincia` is a
+  /// fixed constant on the domain class (Comodatario.PROVINCIA), not an
+  /// input, so it is not persisted.
+  comodatarioWhatsapp       String @map("comodatario_whatsapp")
+
+  // ---- equipos (Equipos.ts) — present from the draft onward ---------------
+  equipoAntenaModelo String  @map("equipo_antena_modelo")
+  /// Normalised "AA:BB:CC:DD:EE:FF" form (DireccionMac.ts).
+  equipoAntenaMac    String  @map("equipo_antena_mac")
+  equipoPoe          Boolean @map("equipo_poe")
+  /// MetrosCano.ts allows up to two decimals; Decimal keeps that exact,
+  /// unlike a float column.
+  equipoCanoMetros   Decimal @map("equipo_cano_metros") @db.Decimal(5, 2)
+
+  // ---- plazo (Plazo.ts) — null until signed, derived at signing time ------
+  plazoMeses            Int?      @map("plazo_meses")
+  /// Calendar date, equal to fechaFirma below (Plazo.crear is called with the
+  /// same signing date) — kept as its own column because Plazo exposes its
+  /// own `fechaInicio` getter distinct from Contrato.fechaFirma.
+  plazoFechaInicio      DateTime? @map("plazo_fecha_inicio") @db.Date
+  /// Derived = fechaInicio + plazoMeses, never typed directly (DESIGN.md §3):
+  /// governs equipment restitution, so a typo here is a legal problem.
+  plazoFechaVencimiento DateTime? @map("plazo_fecha_vencimiento") @db.Date
+
+  // ---- signing (Contrato.firmar) — null until signed -----------------------
+  /// Calendar date the customer signed, read from the server clock in the
+  /// contract's timezone (FirmarContrato.ts ZONA_HORARIA_CONTRATO) — a wall
+  /// date, not an instant.
+  fechaFirma         DateTime? @map("fecha_firma") @db.Date
+  plantillaVersionId String?   @map("plantilla_version_id")
+  firmanteId         String?   @map("firmante_id")
+
+  // ---- contexto de firma (ContextoDeFirma.ts) — null until signed ---------
+  contextoTecnicoId     String?   @map("contexto_tecnico_id")
+  contextoDispositivoId String?   @map("contexto_dispositivo_id")
+  /// The one field in this whole contract that IS a real instant, not a
+  /// calendar date: the exact moment the server captured the signature.
+  contextoCapturadoEn   DateTime? @map("contexto_capturado_en") @db.Timestamptz
+  contextoIp            String?   @map("contexto_ip")
+  contextoUserAgent     String?   @map("contexto_user_agent")
+  contextoGeoLatitud    Float?    @map("contexto_geo_latitud")
+  contextoGeoLongitud   Float?    @map("contexto_geo_longitud")
+
+  // ---- post-signature life --------------------------------------------------
+  motivoBaja       String?   @map("motivo_baja")
+  fechaBaja        DateTime? @map("fecha_baja") @db.Date
+  motivoAnulacion  String?   @map("motivo_anulacion")
+  fechaAnulacion   DateTime? @map("fecha_anulacion") @db.Date
+  /// Null while the equipment has not been recovered. Combined with `estado
+  /// = dado_de_baja`, this is the "unreturned equipment" report DESIGN.md §3
+  /// calls out — indexed below as a partial index for exactly that query.
+  fechaRestitucion DateTime? @map("fecha_restitucion") @db.Date
+
+  // ---- annulment chain (DESIGN.md §3) ---------------------------------------
+  /// The id of the contract this one replaces, when it exists because the
+  /// original was annulled for bad data. Nullable: most contracts replace
+  /// nothing.
+  reemplazaA String? @map("reemplaza_a")
+
+  creadoEn      DateTime @default(now()) @map("creado_en") @db.Timestamptz
+  actualizadoEn DateTime @updatedAt @map("actualizado_en") @db.Timestamptz
+
+  plantilla                PlantillaContrato? @relation(fields: [plantillaVersionId], references: [id])
+  firmante                 FirmanteComodante? @relation(fields: [firmanteId], references: [id])
+  contratoReemplazado      Contrato?          @relation("CadenaDeAnulacion", fields: [reemplazaA], references: [id])
+  contratosQueLoReemplazan Contrato[]         @relation("CadenaDeAnulacion")
+
+  firmas     FirmaCapturada[]
+  documentos DocumentoContrato[]
+  eventos    EventoContrato[]
+
+  @@index([comodatarioDni], map: "idx_contratos_comodatario_dni")
+  @@index([estado], map: "idx_contratos_estado")
+  /// Covers the outstanding-equipment report (estado = dado_de_baja AND
+  /// fecha_restitucion IS NULL). A true partial index restricted to exactly
+  /// that predicate is added as raw SQL in the migration for the office
+  /// panel's actual query shape; this composite index is the schema-level
+  /// fallback so `prisma migrate diff`/introspection stays accurate.
+  @@index([estado, fechaRestitucion], map: "idx_contratos_estado_restitucion")
+  @@map("contratos")
+}
+
+// ------------------------------------------------------------------ firmas
+
+/// A captured signature (FirmaCapturada.ts) — immutable evidence owned by the
+/// contract. Exactly one per document type, enforced by the unique index.
+model FirmaCapturada {
+  id         String               @id @default(uuid())
+  contratoId String               @map("contrato_id")
+  documento  TipoDocumentoFirmado
+  imagenPng  String               @map("imagen_png")
+  /// Raw stroke data — ordered points with timestamps (PuntoFirma[][]) — the
+  /// forensic evidence a pasted image cannot fake. Stored as jsonb so it can
+  /// be queried/inspected without deserialising the whole blob client-side.
+  trazos     Json                 @db.JsonB
+  creadoEn   DateTime             @default(now()) @map("creado_en") @db.Timestamptz
+
+  contrato Contrato @relation(fields: [contratoId], references: [id])
+
+  @@unique([contratoId, documento])
+  @@map("contrato_firmas")
+}
+
+// -------------------------------------------------------------- documentos
+
+/// A rendered, hashed PDF (Contrato.ts DocumentoContrato) — immutable
+/// evidence owned by the contract. Exactly one per document type.
+model DocumentoContrato {
+  id         String               @id @default(uuid())
+  contratoId String               @map("contrato_id")
+  documento  TipoDocumentoFirmado
+  ruta       String
+  /// Lowercase hex SHA-256 of the final PDF, computed server-side
+  /// (Contrato.ts SHA256 regex, DESIGN.md §6 integrity section).
+  sha256     String               @db.VarChar(64)
+  creadoEn   DateTime             @default(now()) @map("creado_en") @db.Timestamptz
+
+  contrato Contrato @relation(fields: [contratoId], references: [id])
+
+  @@unique([contratoId, documento])
+  @@map("contrato_documentos")
+}
+
+// ----------------------------------------------------------------- eventos
+
+/// Append-only event log (Contrato.ts EventoContrato / TipoEventoContrato).
+/// The contract's current state is a projection of these events; the table
+/// itself never UPDATEs or DELETEs a row once written (enforced by a trigger
+/// added in the migration, since Prisma's schema language cannot express
+/// that constraint).
+model EventoContrato {
+  id           String             @id @default(uuid())
+  contratoId   String             @map("contrato_id")
+  tipo         TipoEventoContrato
+  /// The event's business calendar date (e.g. the baja date), not when the
+  /// row was inserted — null for events with no associated date.
+  fecha        DateTime?          @db.Date
+  detalle      String?
+  /// When this row was appended — a real instant, unlike `fecha` above.
+  registradoEn DateTime           @default(now()) @map("registrado_en") @db.Timestamptz
+
+  contrato Contrato @relation(fields: [contratoId], references: [id])
+
+  @@index([contratoId], map: "idx_contrato_eventos_contrato_id")
+  @@map("contrato_eventos")
+}
