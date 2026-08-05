@@ -260,6 +260,91 @@ model DocumentoContrato {
   @@map("contrato_documentos")
 }
 
+// ---------------------------------------------------------------- identidad
+
+/// The three roles of DESIGN.md §9. A Postgres enum, not free text, so a
+/// typo in a seed script cannot invent a fourth role that no guard checks.
+enum RolUsuario {
+  tecnico
+  oficina
+  admin
+
+  @@map("rol_usuario")
+}
+
+/// Why a refresh token stopped working (identidad/domain/TokenDeRefresco).
+/// `rotacion` is the ordinary case; the other three are what an operator
+/// actually reads when investigating a lost tablet.
+enum MotivoRevocacionToken {
+  rotacion
+  cierre_de_sesion
+  reuso_detectado
+  usuario_inactivo
+
+  @@map("motivo_revocacion_token")
+}
+
+/// Someone who can log in (identidad/domain/Usuario).
+model Usuario {
+  id String @id @default(uuid())
+
+  /// Already normalised to lowercase by the domain before it gets here.
+  nombreUsuario  String     @map("nombre_usuario")
+  nombreCompleto String     @map("nombre_completo")
+  rol            RolUsuario
+  /// A deactivated user cannot log in and cannot refresh — checked on both
+  /// paths, so revoking someone in the field takes effect within one access
+  /// token lifetime rather than at the end of the refresh window.
+  activo         Boolean    @default(true)
+  /// argon2id digest. Never selected into any response: the domain entity
+  /// refuses to serialise it (Usuario.toJSON).
+  hashContrasena String     @map("hash_contrasena")
+
+  creadoEn      DateTime @default(now()) @map("creado_en") @db.Timestamptz
+  actualizadoEn DateTime @updatedAt @map("actualizado_en") @db.Timestamptz
+
+  tokensDeRefresco TokenDeRefresco[]
+
+  @@unique([nombreUsuario], map: "usuarios_nombre_usuario_key")
+  @@index([rol], map: "idx_usuarios_rol")
+  @@map("usuarios")
+}
+
+/// One long-lived refresh token, stored as a digest so it can be revoked
+/// (identidad/domain/TokenDeRefresco).
+///
+/// The plaintext token is never written here. That is the whole point: these
+/// tablets leave the building and get lost, and revoking one device has to be
+/// something the office can do without rotating a global secret and signing
+/// out every technician in the province.
+model TokenDeRefresco {
+  id        String @id @default(uuid())
+  usuarioId String @map("usuario_id")
+  /// Every token descended from one login shares a family. Rotation replaces
+  /// a link; revoking the family kills the whole device.
+  familiaId String @map("familia_id")
+  /// SHA-256 of the token, hex. A fast digest rather than argon2 on purpose:
+  /// the token is 256 bits of CSPRNG output, so there is nothing to brute
+  /// force, and the lookup has to be an indexed equality check.
+  tokenHash String @map("token_hash") @db.VarChar(64)
+
+  expiraEn DateTime  @map("expira_en") @db.Timestamptz
+  creadoEn DateTime  @default(now()) @map("creado_en") @db.Timestamptz
+
+  revocadoEn       DateTime?              @map("revocado_en") @db.Timestamptz
+  motivoRevocacion MotivoRevocacionToken? @map("motivo_revocacion")
+  /// The successor that replaced this token when it was rotated. What makes
+  /// "an old link in the chain" distinguishable from "a token we never issued".
+  reemplazadoPor   String?                @map("reemplazado_por")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash], map: "usuario_tokens_refresco_token_hash_key")
+  @@index([familiaId], map: "idx_tokens_refresco_familia")
+  @@index([usuarioId], map: "idx_tokens_refresco_usuario")
+  @@map("usuario_tokens_refresco")
+}
+
 // ----------------------------------------------------------------- eventos
 
 /// Append-only event log (Contrato.ts EventoContrato / TipoEventoContrato).

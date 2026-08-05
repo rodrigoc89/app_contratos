@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve, sep } from "node:path";
 
 import type { AlmacenDeDocumentos } from "../application/ports/AlmacenDeDocumentos";
@@ -29,10 +29,25 @@ export class AlmacenDeDocumentosEnDisco implements AlmacenDeDocumentos {
     await writeFile(destino, contenido);
   }
 
+  /**
+   * The containment check runs here too, before the read.
+   *
+   * It is the same rule as `guardar`, applied to the method that a URL can
+   * reach. The controller never builds this path from a request — it reads it
+   * off the aggregate, which validated it when the contract was sealed — so
+   * this check should be unreachable. Keeping it means a future caller that
+   * forgets gets an error instead of a copy of `/etc/passwd`.
+   */
+  async leer(ruta: string): Promise<Uint8Array> {
+    const origen = this.resolverDentroDeLaRaiz(ruta);
+
+    return new Uint8Array(await readFile(origen));
+  }
+
   private resolverDentroDeLaRaiz(ruta: string): string {
     if (isAbsolute(ruta)) {
       throw new Error(
-        `No se puede guardar "${ruta}": tiene que ser una ruta relativa al almacén de documentos.`,
+        `No se puede acceder a "${ruta}": tiene que ser una ruta relativa al almacén de documentos.`,
       );
     }
 
@@ -43,7 +58,7 @@ export class AlmacenDeDocumentosEnDisco implements AlmacenDeDocumentos {
 
     if (destino !== this.raiz && !destino.startsWith(raizConSeparador)) {
       throw new Error(
-        `No se puede guardar "${ruta}": queda fuera del almacén de documentos.`,
+        `No se puede acceder a "${ruta}": queda fuera del almacén de documentos.`,
       );
     }
 

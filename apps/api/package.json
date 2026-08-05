@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "jiti src/main.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
@@ -15,18 +16,31 @@
     "prisma:firma-de-prueba": "jiti prisma/firmas/generatePlaceholderSignature.ts"
   },
   "devDependencies": {
+    "@nestjs/testing": "^11.1.28",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.0",
+    "@types/supertest": "^7.2.1",
     "dotenv": "^17.4.2",
     "prisma": "^7.9.1",
+    "supertest": "^7.2.2",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },
   "dependencies": {
+    "@contratos/esquemas": "workspace:*",
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/platform-express": "^11.1.28",
+    "@nestjs/throttler": "^6.5.0",
+    "@node-rs/argon2": "^2.0.2",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "jiti": "^2.7.0",
     "pg": "^8.13.0",
-    "puppeteer": "^25.4.0"
+    "puppeteer": "^25.4.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.4.3"
   }
 }

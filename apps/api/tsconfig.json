@@ -12,6 +12,15 @@
     "exactOptionalPropertyTypes": true,
     "noFallthroughCasesInSwitch": true,
 
+    // NestJS is built on the *legacy* (TC39 stage-2) decorators: parameter
+    // decorators such as `@Inject()` and `@Body()` simply do not exist in the
+    // standard stage-3 proposal, so this flag is not optional here.
+    // `emitDecoratorMetadata` is on for `tsc` parity with the jiti runtime
+    // (see src/main.ts), even though this project never *emits* — every
+    // injection point is written with an explicit token, on purpose.
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "esModuleInterop": true,

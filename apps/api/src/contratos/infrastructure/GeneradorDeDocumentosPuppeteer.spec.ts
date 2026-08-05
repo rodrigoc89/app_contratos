@@ -121,6 +121,15 @@ class AlmacenFalso implements AlmacenDeDocumentos {
   async guardar(ruta: string, contenido: Uint8Array): Promise<void> {
     this.guardados.set(ruta, contenido);
   }
+
+  /** Not exercised here — the generator only ever writes. */
+  async leer(ruta: string): Promise<Uint8Array> {
+    const contenido = this.guardados.get(ruta);
+    if (contenido === undefined) {
+      throw new Error(`No hay ningún documento guardado en "${ruta}".`);
+    }
+    return contenido;
+  }
 }
 
 describe("GeneradorDeDocumentosPuppeteer", () => {
