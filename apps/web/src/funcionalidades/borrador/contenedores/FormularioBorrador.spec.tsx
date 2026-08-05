@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DatosSesion } from "@contratos/esquemas";
@@ -100,6 +100,21 @@ describe("FormularioBorrador", () => {
     };
     expect(cuerpo.comodatario.nombreCompleto).toBe("Ana López");
     expect(cuerpo.equipos.antenaMac).toBe("AC:8B:A9:12:34:56");
+  });
+
+  it("notifies onCreado once the draft is created — the seam the técnico route uses to move into the review step", async () => {
+    establecerSesion(sesionFalsa());
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    const alCrear = vi.fn();
+    render(<FormularioBorrador onCreado={alCrear} />);
+
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+
+    await waitFor(() => expect(alCrear).toHaveBeenCalledTimes(1));
+    expect(alCrear).toHaveBeenCalledWith({ id: "c1", estado: "borrador" });
   });
 
   it("surfaces a regla_de_negocio rejection verbatim, keeps the entered values, and does not retry automatically", async () => {

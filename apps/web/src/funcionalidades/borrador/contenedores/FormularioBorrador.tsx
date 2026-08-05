@@ -29,6 +29,15 @@ const EQUIPOS_VACIO: ValoresEquipos = {
 
 type Paso = "comodatario" | "equipos";
 
+export interface PropiedadesFormularioBorrador {
+  /**
+   * Fires once `POST /contratos` succeeds — the seam `InicioTecnico` (D10)
+   * uses to move the técnico into the review step (task 7.3) without this
+   * component knowing anything about what comes after it.
+   */
+  readonly onCreado?: (contrato: DatosContratoCreado) => void;
+}
+
 /**
  * Spec `borrador-form` — "Create draft" and "Server-side rejection after
  * client acceptance". Assembles the two presentational steps and owns
@@ -41,7 +50,7 @@ type Paso = "comodatario" | "equipos";
  * succeeds. Local recovery of the in-progress fields is PR8's job; nothing
  * here persists anything before that request.
  */
-export function FormularioBorrador() {
+export function FormularioBorrador({ onCreado }: PropiedadesFormularioBorrador) {
   const [paso, establecerPaso] = useState<Paso>("comodatario");
   const [comodatario, establecerComodatario] = useState<ValoresComodatario>(COMODATARIO_VACIO);
   const [equipos, establecerEquipos] = useState<ValoresEquipos>(EQUIPOS_VACIO);
@@ -92,6 +101,7 @@ export function FormularioBorrador() {
     try {
       const contrato = await crearBorrador(validacionCompleta.data);
       establecerCreado(contrato);
+      onCreado?.(contrato);
     } catch (motivo) {
       // The entered values are never cleared here — a business-rule
       // rejection (`regla_de_negocio`) must let the technician correct and
