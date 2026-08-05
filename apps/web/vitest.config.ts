@@ -17,5 +17,22 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/tests/configuracionPruebas.ts"],
     passWithNoTests: true,
+    /**
+     * Node 22+ ships an experimental global `localStorage`/`sessionStorage`
+     * that is present (`"localStorage" in globalThis`) but throws
+     * "localStorage is not available because --localstorage-file was not
+     * provided" the moment it is read — and Vitest's jsdom environment
+     * treats any key already present on `globalThis` as "already owned by
+     * the host, don't override it" (see its `populateGlobal`), so jsdom's
+     * own working `localStorage` never gets installed unless Node's broken
+     * stand-in is turned off first. Discovered while writing
+     * `datos/sesion/almacenSesion.ts` (D4/D8's first real storage call
+     * site): a plain `localStorage.setItem(...)` failed with
+     * "Cannot read properties of undefined" in every test worker.
+     */
+    poolOptions: {
+      forks: { execArgv: ["--no-experimental-webstorage"] },
+      threads: { execArgv: ["--no-experimental-webstorage"] },
+    },
   },
 });
