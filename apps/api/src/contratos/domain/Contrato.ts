@@ -59,6 +59,34 @@ export interface DatosBorrador {
   reemplazaA?: string;
 }
 
+/**
+ * The complete stored state of a contract, as a repository reads it back.
+ *
+ * Every field has a matching public getter on the aggregate, so a mapper never
+ * needs privileged access in either direction.
+ */
+export interface EstadoPersistido {
+  id: string;
+  estado: EstadoContrato;
+  comodatario: Comodatario;
+  equipos: Equipos;
+  reemplazaA: string | null;
+  numero: number | null;
+  plazo: Plazo | null;
+  fechaFirma: FechaCalendario | null;
+  plantillaVersionId: string | null;
+  firmanteId: string | null;
+  firmas: readonly FirmaCapturada[];
+  contexto: ContextoDeFirma | null;
+  documentos: readonly DocumentoContrato[];
+  motivoBaja: string | null;
+  fechaBaja: FechaCalendario | null;
+  motivoAnulacion: string | null;
+  fechaAnulacion: FechaCalendario | null;
+  fechaRestitucion: FechaCalendario | null;
+  eventos: readonly EventoContrato[];
+}
+
 export interface DatosFirma {
   numero: number;
   plantillaVersionId: string;
@@ -130,6 +158,113 @@ export class Contrato {
     contrato.registrar("creado", null, null);
 
     return contrato;
+  }
+
+  /**
+   * Rebuilds a contract from stored state. **Only the persistence adapter may
+   * call this.**
+   *
+   * It deliberately bypasses the transition rules — replaying `firmar()` on a
+   * contract signed months ago would re-emit its events and re-run checks
+   * against today's world. What it does NOT bypass is the *state* invariants:
+   * a stored contract that says `vigente` but carries no number, no term or
+   * only one signature is corrupt data, and failing loudly here is far better
+   * than handing the rest of the system an aggregate that could never have
+   * existed.
+   */
+  static rehidratar(estado: EstadoPersistido): Contrato {
+    Contrato.validarEstadoPersistido(estado);
+
+    const contrato = new Contrato(
+      estado.id,
+      estado.comodatario,
+      estado.equipos,
+      estado.reemplazaA,
+    );
+
+    contrato._estado = estado.estado;
+    contrato._numero = estado.numero;
+    contrato._plazo = estado.plazo;
+    contrato._fechaFirma = estado.fechaFirma;
+    contrato._plantillaVersionId = estado.plantillaVersionId;
+    contrato._firmanteId = estado.firmanteId;
+    contrato._firmas = Object.freeze([...estado.firmas]);
+    contrato._contexto = estado.contexto;
+    contrato._documentos = Object.freeze([...estado.documentos]);
+    contrato._motivoBaja = estado.motivoBaja;
+    contrato._fechaBaja = estado.fechaBaja;
+    contrato._motivoAnulacion = estado.motivoAnulacion;
+    contrato._fechaAnulacion = estado.fechaAnulacion;
+    contrato._fechaRestitucion = estado.fechaRestitucion;
+    contrato._eventos.push(...estado.eventos);
+
+    return contrato;
+  }
+
+  private static validarEstadoPersistido(estado: EstadoPersistido): void {
+    const inconsistente = (detalle: string): never => {
+      throw new DomainError(
+        `El contrato almacenado ${estado.id} es inconsistente: ${detalle}.`,
+      );
+    };
+
+    if (estado.estado === "borrador") {
+      if (estado.numero !== null) {
+        inconsistente("un borrador no puede tener número de contrato");
+      }
+      if (estado.plazo !== null || estado.fechaFirma !== null) {
+        inconsistente("un borrador no puede tener plazo ni fecha de firma");
+      }
+      if (estado.firmas.length > 0) {
+        inconsistente("un borrador no puede tener firmas");
+      }
+      if (estado.documentos.length > 0) {
+        inconsistente("un borrador no puede tener documentos sellados");
+      }
+      return;
+    }
+
+    if (estado.numero === null) {
+      inconsistente("un contrato firmado tiene que tener número");
+    }
+    if (estado.plazo === null) {
+      inconsistente("un contrato firmado tiene que tener plazo");
+    }
+    if (estado.fechaFirma === null) {
+      inconsistente("un contrato firmado tiene que tener fecha de firma");
+    }
+    if (estado.plantillaVersionId === null) {
+      inconsistente(
+        "un contrato firmado tiene que registrar la versión de plantilla con la que se firmó",
+      );
+    }
+    if (estado.firmanteId === null) {
+      inconsistente("un contrato firmado tiene que registrar el comodante firmante");
+    }
+    if (estado.contexto === null) {
+      inconsistente("un contrato firmado tiene que registrar el contexto de la firma");
+    }
+
+    try {
+      Contrato.validarJuegoDeFirmas(estado.firmas);
+    } catch {
+      inconsistente(
+        "un contrato firmado tiene que tener exactamente una firma por documento",
+      );
+    }
+
+    if (
+      estado.estado === "dado_de_baja" &&
+      (estado.motivoBaja === null || estado.fechaBaja === null)
+    ) {
+      inconsistente("una baja tiene que tener motivo y fecha");
+    }
+    if (
+      estado.estado === "anulado" &&
+      (estado.motivoAnulacion === null || estado.fechaAnulacion === null)
+    ) {
+      inconsistente("una anulación tiene que tener motivo y fecha");
+    }
   }
 
   // ---------------------------------------------------------------- drafting
