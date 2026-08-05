@@ -25,6 +25,7 @@
  * Vite build time.
  */
 
+export * from "./auth";
 export * from "./campos";
 export * from "./contrato";
 export * from "./firma";

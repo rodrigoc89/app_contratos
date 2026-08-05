@@ -1,14 +1,14 @@
 import { z } from "zod";
 
-import { ROLES_USUARIO } from "../../domain/Usuario";
-
 /**
  * The wire contracts for `/auth`, as Zod schemas.
  *
  * DESIGN.md §5.1 asks for one schema definition consumed by both the React
  * client (through React Hook Form) and this server (through
- * `ZodValidationPipe`). These live here for now; when the frontend appears
- * they move to a shared package unchanged.
+ * `ZodValidationPipe`) — the same argument that put the contract schemas in
+ * this package. Moved here, unchanged in shape, from
+ * `apps/api/src/identidad/interface/dto/esquemasDeAuth.ts`, which is now
+ * deleted; `AuthController.ts` imports from here instead.
  *
  * Note what is *not* validated: the password is only checked for presence and
  * an upper bound. Rejecting a login because the password "looks wrong" would
@@ -46,6 +46,22 @@ export const EsquemaTokenDeRefresco = z.object({
 export type DatosTokenDeRefresco = z.infer<typeof EsquemaTokenDeRefresco>;
 
 /**
+ * `ROLES_USUARIO`, inlined.
+ *
+ * The authoritative tuple lives in
+ * `apps/api/src/identidad/domain/Usuario.ts` (DESIGN.md §9: three roles, a
+ * closed set). This package cannot import it: `paqueteNavegable.spec.ts`
+ * allows only `"zod"` and relative specifiers here, on purpose, so the
+ * package stays consumable by a browser bundle. Inlining is therefore the
+ * only option, not a preference.
+ *
+ * `apps/api/src/identidad/interface/dto/esquemasContraDominio.spec.ts` pins
+ * this tuple against the domain's own, so the two copies cannot drift apart
+ * silently — a change to one without the other fails that test.
+ */
+const ROLES_USUARIO_SESION = ["tecnico", "oficina", "admin"] as const;
+
+/**
  * The session payload as the client sees it.
  *
  * Declared as a schema rather than only as a TypeScript type so the client can
@@ -61,7 +77,7 @@ export const EsquemaSesion = z.object({
     id: z.string(),
     nombreUsuario: z.string(),
     nombreCompleto: z.string(),
-    rol: z.enum(ROLES_USUARIO),
+    rol: z.enum(ROLES_USUARIO_SESION),
     activo: z.boolean(),
   }),
 });

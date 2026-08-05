@@ -20,6 +20,52 @@ const SHA256 = /^[0-9a-f]{64}$/;
 /** `AAAA-MM-DD`, the wire form of a `FechaCalendario`. */
 const FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Every code the API's error envelope can carry, and the envelope shape
+ * itself.
+ *
+ * Moved here, unchanged, from `apps/api/src/http/respuestaDeError.ts` (DESIGN.md
+ * D7): the client has to switch on `codigo` to choose a message and a remedy,
+ * and a hand-copied union on the tablet is exactly the drift this package
+ * exists to prevent. Both stay dependency-free — no `@nestjs/common`, nothing
+ * Node-only — so neither risks the browser-safety guard in
+ * `paqueteNavegable.spec.ts`.
+ *
+ * `apps/api/src/http/respuestaDeError.ts` re-exports both, unchanged; see its
+ * own comment for why that re-export is load-bearing.
+ */
+export type CodigoDeError =
+  | "credenciales_invalidas"
+  | "sesion_invalida"
+  | "no_autenticado"
+  | "sin_permiso"
+  | "no_encontrado"
+  | "demasiadas_peticiones"
+  | "validacion"
+  /** The body-parser refused the request before any controller saw it. */
+  | "cuerpo_demasiado_grande"
+  | "cuerpo_invalido"
+  | "regla_de_negocio"
+  | "conflicto_de_estado"
+  /**
+   * Same 409 as `conflicto_de_estado`, and deliberately not the same code: the
+   * client's remedy is identical, but this one means two writers collided
+   * rather than that somebody asked for something impossible. A spike of these
+   * is an incident; a state conflict is routine.
+   */
+  | "conflicto_de_concurrencia"
+  | "http"
+  | "error_interno";
+
+export interface CuerpoDeError {
+  readonly error: {
+    readonly mensaje: string;
+    readonly codigo: CodigoDeError | string;
+    readonly campos?: Record<string, string>;
+    readonly referencia?: string;
+  };
+}
+
 export const EsquemaEstadoContrato = z.enum([
   "borrador",
   "vigente",
