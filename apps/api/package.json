@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:seed": "jiti prisma/seed.ts",
+    "prisma:firma-de-prueba": "jiti prisma/firmas/generatePlaceholderSignature.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -23,6 +25,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "jiti": "^2.7.0",
     "pg": "^8.13.0",
     "puppeteer": "^25.4.0"
   }

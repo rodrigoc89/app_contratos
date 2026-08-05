@@ -34,4 +34,46 @@ export class PrismaFirmanteRepository implements FirmanteRepository {
 
     return firmanteComodanteDesdeFila(fila);
   }
+
+  /** Installation-side lookup, by the signatory's unique version label. */
+  async buscarPorVersion(version: string): Promise<FirmanteComodante | null> {
+    const fila = await this.prisma.firmanteComodante.findUnique({
+      where: { version },
+    });
+
+    return fila === null ? null : firmanteComodanteDesdeFila(fila);
+  }
+
+  /**
+   * Adds a signatory version and makes it the active one, in a single
+   * transaction.
+   *
+   * Superseded versions are deactivated rather than deleted: contracts point
+   * at the exact signatory row they were stamped with, and that row must
+   * survive for as long as the contract does. Doing both writes in one
+   * transaction is what keeps `ux_firmantes_comodante_activo` — "at most one
+   * active" — from rejecting the insert.
+   *
+   * The DNI is stored as bare digits (`Dni.valor`), the same normalised form
+   * the contracts table uses, so the two are comparable.
+   */
+  async instalarComoActivo(firmante: FirmanteComodante): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.firmanteComodante.updateMany({
+        where: { activo: true },
+        data: { activo: false },
+      });
+
+      await tx.firmanteComodante.create({
+        data: {
+          id: firmante.id,
+          version: firmante.version,
+          nombreCompleto: firmante.nombreCompleto,
+          dni: firmante.dni.valor,
+          imagenFirmaPng: firmante.imagenFirmaPng,
+          activo: true,
+        },
+      });
+    });
+  }
 }

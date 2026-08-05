@@ -21,8 +21,15 @@ const ZONA_HORARIA_CONTRATO = "America/Argentina/Cordoba";
 /**
  * Postgres implementation of `PlantillaRepository`.
  *
- * Read-only, matching the port: templates are published, never edited, by a
- * concern outside this repository's contract.
+ * The port itself is read-only, and stays that way: nothing in the signing
+ * flow may write a template. The two extra methods below exist for publishing
+ * a version — today only the database seed does that — and are deliberately
+ * outside the port so no application service can reach them.
+ *
+ * There is no update and no delete, by design. A template version is
+ * immutable: correcting the legal text means publishing a new version, so
+ * contracts already signed keep rendering the wording they were signed
+ * against.
  */
 export class PrismaPlantillaRepository implements PlantillaRepository {
   constructor(
@@ -45,5 +52,30 @@ export class PrismaPlantillaRepository implements PlantillaRepository {
     }
 
     return plantillaContratoDesdeFila(fila);
+  }
+
+  /** Publishing-side lookup, by the version's unique label. */
+  async buscarPorVersion(version: string): Promise<PlantillaContrato | null> {
+    const fila = await this.prisma.plantillaContrato.findUnique({
+      where: { version },
+    });
+
+    return fila === null ? null : plantillaContratoDesdeFila(fila);
+  }
+
+  /**
+   * Inserts a new template version. Rejects — through the `version` unique
+   * index — rather than overwriting an existing one.
+   */
+  async publicar(plantilla: PlantillaContrato): Promise<void> {
+    await this.prisma.plantillaContrato.create({
+      data: {
+        id: plantilla.id,
+        version: plantilla.version,
+        condicionesGeneralesHtml: plantilla.condicionesGeneralesHtml,
+        comodatoHtml: plantilla.comodatoHtml,
+        vigenteDesde: columnaFechaDesde(plantilla.vigenteDesde),
+      },
+    });
   }
 }

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Condiciones generales de uso</title>
+    <style>
+      /*
+        Print-only stylesheet, fully inline: the renderer runs headless
+        Chromium with --no-sandbox and must never touch the network.
+
+        Page margins are NOT set here on purpose — Puppeteer supplies them
+        (25/20/20/20 mm). Declaring @page margins would silently override that.
+
+        Font stack: only families shipped by fonts-liberation and
+        fonts-dejavu-core, which is all a bare Ubuntu server has, always
+        falling back to a generic family.
+      */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Liberation Serif", "DejaVu Serif", serif;
+        font-size: 10.5pt;
+        line-height: 1.38;
+        color: #000000;
+        background: #ffffff;
+        text-align: justify;
+      }
+
+      h1 {
+        font-family: "Liberation Sans", "DejaVu Sans", sans-serif;
+        font-size: 13pt;
+        text-align: center;
+        letter-spacing: 0.03em;
+        margin: 0 0 12pt;
+      }
+
+      p {
+        margin: 0 0 6pt;
+        orphans: 2;
+        widows: 2;
+      }
+
+      .sangria {
+        margin-left: 12pt;
+      }
+
+      .destacado {
+        font-weight: bold;
+      }
+
+      /* A value filled in by the system, where the paper form had a blank. */
+      .dato {
+        font-weight: bold;
+        white-space: pre-wrap;
+        border-bottom: 0.6pt solid #000000;
+        padding: 0 0.4em;
+      }
+
+      .cierre {
+        margin-top: 16pt;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .cierre p {
+        text-align: left;
+        margin: 0 0 8pt;
+      }
+
+      /*
+        Fixed height, capped width: a signature captured with a very wide or
+        very narrow stroke cannot stretch the page. object-fit keeps the
+        aspect ratio inside that box instead of distorting it.
+      */
+      .firma-imagen {
+        display: block;
+        height: 20mm;
+        max-width: 70mm;
+        width: auto;
+        object-fit: contain;
+      }
+
+      .firma-pie {
+        width: 70mm;
+        border-top: 0.8pt solid #000000;
+        padding-top: 3pt;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CONDICIONES GENERALES DE USO</h1>
+
+    <p>
+      <strong>RESGUARDO DE LOS EQUIPOS:</strong> La antena receptora de internet
+      deberá estar conectada a través de un ESTABILIZADOR DE TENSION para su
+      protección por picos de tensión, los cuales podrían ser dañadas
+      internamente. Mantener alejados de posibles derrames de líquidos al
+      transformador POE de la antena (vasos, filtraciones e incluso de animales)
+    </p>
+
+    <p class="destacado">
+      IMPORTANTE: LA EMPRESA IES.NET NO SE RESPONSABILIZA POR DAÑOS OCASIONADOS
+      A LOS EQUIPOS EN COMODATO, POR FALTA DE CUIDADOS O TORMENTAS ELECTRICAS.
+    </p>
+
+    <p><strong>USO DE INTERNET:</strong> El uso es ILIMITADO.</p>
+
+    <p>
+      <strong>SOPORTE DE INTERNET:</strong> El soporte técnico es gratuito
+      cuando el problema es ocasionado por la empresa, caso contrario si el
+      cliente manipula los equipos tendrá el costo de una visita técnica de
+      $20.000 como mínimo (dependiendo la ubicación gps del cliente) el cálculo
+      estimativo se lo brinda la empresa.
+    </p>
+
+    <p>
+      En el caso de solicitar cambio de contraseña el mismo tendrá un costo
+      $ 15.000.-, si se lo asiste en forma remota. En asistencia presencial al
+      domicilio del cliente el costo será de $35.000 como mínimo.
+    </p>
+
+    <p>
+      <strong>VENCIMIENTO DEL ABONO:</strong> El abono del servicio es a mes
+      vencido y los mismos deberán ser abonados según el día que se realizó la
+      instalación. Para evitar intereses por mora, el servicio deberá ser
+      abonado antes de los diez días corrido de su fecha de facturación.
+    </p>
+
+    <p>
+      <strong>SUSPENSION DEL SERVICIO:</strong> En caso de adeudar el abono por
+      dos periodos seguidos, estos mismos se generan interés por mora. La
+      reconexión del servicio tendrá un costo adicional pasado los dos meses sin
+      haber informado a la empresa, este valor será proporcionado por la
+      empresa. Pasados los 60 días de la suspensión y no haber informado, la
+      empresa procederá al retiro de los equipos como se encuentra establecido
+      en el contrato de comodato.
+    </p>
+
+    <p>
+      <strong>BAJA DEL SERVICIO:</strong> La baja del servicio será por deuda o
+      por solicitud del abonado que deberá comunicar a la empresa y estar al día
+      en el pago de su abono. La baja de servicio por deuda no excluye al abono
+      del pago del mismo.
+    </p>
+
+    <p>
+      <strong>FORMAS DE PAGO:</strong> Se le asigna un código RAPIPAGO, depósito
+      bancario o transferencia al BANCO SANTANDER, BANCO SDE, BANCO PATAGONIA,
+      MERCADO PAGO (solicitar datos a la empresa).
+    </p>
+
+    <p><strong>LUGAR DE PAGO:</strong></p>
+    <p class="sangria">RAPIPAGO en todo el país.</p>
+
+    <p>
+      Por dudas o consultas comuníquese al +5493855919998, de lunes a viernes en
+      el horario 9:00 a 20:00 hs o por e-mail a: ies.net.oficinas@gmail.com
+    </p>
+
+    <section class="cierre">
+      <p>
+        FECHA
+        <span class="dato">{{firmaDia}} de {{firmaMes}} de {{firmaAnio}}</span>
+      </p>
+
+      <img
+        class="firma-imagen"
+        src="{{firmaComodatarioCondiciones}}"
+        alt="Firma del comodatario"
+      />
+      <p class="firma-pie">FIRMA</p>
+
+      <p>ACLARACION: <span class="dato">{{comodatarioNombre}}</span></p>
+
+      <p>Nº <span class="dato">{{numero}}</span></p>
+    </section>
+  </body>
+</html>

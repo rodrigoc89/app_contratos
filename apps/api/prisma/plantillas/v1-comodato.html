@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>Contrato de comodato</title>
+    <style>
+      /*
+        Print-only stylesheet, fully inline: the renderer runs headless
+        Chromium with --no-sandbox and must never touch the network.
+
+        Page margins are NOT set here on purpose — Puppeteer supplies them
+        (25/20/20/20 mm). Declaring @page margins would silently override that.
+
+        Font stack: only families shipped by fonts-liberation and
+        fonts-dejavu-core, which is all a bare Ubuntu server has, always
+        falling back to a generic family.
+      */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: "Liberation Serif", "DejaVu Serif", serif;
+        font-size: 10.5pt;
+        line-height: 1.38;
+        color: #000000;
+        background: #ffffff;
+        text-align: justify;
+      }
+
+      h1 {
+        font-family: "Liberation Sans", "DejaVu Sans", sans-serif;
+        font-size: 13pt;
+        text-align: center;
+        letter-spacing: 0.03em;
+        margin: 0 0 12pt;
+      }
+
+      p {
+        margin: 0 0 6pt;
+        orphans: 2;
+        widows: 2;
+      }
+
+      .equipos {
+        margin: 6pt 0 6pt 12pt;
+      }
+
+      .equipos p {
+        text-align: left;
+        margin: 0 0 4pt;
+      }
+
+      /* A value filled in by the system, where the paper form had a blank. */
+      .dato {
+        font-weight: bold;
+        white-space: pre-wrap;
+        border-bottom: 0.6pt solid #000000;
+        padding: 0 0.4em;
+      }
+
+      .firmas {
+        width: 100%;
+        margin-top: 18pt;
+        border-collapse: collapse;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+
+      .firmas td {
+        width: 50%;
+        vertical-align: top;
+        padding: 0 6pt;
+        text-align: left;
+      }
+
+      .firmas p {
+        margin: 0 0 4pt;
+      }
+
+      /*
+        Fixed height, capped width: a signature captured with a very wide or
+        very narrow stroke cannot stretch the page. object-fit keeps the
+        aspect ratio inside that box instead of distorting it.
+      */
+      .firma-imagen {
+        display: block;
+        height: 20mm;
+        max-width: 70mm;
+        width: auto;
+        object-fit: contain;
+      }
+
+      .firma-rotulo {
+        border-top: 0.8pt solid #000000;
+        padding-top: 3pt;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CONTRATO DE COMODATO</h1>
+
+    <p>
+      Entre el Señor <span class="dato">{{comodanteNombre}}</span>, DNI N°
+      <span class="dato">{{comodanteDni}}</span>, con domicilio Mza. 27 lote 6
+      B° Saint Germain, en Ciudad Santiago del Estero, Provincia de Santiago del
+      Estero en adelante denominado “COMODANTE”, y por otro lado el o la SR/A
+      <span class="dato">{{comodatarioNombre}}</span> DNI N°
+      <span class="dato">{{comodatarioDni}}</span> con domicilio en calle
+      <span class="dato">{{comodatarioDomicilio}}</span> Ciudad
+      <span class="dato">{{comodatarioCiudad}}</span>, de la provincia de
+      <span class="dato">{{comodatarioProvincia}}</span>, en adelante
+      “COMODATARIO” han convenido celebrar el presente CONTRATO DE COMODATO, que
+      se regirá por las cláusulas que se detallan a continuación:
+    </p>
+
+    <p>
+      <strong>PRIMERA – OBJETO:</strong> EL “COMODANTE” cede en comodato al
+      “COMODATARIO”, y este recibe en tal carácter y acepta de conformidad el/los
+      siguientes equipos:
+    </p>
+
+    <div class="equipos">
+      <p>
+        ANTENA <span class="dato">{{antenaModelo}}</span> MAC:
+        <span class="dato">{{antenaMac}}</span>
+      </p>
+      <p>POE <span class="dato">{{poe}}</span></p>
+      <p>CAÑO METROS <span class="dato">{{canoMetros}}</span></p>
+    </div>
+
+    <p>
+      Tales equipos son de exclusiva propiedad del “COMODANTE”. El “COMODATARIO”
+      por su parte declara recibir los equipos en perfecto estado de uso y
+      funcionamiento y se obliga a restituirlos en las mismas condiciones que los
+      recibe.
+    </p>
+
+    <p>
+      <strong>SEGUNDA - PLAZO:</strong> El contrato tendrá una duración de
+      <span class="dato">{{plazoMeses}}</span> meses a partir del
+      <span class="dato">{{fechaInicio}}</span> ósea que vencerá el
+      <span class="dato">{{fechaVencimiento}}</span>. La obligación de restituir
+      la cosa por parte del “COMODATARIO” se opera de pleno derecho, por el mero
+      vencimiento del plazo estipulado y sin necesidad de requerimiento alguno
+      por parte del comodante, bajo apercibimiento de la pertinente acción
+      judicial.
+    </p>
+
+    <p>
+      Es decir que el presente Contrato se extingue de manera automática plena y
+      definitiva el día del vencimiento del plazo.
+    </p>
+
+    <p>
+      <strong>TERCERA - DESTINO:</strong> EL “COMODANTE” entrega al
+      “COMODATARIO” el/los equipos mencionados en la cláusula primera, para el
+      uso exclusivo de servicio de internet por aire, quedando expresamente
+      prohibido darle otro destino, su préstamo o cesión.
+    </p>
+
+    <p>
+      <strong>CUARTA:</strong> Queda expresamente prohibido a el “COMODATARIO”
+      ceder en todo o en parte el presente contrato, como así también prestar,
+      permutar o transferir los equipos referidos en la cláusula primera. En caso
+      de incumplimiento el “COMODANTE” procederá a la inhabilitación inmediata de
+      los equipos entregados en comodato.
+    </p>
+
+    <p>
+      Los equipos entregados no podrán destinarse a otro domicilio que el
+      especificado por el comodatario en el presente contrato. Todo cambio de
+      domicilio deberá ser solicitado por el “COMODATARIO” al “COMODANTE”. En
+      caso de incumplimiento el “COMODANTE” procederá a la inhabilitación
+      inmediata de los equipos entregado en comodato.
+    </p>
+
+    <p>
+      <strong>QUINTA - OBLIGACIONES:</strong> El “COMODATARIO” está obligado a:
+      1) Usar los equipos conforme al destino convenido; 2) Conservar la cosa con
+      prudencia y diligencia; 3) Restituir el/los equipos en similar estado al
+      recibido, caso contrario responder por los daños y perjuicios que
+      involucran reparar lo averiado. El incumpliendo por parte del
+      “COMODATARIO” a cualquiera de estos puntos, dará derecho a el “COMODANTE” a
+      dar por resuelto automáticamente este “COMODATO” y en consecuencia a pedir
+      la RESTITUCION ANTICIPADA conforme el Art. 1539 del Código Civil y
+      Comercial de la Nación.
+    </p>
+
+    <p>
+      <strong>SEXTA - DAÑOS: RESPONSABILIDAD:</strong> El “COMODATARIO”, responde
+      por las pérdidas o deterioro de los equipos entregados, incluso en caso
+      fortuito, conforme al Art. 1536 inc. d, del Código Civil y Comercial
+      Argentino, salvo los que resultaren del buen uso y acción del tiempo.
+    </p>
+
+    <p>
+      <strong>SEPTIMA - INSPECCION.</strong> El “COMODANTE” se reserva el derecho
+      de inspección de el/los equipos en forma periódica.
+    </p>
+
+    <p>
+      <strong>OCTAVA: PAGOS:</strong> El “COMODANTE y COMODATARIO” convienen que
+      las obligaciones de pago serán mensuales del 01 al 10 de cada mes,
+      comprometidas por este contrato de Comodato.
+    </p>
+
+    <p>
+      <strong>NOVENA - ACCION RESOLUTORIA:</strong> la falta de pago parcial o
+      total de DOS (2) mensualidades consecutivas, o el incumplimiento del
+      contrato en cualquiera sea sus cláusulas, sin necesidad de requerimiento
+      previo, dará derecho al “COMODANTE” a dar por resuelto el presente
+      contrato, asimismo procederá a la inhabilitación inmediata de los equipos y
+      solicitara al “COMODATARIO” la entrega en un plazo de 5 (cinco) días
+      corridos a partir de la inhabilitación y/o desconexión de los bienes
+      referidos en la cláusula primera en perfecto estado de uso y conservación.
+      En caso de no realizar la entrega de los bienes, el comodatario se obliga a
+      pagar al comodante, la suma de CIENTO TREINTA DOLARES ESTADOUNIDENSES CON
+      00/100 CENTAVOS (U$S 130), al tipo de cambio vendedor vigente según
+      cotización del B.N.A. caso contrario se iniciarán las acciones judiciales
+      correspondientes.
+    </p>
+
+    <p>
+      <strong>DECIMA:</strong> Para cualquier cuestión judicial que pueda
+      originarse del presente contrato, las partes se someterán a la
+      jurisdicción de los tribunales ordinarios de la ciudad de Santiago del
+      Estero, renunciando a cualquier otro fuero o jurisdicción, inclusive el
+      juzgado federal.
+    </p>
+
+    <p>
+      <strong>DECIMA PRIMERA:</strong> Para todos los efectos legales emergentes
+      del presente contrato, los firmantes constituyen domicilios especiales en
+      los mencionados ut-supra, donde serán válidas todas las notificaciones y
+      diligencias notariales o judiciales que se practiquen, aunque los
+      interesados no vivan o no se encuentre en ellos. -
+    </p>
+
+    <p>
+      <strong>DECIMA SEGUNDA:</strong> Los gastos de sellado del presente
+      contrato serán soportados por partes iguales. -
+    </p>
+
+    <p>
+      En prueba de conformidad, previa lectura y ratificación, firman las partes
+      dos ejemplares de un mismo tenor y a un solo efecto.
+    </p>
+
+    <p>
+      En la Ciudad de Santiago del Estero, Provincia de Santiago del Estero, a
+      los <span class="dato">{{firmaDia}}</span> días del mes de
+      <span class="dato">{{firmaMes}}</span> del año
+      <span class="dato">20{{firmaAnioCorto}}</span>.-
+    </p>
+
+    <table class="firmas">
+      <tbody>
+        <tr>
+          <td>
+            <img
+              class="firma-imagen"
+              src="{{firmaComodante}}"
+              alt="Firma del comodante"
+            />
+            <p class="firma-rotulo">COMODANTE</p>
+            <p>Aclaración: <span class="dato">{{comodanteNombre}}</span></p>
+            <p>DNI N° <span class="dato">{{comodanteDni}}</span></p>
+          </td>
+          <td>
+            <img
+              class="firma-imagen"
+              src="{{firmaComodatarioComodato}}"
+              alt="Firma del comodatario"
+            />
+            <p class="firma-rotulo">COMODATARIO</p>
+            <p>Aclaración: <span class="dato">{{comodatarioNombre}}</span></p>
+            <p>DNI N° <span class="dato">{{comodatarioDni}}</span></p>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>
