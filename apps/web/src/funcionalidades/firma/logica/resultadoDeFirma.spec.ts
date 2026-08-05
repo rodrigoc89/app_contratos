@@ -191,7 +191,7 @@ describe("firmarContrato", () => {
     // Exactly the firmar attempt plus the one confirming refetch — never a
     // retry of the write itself (conflicto_de_estado must never be retried).
     expect(fetchSimulado).toHaveBeenCalledTimes(2);
-    const rutasLlamadas = fetchSimulado.mock.calls.map(([ruta]: [unknown]) => ruta);
+    const rutasLlamadas = fetchSimulado.mock.calls.map((llamada) => (llamada as [unknown])[0]);
     expect(rutasLlamadas).toEqual(["/contratos/c1/firmar", "/contratos/c1"]);
   });
 
