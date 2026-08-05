@@ -47,12 +47,12 @@ describe("route guards", () => {
     expect(screen.getByLabelText("Usuario")).toBeInTheDocument();
   });
 
-  it("shows the técnico home to a técnico session", () => {
+  it("shows the borrador form to a técnico session", () => {
     establecerSesion(sesionFalsa("tecnico"));
 
     renderizarEn("/");
 
-    expect(screen.getByText("Visita en curso")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
   });
 
   it("shows 'no disponible todavía' instead of an error for an oficina session", () => {
@@ -70,6 +70,6 @@ describe("route guards", () => {
     renderizarEn("/");
 
     expect(screen.getByText(/no está disponible todavía/i)).toBeInTheDocument();
-    expect(screen.queryByText("Visita en curso")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Datos del cliente" })).not.toBeInTheDocument();
   });
 });
