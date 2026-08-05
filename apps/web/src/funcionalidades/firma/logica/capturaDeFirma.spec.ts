@@ -1,8 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { EsquemaFirmaCapturada, MAXIMO_PUNTOS_POR_TRAZO, MAXIMO_TRAZOS_POR_FIRMA } from "@contratos/esquemas";
+import {
+  DOCUMENTOS_DEL_CONTRATO,
+  EsquemaFirmaCapturada,
+  EsquemaFirmarContrato,
+  EsquemaTrazoFirma,
+  MAXIMO_PUNTOS_POR_TRAZO,
+  MAXIMO_TRAZOS_POR_FIRMA,
+} from "@contratos/esquemas";
 
-import { crearCapturaDeFirma, muestraDesdePuntero, type CapturaDeFirma, type MuestraDePuntero } from "./capturaDeFirma";
+import { crearCapturaDeFirma, ensamblarFirmas, muestraDesdePuntero, type CapturaDeFirma, type MuestraDePuntero } from "./capturaDeFirma";
 
 /**
  * Spec `firma-capture` + DESIGN.md D5. `capturaDeFirma` is the DOM-free core:
@@ -137,5 +144,107 @@ describe("muestraDesdePuntero", () => {
   it("omits presión even for a pen when the reported pressure is zero — not meaningfully present", () => {
     const resultado = muestraDesdePuntero({ x: 1, y: 2, tiempoMs: 10, pointerType: "pen", pressure: 0 });
     expect(resultado).not.toHaveProperty("presion");
+  });
+});
+
+/** Draws one server-valid stroke (10 points) at the given vertical offset. */
+function dibujarTrazoValido(captura: CapturaDeFirma, desplazamientoY: number): void {
+  captura.iniciarTrazo(muestra(0, desplazamientoY, 0));
+  for (let i = 1; i < 10; i += 1) {
+    captura.agregarPunto(muestra(i * 5, desplazamientoY, i * 10));
+  }
+  captura.terminarTrazo();
+}
+
+describe("deshacerUltimoTrazo", () => {
+  it("removes only the most recently added stroke, leaving earlier strokes untouched", () => {
+    const captura = crearCapturaDeFirma();
+    dibujarTrazoValido(captura, 0);
+    dibujarTrazoValido(captura, 5);
+    expect(captura.trazos()).toHaveLength(2);
+
+    captura.deshacerUltimoTrazo();
+
+    expect(captura.trazos()).toHaveLength(1);
+    expect(captura.trazos()[0]?.[0]?.y).toBe(0);
+    expect(captura.cantidadPuntos).toBe(10);
+  });
+
+  it("is a no-op when there is nothing to undo", () => {
+    const captura = crearCapturaDeFirma();
+    captura.deshacerUltimoTrazo();
+    expect(captura.trazos()).toHaveLength(0);
+  });
+
+  it("does not corrupt the remaining stroke's timestamps — it still satisfies the server's non-decreasing-t rule", () => {
+    const captura = crearCapturaDeFirma();
+    dibujarTrazoValido(captura, 0);
+    dibujarTrazoValido(captura, 5);
+
+    captura.deshacerUltimoTrazo();
+
+    const [trazoRestante] = captura.trazos();
+    expect(trazoRestante).toBeDefined();
+    const resultado = EsquemaTrazoFirma.safeParse(trazoRestante);
+    expect(resultado.success).toBe(true);
+  });
+});
+
+describe("limpiar", () => {
+  it("discards every stroke and point captured so far", () => {
+    const captura = crearCapturaDeFirma();
+    dibujarTrazoValido(captura, 0);
+    dibujarTrazoValido(captura, 5);
+
+    captura.limpiar();
+
+    expect(captura.trazos()).toHaveLength(0);
+    expect(captura.cantidadPuntos).toBe(0);
+  });
+
+  it("leaves the capture in a state the real server schema rejects as empty — not a zero-stroke signature that looks valid", () => {
+    const captura = crearCapturaDeFirma();
+    dibujarTrazoValido(captura, 0);
+    captura.limpiar();
+
+    const resultado = EsquemaFirmaCapturada.safeParse(firmaCandidata(captura));
+    expect(resultado.success).toBe(false);
+  });
+});
+
+describe("ensamblarFirmas", () => {
+  it("assembles both documents' captures into a firmas[] body that the real signing schema accepts", () => {
+    const [documentoUno, documentoDos] = DOCUMENTOS_DEL_CONTRATO;
+    const capturaUno = crearCapturaDeFirma();
+    dibujarTrazoValido(capturaUno, 0);
+    const capturaDos = crearCapturaDeFirma();
+    dibujarTrazoValido(capturaDos, 0);
+
+    const firmas = ensamblarFirmas([
+      { documento: documentoUno, captura: capturaUno, imagenPng: PNG_MARCADOR },
+      { documento: documentoDos, captura: capturaDos, imagenPng: PNG_MARCADOR },
+    ]);
+
+    const cuerpo = { firmas, dispositivoId: "tablet-de-prueba" };
+    const resultado = EsquemaFirmarContrato.safeParse(cuerpo);
+    expect(resultado.success).toBe(true);
+  });
+
+  it("does not assemble a body the signing schema accepts when one document's signature is still just a tap", () => {
+    const [documentoUno, documentoDos] = DOCUMENTOS_DEL_CONTRATO;
+    const capturaUno = crearCapturaDeFirma();
+    dibujarTrazoValido(capturaUno, 0);
+    const capturaInsuficiente = crearCapturaDeFirma();
+    capturaInsuficiente.iniciarTrazo(muestra(0, 0, 0));
+    capturaInsuficiente.agregarPunto(muestra(5, 0, 10));
+
+    const firmas = ensamblarFirmas([
+      { documento: documentoUno, captura: capturaUno, imagenPng: PNG_MARCADOR },
+      { documento: documentoDos, captura: capturaInsuficiente, imagenPng: PNG_MARCADOR },
+    ]);
+
+    const cuerpo = { firmas, dispositivoId: "tablet-de-prueba" };
+    const resultado = EsquemaFirmarContrato.safeParse(cuerpo);
+    expect(resultado.success).toBe(false);
   });
 });

@@ -1,4 +1,11 @@
-import { MAXIMO_PUNTOS_POR_TRAZO, MAXIMO_TRAZOS_POR_FIRMA, type DatosPuntoFirma, type DatosTrazoFirma } from "@contratos/esquemas";
+import {
+  MAXIMO_PUNTOS_POR_TRAZO,
+  MAXIMO_TRAZOS_POR_FIRMA,
+  type DatosFirmaCapturada,
+  type DatosPuntoFirma,
+  type DatosTrazoFirma,
+  type TipoDocumentoFirmado,
+} from "@contratos/esquemas";
 
 /**
  * DESIGN.md D5 — signature capture as a DOM-free core behind a surface port.
@@ -75,6 +82,20 @@ export interface CapturaDeFirma {
   agregarPunto(muestra: MuestraDePuntero): void;
   /** Marks the current stroke as finished. The stroke is not discarded. */
   terminarTrazo(): void;
+  /**
+   * Discards the most recently added stroke, whether finished or still open.
+   * A no-op when there is nothing captured yet. Strokes are timestamped
+   * independently of one another (`t` only has to be non-decreasing within a
+   * single stroke), so removing one never touches the timestamps of any
+   * stroke that remains.
+   */
+  deshacerUltimoTrazo(): void;
+  /**
+   * Discards every stroke. The result is `trazos() === []`, the same shape
+   * the server rejects for having zero strokes — never a signature that
+   * merely looks empty.
+   */
+  limpiar(): void;
   /** Every captured stroke, in the shape `EsquemaTrazoFirma` expects. */
   trazos(): readonly DatosTrazoFirma[];
   /** Total points across every stroke — the signal "listo" gates on. */
@@ -126,6 +147,14 @@ export function crearCapturaDeFirma(): CapturaDeFirma {
       // `pointerup`), not because anything needs finalizing here yet.
     },
 
+    deshacerUltimoTrazo() {
+      trazosInternos.pop();
+    },
+
+    limpiar() {
+      trazosInternos.length = 0;
+    },
+
     trazos() {
       return trazosInternos.map((trazo) => [...trazo]);
     },
@@ -134,4 +163,29 @@ export function crearCapturaDeFirma(): CapturaDeFirma {
       return trazosInternos.reduce((total, trazo) => total + trazo.length, 0);
     },
   };
+}
+
+/** One document's captured signature, ready to fold into `firmas[]`. */
+export interface FirmaDelDocumento {
+  readonly documento: TipoDocumentoFirmado;
+  readonly captura: CapturaDeFirma;
+  /** `data:image/png;base64,…` from the canvas surface (`SuperficieDeFirma`, PR12). */
+  readonly imagenPng: string;
+}
+
+/**
+ * Assembles both documents' captures into the `firmas[]` shape
+ * `POST /contratos/:id/firmar` expects. The result is parsed against the
+ * real `EsquemaFirmarContrato` before it is ever sent — a signature rejected
+ * after the customer already signed is the worst failure this system can
+ * produce (DESIGN.md D5), so the client refuses it first.
+ */
+export function ensamblarFirmas(
+  firmas: readonly FirmaDelDocumento[],
+): readonly DatosFirmaCapturada[] {
+  return firmas.map(({ documento, captura, imagenPng }) => ({
+    documento,
+    imagenPng,
+    trazos: [...captura.trazos()],
+  }));
 }
