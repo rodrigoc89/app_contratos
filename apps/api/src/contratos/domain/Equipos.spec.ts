@@ -63,5 +63,30 @@ describe("Equipos", () => {
         /antena/i,
       );
     });
+
+    /**
+     * `poe` is declared `boolean`, but a type declaration is a compile-time
+     * promise and this value arrives from an HTTP request. The stakes are not
+     * abstract: anything truthy prints `POE SI` on a signed legal document,
+     * so the string `"no"` would state in writing that a PoE injector was
+     * handed over when it was not.
+     */
+    it.each([
+      ["the string \"no\"", "no"],
+      ["the string \"false\"", "false"],
+      ["a number", 1],
+      ["null", null],
+      ["undefined", undefined],
+    ])("rejects a poe that is not a boolean: %s", (_caso, valor) => {
+      expect(() =>
+        Equipos.crear({ ...DATOS, poe: valor as unknown as boolean }),
+      ).toThrow(DomainError);
+    });
+
+    it("names PoE when rejecting it", () => {
+      expect(() =>
+        Equipos.crear({ ...DATOS, poe: "no" as unknown as boolean }),
+      ).toThrow(/poe/i);
+    });
   });
 });

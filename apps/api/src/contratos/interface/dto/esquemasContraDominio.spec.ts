@@ -299,12 +299,20 @@ describe("a payload that passes the schema builds the domain object", () => {
   });
 
   /**
-   * `Equipos.crear` types `poe` as a boolean and never checks it at runtime,
-   * so a string "no" would be stored and printed as `SI`. The schema is the
-   * only thing standing between a JSON body and that outcome — which is
-   * exactly the kind of guarantee this package exists to provide.
+   * A non-boolean `poe` is refused twice over, and both refusals are asserted
+   * here on purpose.
+   *
+   * `poe` is the one field with no value object to validate it, and anything
+   * truthy prints `POE SI` on a signed contract — stating in writing that an
+   * injector was handed over when it was not. The schema rejects it at the
+   * edge, which is where the technician gets a useful message; the domain
+   * rejects it too, because it is the authority on what valid equipment is
+   * and must not depend on someone upstream remembering to validate.
+   *
+   * If either assertion is ever deleted, this stops being defence in depth
+   * and becomes a single point of failure on a legal document.
    */
-  it("refuses a non-boolean poe that the domain would have printed as SI", () => {
+  it("refuses a non-boolean poe at the schema and at the domain", () => {
     expect(
       EsquemaEquipos.safeParse({
         antenaModelo: "LiteBeam 5AC Gen2",
@@ -314,12 +322,14 @@ describe("a payload that passes the schema builds the domain object", () => {
       }).success,
     ).toBe(false);
 
-    expect(Equipos.crear({
-      antenaModelo: "LiteBeam 5AC Gen2",
-      antenaMac: "ac8ba9123456",
-      poe: "no" as unknown as boolean,
-      canoMetros: 6,
-    }).poeImpreso).toBe("SI");
+    expect(() =>
+      Equipos.crear({
+        antenaModelo: "LiteBeam 5AC Gen2",
+        antenaMac: "ac8ba9123456",
+        poe: "no" as unknown as boolean,
+        canoMetros: 6,
+      }),
+    ).toThrow(/poe/i);
   });
 
 });
