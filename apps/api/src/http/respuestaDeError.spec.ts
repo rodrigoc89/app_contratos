@@ -12,6 +12,7 @@ import {
   CredencialesInvalidas,
   SesionInvalida,
 } from "../identidad/domain/ErroresDeIdentidad";
+import { ConflictoDeConcurrencia } from "../shared/domain/ConflictoDeConcurrencia";
 import { ConflictoDeEstado } from "../shared/domain/ConflictoDeEstado";
 import { DomainError } from "../shared/domain/DomainError";
 import { EstadoAlmacenadoInconsistente } from "../shared/domain/EstadoAlmacenadoInconsistente";
@@ -85,6 +86,58 @@ describe("respuestaDeError", () => {
 
       expect(estado).toBe(409);
       expect(cuerpo.error.codigo).toBe("conflicto_de_estado");
+    });
+
+    /**
+     * Two writers collided. The remedy is the same one a state conflict asks
+     * for — reload and look — so the status is the same 409, but the code is
+     * not, and that difference is the whole point: a log or a metric has to be
+     * able to tell an ordinary retry from a genuine race, because a spike of
+     * these means something is wrong with a tablet.
+     */
+    it("maps a concurrent-write collision to 409 under its own code", () => {
+      const { estado, cuerpo } = respuestaDeError(
+        new ConflictoDeConcurrencia(
+          "El contrato se modificó mientras usted lo firmaba.",
+        ),
+        REFERENCIA,
+      );
+
+      expect(estado).toBe(409);
+      expect(cuerpo.error.codigo).toBe("conflicto_de_concurrencia");
+      expect(cuerpo.error.mensaje).toBe(
+        "El contrato se modificó mientras usted lo firmaba.",
+      );
+    });
+
+    /**
+     * The two 409s must stay distinguishable in both directions: a lost race
+     * is not a state conflict, and a state conflict is not a lost race.
+     */
+    it("does not report a lost race as a state conflict", () => {
+      expect(
+        respuestaDeError(new ConflictoDeConcurrencia("No."), REFERENCIA).cuerpo
+          .error.codigo,
+      ).not.toBe("conflicto_de_estado");
+      expect(
+        respuestaDeError(new ConflictoDeEstado("No."), REFERENCIA).cuerpo.error
+          .codigo,
+      ).not.toBe("conflicto_de_concurrencia");
+    });
+
+    it("checks the concurrency subclass before the base class", () => {
+      // Worded like nothing in particular on purpose: only the type may
+      // decide, so a message with no collision vocabulary is still a 409.
+      expect(
+        respuestaDeError(new ConflictoDeConcurrencia("No."), REFERENCIA).estado,
+      ).toBe(409);
+    });
+
+    it("is a client-caused answer, so the filter does not log it as unexpected", () => {
+      expect(
+        respuestaDeError(new ConflictoDeConcurrencia("No."), REFERENCIA)
+          .esInesperado,
+      ).toBe(false);
     });
 
     /**

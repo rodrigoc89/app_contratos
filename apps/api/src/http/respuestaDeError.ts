@@ -4,6 +4,7 @@ import {
   CredencialesInvalidas,
   SesionInvalida,
 } from "../identidad/domain/ErroresDeIdentidad";
+import { ConflictoDeConcurrencia } from "../shared/domain/ConflictoDeConcurrencia";
 import { ConflictoDeEstado } from "../shared/domain/ConflictoDeEstado";
 import { DomainError } from "../shared/domain/DomainError";
 import { EstadoAlmacenadoInconsistente } from "../shared/domain/EstadoAlmacenadoInconsistente";
@@ -22,6 +23,13 @@ export type CodigoDeError =
   | "cuerpo_invalido"
   | "regla_de_negocio"
   | "conflicto_de_estado"
+  /**
+   * Same 409 as `conflicto_de_estado`, and deliberately not the same code: the
+   * client's remedy is identical, but this one means two writers collided
+   * rather than that somebody asked for something impossible. A spike of these
+   * is an incident; a state conflict is routine.
+   */
+  | "conflicto_de_concurrencia"
   | "http"
   | "error_interno";
 
@@ -119,6 +127,19 @@ export function respuestaDeError(
     return cliente(HttpStatus.CONFLICT, {
       mensaje: excepcion.message,
       codigo: "conflicto_de_estado",
+    });
+  }
+
+  // Before `DomainError` for the same reason as the branch above, and next to
+  // it because it answers the same status. It is a separate branch rather than
+  // a shared one because the two 409s have to stay distinguishable: this one
+  // is not "you asked for something impossible", it is "you and somebody else
+  // asked at the same time". Same remedy for the technician, different fact
+  // for whoever reads the logs afterwards.
+  if (excepcion instanceof ConflictoDeConcurrencia) {
+    return cliente(HttpStatus.CONFLICT, {
+      mensaje: excepcion.message,
+      codigo: "conflicto_de_concurrencia",
     });
   }
 

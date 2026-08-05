@@ -199,6 +199,15 @@ model Contrato {
   creadoEn      DateTime @default(now()) @map("creado_en") @db.Timestamptz
   actualizadoEn DateTime @updatedAt @map("actualizado_en") @db.Timestamptz
 
+  /// Optimistic-locking counter, not a business field — no domain rule reads
+  /// it (contratos/domain/Contrato.ts `versionAlmacenada`). Every write is
+  /// conditioned on the value the writer read and bumps it in the same
+  /// statement, so of two requests holding the same contract only the first to
+  /// commit updates a row; the second matches nothing and is refused. Starts
+  /// at 1, because 0 means "never stored" on the application side.
+  /// Deliberately unindexed: it is only ever read alongside the primary key.
+  version Int @default(1)
+
   plantilla                PlantillaContrato? @relation(fields: [plantillaVersionId], references: [id])
   firmante                 FirmanteComodante? @relation(fields: [firmanteId], references: [id])
   contratoReemplazado      Contrato?          @relation("CadenaDeAnulacion", fields: [reemplazaA], references: [id])

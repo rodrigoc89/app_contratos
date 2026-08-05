@@ -523,6 +523,55 @@ describe("contract endpoints (integration)", () => {
     });
 
     /**
+     * The retry above arrives *after* the first request finished. This one
+     * does not: both are in flight at the same time, which is what an
+     * impatient second tap on a slow render actually produces, and neither
+     * request can see the other's work when it loads the draft.
+     *
+     * Both therefore reach the save believing they are signing a draft. The
+     * repository's conditional write is the only thing that settles it, and
+     * the loser is answered 409 under its own code — not
+     * `conflicto_de_estado`, because nobody asked for anything invalid here.
+     */
+    it("answers 409 to the loser of two simultaneous signatures, and seals only one", async () => {
+      const id = await crearBorrador();
+
+      const [primera, segunda] = await Promise.all([firmar(id), firmar(id)]);
+
+      const estados = [primera.status, segunda.status].sort();
+      expect(estados).toEqual([200, 409]);
+
+      const ganadora = primera.status === 200 ? primera : segunda;
+      const perdedora = primera.status === 200 ? segunda : primera;
+      expect(perdedora.body.error.codigo).toBe("conflicto_de_concurrencia");
+      expect(perdedora.body.error.mensaje).toMatch(/recargue/i);
+
+      const fila = await prisma.contrato.findUnique({ where: { id } });
+      expect(fila?.estado).toBe("vigente");
+      expect(fila?.numero).toBe(ganadora.body.numero);
+
+      // One signing event, carrying the winner's number: the append-only log
+      // is the evidence this system exists to produce, and it must describe
+      // the contract that was actually sealed.
+      const eventos = await prisma.eventoContrato.findMany({
+        where: { contratoId: id, tipo: "firmado" },
+      });
+      expect(eventos).toHaveLength(1);
+      expect(eventos[0]?.detalle).toBe(`Nº ${ganadora.body.numero}`);
+
+      const documentos = await prisma.documentoContrato.findMany({
+        where: { contratoId: id },
+      });
+      expect(documentos).toHaveLength(2);
+      expect(
+        documentos.every((d) => d.ruta.startsWith(`${ganadora.body.numero}/`)),
+      ).toBe(true);
+      expect(
+        await prisma.firmaCapturada.count({ where: { contratoId: id } }),
+      ).toBe(2);
+    });
+
+    /**
      * `FirmarContrato` renders before it touches the aggregate for exactly
      * this reason. A Chromium that runs out of memory must leave a draft the
      * technician can retry, not a half-signed record with a consumed number.

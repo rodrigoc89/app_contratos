@@ -6,7 +6,7 @@ import { EstadoAlmacenadoInconsistente } from "../../shared/domain/EstadoAlmacen
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import { Comodatario } from "./Comodatario";
 import { ContextoDeFirma } from "./ContextoDeFirma";
-import { Contrato } from "./Contrato";
+import { Contrato, VERSION_SIN_PERSISTIR } from "./Contrato";
 import type { EstadoPersistido } from "./Contrato";
 import { Equipos } from "./Equipos";
 import { FirmaCapturada } from "./FirmaCapturada";
@@ -63,6 +63,7 @@ const DOCUMENTOS = [
 const borradorPersistido = (): EstadoPersistido => ({
   id: ID,
   estado: "borrador",
+  version: 1,
   comodatario: comodatario(),
   equipos: equipos(),
   reemplazaA: null,
@@ -345,6 +346,77 @@ describe("Contrato.rehidratar", () => {
     });
   });
 
+  /**
+   * The stored version is bookkeeping the persistence adapter needs and the
+   * business rules must never see. These tests exist to keep it that way: the
+   * aggregate carries the number it was loaded with, hands it back untouched,
+   * and no transition reads it or moves it.
+   */
+  describe("stored version (persistence bookkeeping)", () => {
+    it("carries back the version it was loaded with", () => {
+      const contrato = Contrato.rehidratar({
+        ...vigentePersistido(),
+        version: 7,
+      });
+
+      expect(contrato.versionAlmacenada).toBe(7);
+    });
+
+    it("starts a brand-new draft at the not-yet-stored version", () => {
+      const contrato = Contrato.crearBorrador({
+        id: ID,
+        comodatario: comodatario(),
+        equipos: equipos(),
+      });
+
+      expect(contrato.versionAlmacenada).toBe(VERSION_SIN_PERSISTIR);
+    });
+
+    it("lets the persistence adapter confirm the version it just wrote", () => {
+      const contrato = Contrato.rehidratar({
+        ...vigentePersistido(),
+        version: 7,
+      });
+
+      contrato.confirmarVersionAlmacenada(8);
+
+      expect(contrato.versionAlmacenada).toBe(8);
+    });
+
+    /**
+     * The one property that matters most: business transitions do not touch
+     * it. If signing or terminating a contract ever moved the version by
+     * itself, the adapter's compare-and-set would be comparing against a
+     * number the domain invented, and the whole guard would be decorative.
+     */
+    it("is not moved by signing, terminating or restituting", () => {
+      const contrato = Contrato.rehidratar({
+        ...borradorPersistido(),
+        version: 3,
+      });
+
+      contrato.actualizarEquipos(equipos());
+      contrato.firmar({
+        numero: 1042,
+        plantillaVersionId: "plantilla-2026-01",
+        firmanteId: "firmante-sieira-v1",
+        fechaFirma: FIRMA,
+        firmas: [firmaDe("condiciones_generales"), firmaDe("comodato")],
+        contexto: contexto(),
+      });
+      contrato.registrarDocumentos(DOCUMENTOS);
+      contrato.darDeBaja({
+        motivo: "Baja solicitada",
+        fecha: FechaCalendario.desdeIso("2027-01-15"),
+      });
+      contrato.registrarRestitucion({
+        fecha: FechaCalendario.desdeIso("2027-01-20"),
+      });
+
+      expect(contrato.versionAlmacenada).toBe(3);
+    });
+  });
+
   describe("round trip", () => {
     it("survives being written out and read back unchanged", () => {
       const original = firmadoDeVerdad();
@@ -370,6 +442,7 @@ describe("Contrato.rehidratar", () => {
         fechaAnulacion: original.fechaAnulacion,
         fechaRestitucion: original.fechaRestitucion,
         eventos: original.eventos,
+        version: original.versionAlmacenada,
       });
 
       expect(rehidratado.estado).toBe(original.estado);

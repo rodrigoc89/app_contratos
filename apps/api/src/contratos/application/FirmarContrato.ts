@@ -109,6 +109,34 @@ export class FirmarContrato {
     });
     contrato.registrarDocumentos(documentos);
 
+    // The last thing that can refuse, and the one that can refuse *after* the
+    // PDFs exist. Two requests can reach this line holding the same contract
+    // — the guard above and `firmar()` both only see the copy this request
+    // loaded — so the repository settles it, and the loser gets a
+    // `ConflictoDeConcurrencia` (409) rather than overwriting the winner.
+    //
+    // What the loser leaves behind, stated plainly because it is not cleaned
+    // up: a contract number consumed from the sequence, and two rendered,
+    // hashed PDFs sitting in the document store under that number, referenced
+    // by no row — the save rolled back, so `contrato_documentos` never learned
+    // about them. They cannot be mistaken for real evidence (nothing points at
+    // them) and they cannot overwrite any (the number was allocated to this
+    // attempt alone), but they do occupy disk.
+    //
+    // Not new — every failure between the render above and the commit below
+    // has always left the same thing, which is the price of rendering first so
+    // that a Chromium crash leaves a retryable draft rather than a numbered
+    // contract with no evidence. What *is* new is that a lost race is now an
+    // ordinary outcome instead of an exotic one, so the orphans will actually
+    // appear in a system with impatient tablets.
+    //
+    // Cleaning them up is a sweeper's job, not this method's: deleting on the
+    // error path would mean the store needs a delete operation reachable from
+    // a failure, and a save that failed for some *other* reason — the database
+    // going away mid-commit — is precisely when the bytes are worth keeping
+    // until someone has looked. The sweep is: list the store's directories,
+    // drop the ones with no matching `contrato_documentos` row that are older
+    // than a wide grace period, and log what it removed.
     await this.contratos.guardar(contrato);
 
     return contrato;

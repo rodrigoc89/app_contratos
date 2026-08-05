@@ -77,10 +77,20 @@ export interface FilaContrato {
   reemplazaA: string | null;
 }
 
-/** The same row, as Prisma hands it back on a read. */
+/**
+ * The same row, as Prisma hands it back on a read.
+ *
+ * It carries two columns the write shape above does not. `equipoCanoMetros`
+ * comes back as a `Decimal` instance rather than a number. `version` is the
+ * row's optimistic-locking counter: on the way *in* the repository decides
+ * what to write (the loaded version plus one, under a matching `where`), so
+ * putting it on `FilaContrato` would invite writing back the stale number that
+ * is exactly what the guard is comparing against.
+ */
 export interface FilaContratoLeida
   extends Omit<FilaContrato, "equipoCanoMetros"> {
   equipoCanoMetros: DecimalLegible;
+  version: number;
 }
 
 /** A stroke point, plain and mutable-safe for a Prisma Json write. */
@@ -227,6 +237,9 @@ export function contratoDesdeFila(
   const estado: EstadoPersistido = {
     id: fila.id,
     estado: fila.estado,
+    // Storage bookkeeping the aggregate only holds so the next write can
+    // compare against it. Nothing in the domain reads it.
+    version: fila.version,
     comodatario,
     equipos,
     reemplazaA: fila.reemplazaA,

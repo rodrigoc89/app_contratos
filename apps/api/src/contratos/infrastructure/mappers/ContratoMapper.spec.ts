@@ -8,7 +8,11 @@ import { Contrato } from "../../domain/Contrato";
 import { Equipos } from "../../domain/Equipos";
 import { FirmaCapturada } from "../../domain/FirmaCapturada";
 import type { TipoDocumentoFirmado } from "../../domain/FirmaCapturada";
-import type { DecimalLegible, RelacionesContrato } from "./ContratoMapper";
+import type {
+  DecimalLegible,
+  FilaContratoLeida,
+  RelacionesContrato,
+} from "./ContratoMapper";
 import {
   contratoDesdeFila,
   documentoDesdeFila,
@@ -97,6 +101,18 @@ const unFirmado = (): Contrato => {
   contrato.registrarDocumentos(DOCUMENTOS);
   return contrato;
 };
+
+/**
+ * Rebuilds the `contratos` row a repository read would hand back, from a real
+ * aggregate: the write shape plus the two columns only a read produces — the
+ * `Decimal` instance Prisma returns for `equipo_cano_metros`, and the row's
+ * version counter, which the write shape deliberately does not carry.
+ */
+const filaLeidaDesde = (contrato: Contrato, version = 1): FilaContratoLeida => ({
+  ...filaContratoDesde(contrato),
+  equipoCanoMetros: decimal(contrato.equipos.canoMetros.valor),
+  version,
+});
 
 /** Rebuilds the `RelacionesContrato` a repository read would produce, from a real aggregate. */
 const relacionesLeidasDesde = (contrato: Contrato): RelacionesContrato => ({
@@ -213,12 +229,11 @@ describe("filaEventoDesde", () => {
 describe("contratoDesdeFila", () => {
   it("rebuilds a draft", () => {
     const original = unBorrador();
-    const fila = {
-      ...filaContratoDesde(original),
-      equipoCanoMetros: decimal(6.5),
-    };
 
-    const rehidratado = contratoDesdeFila(fila, relacionesLeidasDesde(original));
+    const rehidratado = contratoDesdeFila(
+      filaLeidaDesde(original),
+      relacionesLeidasDesde(original),
+    );
 
     expect(rehidratado.estado).toBe("borrador");
     expect(rehidratado.comodatario.dni.formateado).toBe("30.123.456");
@@ -227,12 +242,11 @@ describe("contratoDesdeFila", () => {
 
   it("rebuilds a signed contract with everything it carries, byte for byte", () => {
     const original = unFirmado();
-    const fila = {
-      ...filaContratoDesde(original),
-      equipoCanoMetros: decimal(original.equipos.canoMetros.valor),
-    };
 
-    const rehidratado = contratoDesdeFila(fila, relacionesLeidasDesde(original));
+    const rehidratado = contratoDesdeFila(
+      filaLeidaDesde(original),
+      relacionesLeidasDesde(original),
+    );
 
     expect(rehidratado.estado).toBe(original.estado);
     expect(rehidratado.numero).toBe(original.numero);
@@ -262,17 +276,31 @@ describe("contratoDesdeFila", () => {
       fecha: FechaCalendario.desdeIso("2027-03-10"),
     });
 
-    const fila = {
-      ...filaContratoDesde(original),
-      equipoCanoMetros: decimal(original.equipos.canoMetros.valor),
-    };
-
-    const rehidratado = contratoDesdeFila(fila, relacionesLeidasDesde(original));
+    const rehidratado = contratoDesdeFila(
+      filaLeidaDesde(original),
+      relacionesLeidasDesde(original),
+    );
 
     expect(rehidratado.estado).toBe("dado_de_baja");
     expect(rehidratado.motivoBaja).toBe("Deuda");
     expect(rehidratado.fechaBaja?.iso).toBe("2027-03-10");
     expect(rehidratado.equiposPendientesDeRestitucion).toBe(true);
+  });
+
+  /**
+   * The version column is the only thing on the row that the aggregate does
+   * not treat as business data, and it still has to survive the trip: the
+   * repository compares against it on the very next write.
+   */
+  it("carries the row's version onto the aggregate, untouched", () => {
+    const original = unFirmado();
+
+    const rehidratado = contratoDesdeFila(
+      filaLeidaDesde(original, 7),
+      relacionesLeidasDesde(original),
+    );
+
+    expect(rehidratado.versionAlmacenada).toBe(7);
   });
 });
 

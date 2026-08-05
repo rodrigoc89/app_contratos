@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { FirmanteComodante } from "../../firmantes/domain/FirmanteComodante";
 import { PlantillaContrato } from "../../plantillas/domain/PlantillaContrato";
+import { ConflictoDeConcurrencia } from "../../shared/domain/ConflictoDeConcurrencia";
 import { ConflictoDeEstado } from "../../shared/domain/ConflictoDeEstado";
 import { DomainError } from "../../shared/domain/DomainError";
 import { RecursoNoEncontrado } from "../../shared/domain/RecursoNoEncontrado";
@@ -78,6 +79,8 @@ const FIRMANTE = FirmanteComodante.crear({
 
 class ContratosEnMemoria implements ContratoRepository {
   guardados: Contrato[] = [];
+  /** Stands in for another request having written this contract first. */
+  perderLaCarrera = false;
   private proximoNumero = 1042;
 
   constructor(private readonly almacenados: Map<string, Contrato> = new Map()) {}
@@ -91,6 +94,11 @@ class ContratosEnMemoria implements ContratoRepository {
   }
 
   guardar(contrato: Contrato): Promise<void> {
+    if (this.perderLaCarrera) {
+      return Promise.reject(
+        new ConflictoDeConcurrencia("Otra persona guardó este contrato."),
+      );
+    }
     this.guardados.push(contrato);
     this.almacenados.set(contrato.id, contrato);
     return Promise.resolve();
@@ -318,6 +326,24 @@ describe("FirmarContrato", () => {
       expect(almacenado?.estado).toBe("borrador");
       expect(almacenado?.numero).toBeNull();
       expect(almacenado?.firmas).toHaveLength(0);
+    });
+
+    /**
+     * The repository is the only thing that can tell two simultaneous signers
+     * apart, and it does so by refusing the second save. This use case must
+     * let that refusal through exactly as it is: rewrapping it as a state
+     * conflict would tell whoever reads the logs that somebody tried to sign
+     * an already-signed contract, which is a different — and much less
+     * alarming — fact than two requests colliding.
+     */
+    it("passes a lost race through untouched, as a concurrency conflict", async () => {
+      contratos.agregar(nuevoBorrador());
+      contratos.perderLaCarrera = true;
+
+      const error: unknown = await ejecutar().catch((causa: unknown) => causa);
+
+      expect(error).toBeInstanceOf(ConflictoDeConcurrencia);
+      expect(error).not.toBeInstanceOf(ConflictoDeEstado);
     });
 
     it("lets the technician retry once rendering recovers", async () => {

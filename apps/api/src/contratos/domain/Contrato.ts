@@ -48,6 +48,15 @@ export interface EventoContrato {
   readonly detalle: string | null;
 }
 
+/**
+ * The version an aggregate carries before it has ever been written.
+ *
+ * Zero is not a row that exists: the first save writes version 1. A repository
+ * uses this to tell "insert me" from "update me if nobody moved first", and it
+ * is the only thing anyone is ever allowed to conclude from a version number.
+ */
+export const VERSION_SIN_PERSISTIR = 0;
+
 export interface DatosBorrador {
   id: string;
   comodatario: Comodatario;
@@ -64,6 +73,15 @@ export interface DatosBorrador {
 export interface EstadoPersistido {
   id: string;
   estado: EstadoContrato;
+  /**
+   * The row's version counter, as it was when this state was read.
+   *
+   * Storage bookkeeping, and nothing else: no rule in this class reads it, and
+   * none ever may. It rides along inside the aggregate only because the
+   * repository has to know, at save time, which stored row this instance was
+   * built from — see `versionAlmacenada`.
+   */
+  version: number;
   comodatario: Comodatario;
   equipos: Equipos;
   reemplazaA: string | null;
@@ -137,6 +155,12 @@ export class Contrato {
   private _documentos: readonly DocumentoContrato[] = [];
   private readonly _eventos: EventoContrato[] = [];
 
+  /**
+   * Opaque storage bookkeeping — see `versionAlmacenada`. A brand-new contract
+   * has never been written, so it starts at `VERSION_SIN_PERSISTIR`.
+   */
+  private _versionAlmacenada: number = VERSION_SIN_PERSISTIR;
+
   private constructor(
     readonly id: string,
     private _comodatario: Comodatario,
@@ -193,6 +217,7 @@ export class Contrato {
     contrato._fechaAnulacion = estado.fechaAnulacion;
     contrato._fechaRestitucion = estado.fechaRestitucion;
     contrato._eventos.push(...estado.eventos);
+    contrato._versionAlmacenada = estado.version;
 
     return contrato;
   }
@@ -266,6 +291,42 @@ export class Contrato {
     ) {
       inconsistente("una anulación tiene que tener motivo y fecha");
     }
+  }
+
+  // ------------------------------------------------- persistence bookkeeping
+
+  /**
+   * The version of the stored row this instance was built from.
+   *
+   * **Not a business concept, and deliberately inert.** Nothing in this class
+   * reads it, no transition moves it, no invariant mentions it: a contract is
+   * exactly as valid at version 1 as at version 40. It exists because two
+   * requests can load the same contract at the same time, and the repository
+   * needs something to compare against so that only the first save through
+   * wins — the number the row had when *this* aggregate was read.
+   *
+   * A contract that has never been stored carries `VERSION_SIN_PERSISTIR`.
+   *
+   * It lives here rather than in a table beside the repository because it has
+   * to travel with the aggregate: it is read on one request, and checked on
+   * the write that same request performs, and any bookkeeping kept outside
+   * would have to re-derive which read a given instance came from.
+   */
+  get versionAlmacenada(): number {
+    return this._versionAlmacenada;
+  }
+
+  /**
+   * Records the version the row now holds, after a save has committed.
+   * **Only the persistence adapter may call this**, exactly like `rehidratar`.
+   *
+   * Without it, saving the same in-memory contract twice would compare against
+   * a version its own first save had already replaced, and the second call —
+   * the deliberate no-op re-save of an unchanged aggregate — would be refused
+   * as if somebody else had written.
+   */
+  confirmarVersionAlmacenada(version: number): void {
+    this._versionAlmacenada = version;
   }
 
   // ---------------------------------------------------------------- drafting
