@@ -1,0 +1,14 @@
+{
+  "name": "app-contratos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Digital comodato contracts for IES.NET",
+  "packageManager": "pnpm@11.11.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
