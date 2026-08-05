@@ -60,29 +60,43 @@ function colaFalsa(vaciar: () => Promise<void>): ColaDeGuardado {
 }
 
 /**
- * `VisorDeDocumento` calls its `crearObservador` factory once per instance —
- * this hands back a fresh scripted `ObservadorDeDocumento` on every call,
- * indexed by call order, so `emitir(0, …)` drives the first document
- * rendered (`condiciones_generales`) and `emitir(1, …)` the second
- * (`comodato`), matching `DOCUMENTOS_DEL_CONTRATO`'s order.
+ * `VisorDeDocumento`'s own `useEffect` calls `crearObservador(iframe)` — a
+ * passive effect that `PasoFirmaDual`'s own async `vaciar()`/`cargar()`
+ * transition (this container's whole reason to exist, task 7.3) does not run
+ * inside an explicit `act()`, so its timing relative to `findByTitle`
+ * resolving is not guaranteed. Keying by the iframe's own `title` (which is
+ * `TITULOS[documento]`, deterministic) and buffering an `emitir` that arrives
+ * before `observar()` has registered — replaying it the moment registration
+ * happens — removes that race entirely, rather than depending on it.
  */
-function observadorFalsoPorLlamada(): {
-  crearObservador: () => ObservadorDeDocumento;
-  emitir: (indice: number, medicion: MedicionDeDesplazamiento) => void;
+function observadorFalsoPorTitulo(): {
+  crearObservador: (iframe: HTMLIFrameElement) => ObservadorDeDocumento;
+  emitir: (titulo: string, medicion: MedicionDeDesplazamiento) => void;
 } {
-  const emisores: Array<(medicion: MedicionDeDesplazamiento) => void> = [];
+  const emisores = new Map<string, (medicion: MedicionDeDesplazamiento) => void>();
+  const pendientes = new Map<string, MedicionDeDesplazamiento[]>();
   return {
-    crearObservador: () => {
-      const indice = emisores.length;
-      return {
-        observar(alMedir) {
-          emisores[indice] = alMedir;
-          return () => {};
-        },
-      };
-    },
-    emitir(indice, medicion) {
-      emisores[indice]?.(medicion);
+    crearObservador: (iframe) => ({
+      observar(alMedir) {
+        emisores.set(iframe.title, alMedir);
+        for (const medicion of pendientes.get(iframe.title) ?? []) {
+          alMedir(medicion);
+        }
+        pendientes.delete(iframe.title);
+        return () => {
+          emisores.delete(iframe.title);
+        };
+      },
+    }),
+    emitir(titulo, medicion) {
+      const emisor = emisores.get(titulo);
+      if (emisor !== undefined) {
+        emisor(medicion);
+        return;
+      }
+      const cola = pendientes.get(titulo) ?? [];
+      cola.push(medicion);
+      pendientes.set(titulo, cola);
     },
   };
 }
@@ -102,6 +116,25 @@ function firmarEnLienzo(lienzo: Element, cantidadDePuntos: number): void {
     fireEvent.pointerMove(lienzo, { pointerId: 1, clientX: i * 2, clientY: 0, pointerType: "touch" });
   }
   fireEvent.pointerUp(lienzo, { pointerId: 1, clientX: cantidadDePuntos * 2, clientY: 0, pointerType: "touch" });
+}
+
+/**
+ * Waits for the review step to mount, then flushes any passive effects one
+ * more time. `PasoFirmaDual`'s `vaciar()`/`cargar()` transition resolves
+ * outside any `act()` scope of its own (ordinary async app code, same shape
+ * as `FormularioBorrador`'s own submit handler) — so `VisorDeDocumento`'s and
+ * `LienzoDeFirma`'s own `useEffect`s, which create the real observer/surface,
+ * are not guaranteed to have run by the time `findByTitle` merely observes
+ * the resulting DOM. Wrapping `findByTitle` itself in `act()` was tried and
+ * rejected: it broke `waitFor`'s own internal polling (the title stopped
+ * being found at all). A separate, empty `act(async () => {})` right after
+ * the wait resolves does not have that problem, and is what every test that
+ * interacts with the injected observer/surface fakes right after this call
+ * depends on.
+ */
+async function esperarPasoListo(): Promise<void> {
+  await screen.findByTitle("Condiciones Generales de Uso");
+  await act(async () => {});
 }
 
 describe("PasoFirmaDual", () => {
@@ -180,7 +213,7 @@ describe("PasoFirmaDual", () => {
   });
 
   it("keeps Firmar disabled until BOTH documents' reading gates are completo — one alone is not enough", async () => {
-    const { crearObservador, emitir } = observadorFalsoPorLlamada();
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
     render(
       <PasoFirmaDual
         contratoId="c1"
@@ -190,25 +223,25 @@ describe("PasoFirmaDual", () => {
         crearSuperficie={superficieFalsa()}
       />,
     );
-    await screen.findByTitle("Condiciones Generales de Uso");
+    await esperarPasoListo();
     const [condiciones, comodato] = screen.getAllByRole("img");
 
     firmarEnLienzo(condiciones as Element, MINIMO_PUNTOS_FIRMA);
     firmarEnLienzo(comodato as Element, MINIMO_PUNTOS_FIRMA);
 
     act(() => {
-      emitir(0, { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
     });
     expect(screen.getByRole("button", { name: "Firmar" })).toBeDisabled();
 
     act(() => {
-      emitir(1, { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Contrato de Comodato", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
     });
     expect(screen.getByRole("button", { name: "Firmar" })).toBeEnabled();
   });
 
   it("cannot submit a blank signature — its PNG is schema-valid, but the gate is on captured points, not the image", async () => {
-    const { crearObservador, emitir } = observadorFalsoPorLlamada();
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
     render(
       <PasoFirmaDual
         contratoId="c1"
@@ -218,11 +251,11 @@ describe("PasoFirmaDual", () => {
         crearSuperficie={superficieFalsa()}
       />,
     );
-    await screen.findByTitle("Condiciones Generales de Uso");
+    await esperarPasoListo();
 
     act(() => {
-      emitir(0, { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
-      emitir(1, { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Contrato de Comodato", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
     });
 
     const [condiciones, comodato] = screen.getAllByRole("img");
@@ -235,7 +268,7 @@ describe("PasoFirmaDual", () => {
   });
 
   it("calls onListo with an assembled firmas[] the real signing schema accepts, once every requirement is met", async () => {
-    const { crearObservador, emitir } = observadorFalsoPorLlamada();
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
     const alListo = vi.fn();
     render(
       <PasoFirmaDual
@@ -247,11 +280,11 @@ describe("PasoFirmaDual", () => {
         onListo={alListo}
       />,
     );
-    await screen.findByTitle("Condiciones Generales de Uso");
+    await esperarPasoListo();
 
     act(() => {
-      emitir(0, { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
-      emitir(1, { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Contrato de Comodato", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
     });
 
     const [condiciones, comodato] = screen.getAllByRole("img");
