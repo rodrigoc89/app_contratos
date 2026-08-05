@@ -34,19 +34,22 @@ describe("PrismaPlantillaRepository (integration)", () => {
         {
           id: "p-enero",
           version: "2026-01",
-          contenidoHtml: "<html>enero</html>",
+          condicionesGeneralesHtml: "<html>cg enero</html>",
+          comodatoHtml: "<html>enero</html>",
           vigenteDesde: new Date("2026-01-01T00:00:00.000Z"),
         },
         {
           id: "p-junio",
           version: "2026-06",
-          contenidoHtml: "<html>junio</html>",
+          condicionesGeneralesHtml: "<html>cg junio</html>",
+          comodatoHtml: "<html>junio</html>",
           vigenteDesde: new Date("2026-06-01T00:00:00.000Z"),
         },
         {
           id: "p-futura",
           version: "2027-01",
-          contenidoHtml: "<html>futuro</html>",
+          condicionesGeneralesHtml: "<html>cg futuro</html>",
+          comodatoHtml: "<html>futuro</html>",
           vigenteDesde: new Date("2027-01-01T00:00:00.000Z"),
         },
       ],
@@ -63,7 +66,8 @@ describe("PrismaPlantillaRepository (integration)", () => {
       data: {
         id: "p-hoy",
         version: "2026-08",
-        contenidoHtml: "<html>hoy</html>",
+        condicionesGeneralesHtml: "<html>cg hoy</html>",
+        comodatoHtml: "<html>hoy</html>",
         vigenteDesde: new Date("2026-08-04T00:00:00.000Z"),
       },
     });
@@ -78,7 +82,8 @@ describe("PrismaPlantillaRepository (integration)", () => {
       data: {
         id: "p-futura",
         version: "2027-01",
-        contenidoHtml: "<html>futuro</html>",
+        condicionesGeneralesHtml: "<html>cg futuro</html>",
+        comodatoHtml: "<html>futuro</html>",
         vigenteDesde: new Date("2027-01-01T00:00:00.000Z"),
       },
     });

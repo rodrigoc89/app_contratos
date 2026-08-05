@@ -5,7 +5,8 @@ import { PlantillaContrato } from "../../domain/PlantillaContrato";
 export interface FilaPlantillaContrato {
   id: string;
   version: string;
-  contenidoHtml: string;
+  condicionesGeneralesHtml: string;
+  comodatoHtml: string;
   vigenteDesde: Date;
 }
 
@@ -21,7 +22,8 @@ export function plantillaContratoDesdeFila(
   return PlantillaContrato.crear({
     id: fila.id,
     version: fila.version,
-    contenidoHtml: fila.contenidoHtml,
+    condicionesGeneralesHtml: fila.condicionesGeneralesHtml,
+    comodatoHtml: fila.comodatoHtml,
     vigenteDesde: fechaCalendarioDesdeColumna(fila.vigenteDesde),
   });
 }

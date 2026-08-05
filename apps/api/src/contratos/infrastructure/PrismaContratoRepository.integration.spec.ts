@@ -112,7 +112,8 @@ async function crearPlantillaYFirmanteActivos(): Promise<{
     data: {
       id: "plantilla-2026-01",
       version: "2026-01",
-      contenidoHtml: "<html>contrato</html>",
+      condicionesGeneralesHtml: "<html>condiciones</html>",
+      comodatoHtml: "<html>contrato</html>",
       vigenteDesde: new Date("2026-01-01T00:00:00.000Z"),
     },
   });

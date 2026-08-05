@@ -1,4 +1,8 @@
 import { DomainError } from "../../shared/domain/DomainError";
+import {
+  DOCUMENTOS_DEL_CONTRATO,
+  type TipoDocumentoFirmado,
+} from "../../shared/domain/TipoDocumentoFirmado";
 
 /**
  * A tap is one or two samples. A pen drawing anything at all produces dozens
@@ -7,12 +11,7 @@ import { DomainError } from "../../shared/domain/DomainError";
  */
 export const MINIMO_PUNTOS_FIRMA = 10;
 
-export type TipoDocumentoFirmado = "condiciones_generales" | "comodato";
-
-const DOCUMENTOS: readonly TipoDocumentoFirmado[] = [
-  "condiciones_generales",
-  "comodato",
-];
+export type { TipoDocumentoFirmado } from "../../shared/domain/TipoDocumentoFirmado";
 
 export interface PuntoFirma {
   readonly x: number;
@@ -48,7 +47,7 @@ export class FirmaCapturada {
   ) {}
 
   static crear(datos: DatosFirmaCapturada): FirmaCapturada {
-    if (!DOCUMENTOS.includes(datos.documento)) {
+    if (!DOCUMENTOS_DEL_CONTRATO.includes(datos.documento)) {
       throw new DomainError(
         `El documento "${datos.documento}" no es uno de los que se firman.`,
       );

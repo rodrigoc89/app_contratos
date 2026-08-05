@@ -27,7 +27,10 @@ datasource db {
 model PlantillaContrato {
   id            String   @id @default(uuid())
   version       String   @unique
-  contenidoHtml String   @map("contenido_html")
+  /// The contract is two documents the customer signs separately, each with
+  /// its own legal text. One template version carries both.
+  condicionesGeneralesHtml String @map("condiciones_generales_html")
+  comodatoHtml             String @map("comodato_html")
   /// Calendar date the version takes effect. A wall-calendar date, never a
   /// timestamp: DESIGN.md picks the version in force by comparing this against
   /// the contract's signing date, both calendar dates.

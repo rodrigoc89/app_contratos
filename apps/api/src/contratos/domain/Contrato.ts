@@ -1,6 +1,10 @@
 import { DomainError } from "../../shared/domain/DomainError";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import { textoRequerido } from "../../shared/domain/texto";
+import {
+  DOCUMENTOS_DEL_CONTRATO,
+  NOMBRE_DOCUMENTO,
+} from "../../shared/domain/TipoDocumentoFirmado";
 import type { Comodatario } from "./Comodatario";
 import type { ContextoDeFirma } from "./ContextoDeFirma";
 import type { Equipos } from "./Equipos";
@@ -15,16 +19,6 @@ const SHA256 = /^[0-9a-f]{64}$/i;
  * out of it would seal the wrong bytes as legal evidence.
  */
 const RUTA_INSEGURA = /^\/|^[a-zA-Z]:|\.\./;
-
-const DOCUMENTOS_DEL_CONTRATO: readonly TipoDocumentoFirmado[] = [
-  "condiciones_generales",
-  "comodato",
-];
-
-const NOMBRE_DOCUMENTO: Record<TipoDocumentoFirmado, string> = {
-  condiciones_generales: "las condiciones generales de uso",
-  comodato: "el contrato de comodato",
-};
 
 /** A rendered PDF, frozen and hashed — the contract's actual evidence. */
 export interface DocumentoContrato {

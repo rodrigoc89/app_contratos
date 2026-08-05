@@ -9,13 +9,17 @@ describe("plantillaContratoDesdeFila", () => {
     const plantilla = plantillaContratoDesdeFila({
       id: "plantilla-2026-01",
       version: "2026-01",
-      contenidoHtml: "<html>...</html>",
+      condicionesGeneralesHtml: "<html>condiciones</html>",
+      comodatoHtml: "<html>comodato</html>",
       vigenteDesde: columnaFechaDesde(FechaCalendario.desdeIso("2026-01-01")),
     });
 
     expect(plantilla.id).toBe("plantilla-2026-01");
     expect(plantilla.version).toBe("2026-01");
-    expect(plantilla.contenidoHtml).toBe("<html>...</html>");
+    expect(plantilla.contenidoDe("condiciones_generales")).toBe(
+      "<html>condiciones</html>",
+    );
+    expect(plantilla.contenidoDe("comodato")).toBe("<html>comodato</html>");
     expect(plantilla.vigenteDesde.iso).toBe("2026-01-01");
   });
 
@@ -26,7 +30,8 @@ describe("plantillaContratoDesdeFila", () => {
     const plantilla = plantillaContratoDesdeFila({
       id: "plantilla-2026-01",
       version: "2026-01",
-      contenidoHtml: "<html>...</html>",
+      condicionesGeneralesHtml: "<html>condiciones</html>",
+      comodatoHtml: "<html>comodato</html>",
       vigenteDesde: comoLoDevuelvePrisma,
     });
 

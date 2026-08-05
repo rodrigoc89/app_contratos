@@ -61,7 +61,8 @@ const nuevoBorrador = (): Contrato =>
 const PLANTILLA = PlantillaContrato.crear({
   id: "plantilla-2026-01",
   version: "2026-01",
-  contenidoHtml: "<h1>CONTRATO DE COMODATO</h1>",
+  condicionesGeneralesHtml: "<h1>CONDICIONES GENERALES DE USO</h1>",
+  comodatoHtml: "<h1>CONTRATO DE COMODATO</h1>",
   vigenteDesde: FechaCalendario.desdeIso("2026-01-01"),
 });
 
