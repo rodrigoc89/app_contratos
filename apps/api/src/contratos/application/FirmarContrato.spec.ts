@@ -111,12 +111,12 @@ class GeneradorFalso implements GeneradorDeDocumentos {
     return Promise.resolve([
       {
         documento: "condiciones_generales",
-        ruta: `contratos/${entrada.contrato.numero}/condiciones.pdf`,
+        ruta: `contratos/${entrada.numero}/condiciones.pdf`,
         sha256: "a".repeat(64),
       },
       {
         documento: "comodato",
-        ruta: `contratos/${entrada.contrato.numero}/comodato.pdf`,
+        ruta: `contratos/${entrada.numero}/comodato.pdf`,
         sha256: "b".repeat(64),
       },
     ]);
@@ -190,10 +190,17 @@ describe("FirmarContrato", () => {
       expect(contrato.firmanteId).toBe("firmante-sieira-v1");
     });
 
-    it("renders the documents from the already-numbered contract", async () => {
+    it("renders from the sealed values, never from the aggregate itself", async () => {
       await ejecutar();
 
-      expect(generador.recibido?.contrato.numero).toBe(1042);
+      expect(generador.recibido?.numero).toBe(1042);
+      expect(generador.recibido?.fechaFirma.iso).toBe("2026-08-04");
+      expect(generador.recibido?.plazo.fechaVencimiento.iso).toBe("2036-08-04");
+      expect(generador.recibido?.comodatario.dni.formateado).toBe("30.123.456");
+      expect(generador.recibido?.equipos.antenaMac.valor).toBe(
+        "AC:8B:A9:12:34:56",
+      );
+      expect(generador.recibido?.firmas).toHaveLength(2);
       expect(generador.recibido?.plantilla.id).toBe("plantilla-2026-01");
       expect(generador.recibido?.firmante.id).toBe("firmante-sieira-v1");
     });
@@ -253,6 +260,33 @@ describe("FirmarContrato", () => {
 
       const almacenado = await contratos.porId(ID);
       expect(almacenado?.documentos).toHaveLength(0);
+    });
+
+    it("leaves the contract a draft when rendering fails, not half signed", async () => {
+      contratos.agregar(nuevoBorrador());
+      generador.fallar = true;
+
+      await expect(ejecutar()).rejects.toThrow();
+
+      const almacenado = await contratos.porId(ID);
+      expect(almacenado?.estado).toBe("borrador");
+      expect(almacenado?.numero).toBeNull();
+      expect(almacenado?.firmas).toHaveLength(0);
+    });
+
+    it("lets the technician retry once rendering recovers", async () => {
+      contratos.agregar(nuevoBorrador());
+
+      // Chromium runs out of memory on the VPS — the failure DESIGN.md §7
+      // calls the single biggest resource risk of the system.
+      generador.fallar = true;
+      await expect(ejecutar()).rejects.toThrow();
+
+      generador.fallar = false;
+      const contrato = await ejecutar();
+
+      expect(contrato.estado).toBe("vigente");
+      expect(contrato.documentos).toHaveLength(2);
     });
   });
 });

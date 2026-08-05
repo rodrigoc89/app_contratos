@@ -57,6 +57,12 @@ describe("NumeroWhatsapp", () => {
     it("explains what is wrong", () => {
       expect(() => NumeroWhatsapp.crear("123")).toThrow(/whatsapp|número/i);
     });
+
+    it("never echoes the attempted number, which would leak it into logs", () => {
+      expect(() => NumeroWhatsapp.crear("3854123456789")).not.toThrow(
+        /3854123456789/,
+      );
+    });
   });
 
   describe("presentation", () => {

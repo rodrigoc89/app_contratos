@@ -42,6 +42,10 @@ describe("Dni", () => {
     it("explains what is wrong so the technician can fix it on the spot", () => {
       expect(() => Dni.crear("123")).toThrow(/DNI/i);
     });
+
+    it("never echoes the attempted document, which would leak it into logs", () => {
+      expect(() => Dni.crear("30123456789")).not.toThrow(/30123456789/);
+    });
   });
 
   describe("presentation", () => {

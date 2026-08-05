@@ -23,8 +23,10 @@ export class NumeroWhatsapp {
     const nacional = NumeroWhatsapp.aNumeroNacional((entrada ?? "").trim());
 
     if (nacional === null) {
+      // Never echo the attempted value: a customer phone number must not end
+      // up in application logs.
       throw new DomainError(
-        `El número de WhatsApp "${entrada}" no es válido: ingresá el código de área y el número, sin el 0 y sin el 15. Por ejemplo 385 4123456.`,
+        "El número de WhatsApp no es válido: ingresá el código de área y el número, sin el 0 y sin el 15. Por ejemplo 385 4123456.",
       );
     }
 

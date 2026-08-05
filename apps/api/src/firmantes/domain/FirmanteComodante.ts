@@ -43,4 +43,34 @@ export class FirmanteComodante {
   get aclaracion(): string {
     return this.nombreCompleto;
   }
+
+  /** Everything about this signatory except the signature itself. */
+  resumenPublico(): ResumenFirmante {
+    return {
+      id: this.id,
+      version: this.version,
+      nombreCompleto: this.nombreCompleto,
+      dni: this.dni.formateado,
+    };
+  }
+
+  /**
+   * Serialising this entity must never carry the signature image.
+   *
+   * The image is the owner's real handwritten signature: leaked, anyone can
+   * paste it onto any document. Rather than trusting every future controller
+   * to remember to strip the field, the entity refuses to serialise it at all.
+   * Code that genuinely needs the image — the PDF renderer — reads
+   * `imagenFirmaPng` explicitly, which is a deliberate act.
+   */
+  toJSON(): ResumenFirmante {
+    return this.resumenPublico();
+  }
+}
+
+export interface ResumenFirmante {
+  readonly id: string;
+  readonly version: string;
+  readonly nombreCompleto: string;
+  readonly dni: string;
 }

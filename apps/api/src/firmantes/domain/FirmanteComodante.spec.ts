@@ -42,4 +42,37 @@ describe("FirmanteComodante", () => {
       DomainError,
     );
   });
+
+  describe("protecting the pre-loaded signature image", () => {
+    it("keeps the image out of JSON serialisation", () => {
+      const serializado = JSON.stringify(FirmanteComodante.crear(DATOS));
+
+      expect(serializado).not.toContain("base64");
+      expect(serializado).not.toContain("imagenFirmaPng");
+    });
+
+    it("still serialises the harmless identifying fields", () => {
+      const serializado = JSON.parse(
+        JSON.stringify(FirmanteComodante.crear(DATOS)),
+      ) as Record<string, unknown>;
+
+      expect(serializado["id"]).toBe("firmante-sieira-v1");
+      expect(serializado["nombreCompleto"]).toBe("SIEIRA GUILLERMO FEDERICO");
+    });
+
+    it("offers a projection with no image, for any screen that lists signatories", () => {
+      const resumen = FirmanteComodante.crear(DATOS).resumenPublico();
+
+      expect(resumen).toEqual({
+        id: "firmante-sieira-v1",
+        version: "v1",
+        nombreCompleto: "SIEIRA GUILLERMO FEDERICO",
+        dni: "27.582.030",
+      });
+    });
+
+    it("still hands the image to the PDF renderer that needs it", () => {
+      expect(FirmanteComodante.crear(DATOS).imagenFirmaPng).toContain("base64");
+    });
+  });
 });

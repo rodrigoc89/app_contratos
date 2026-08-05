@@ -303,6 +303,34 @@ describe("Contrato", () => {
       ).toThrow(DomainError);
     });
 
+    it("refuses a path that escapes the document store", () => {
+      const contrato = firmado();
+
+      expect(() =>
+        contrato.registrarDocumentos([
+          DOCUMENTOS[0] as (typeof DOCUMENTOS)[0],
+          {
+            ...(DOCUMENTOS[1] as (typeof DOCUMENTOS)[1]),
+            ruta: "../../etc/passwd",
+          },
+        ]),
+      ).toThrow(DomainError);
+    });
+
+    it("refuses an absolute path", () => {
+      const contrato = firmado();
+
+      expect(() =>
+        contrato.registrarDocumentos([
+          DOCUMENTOS[0] as (typeof DOCUMENTOS)[0],
+          {
+            ...(DOCUMENTOS[1] as (typeof DOCUMENTOS)[1]),
+            ruta: "/var/lib/contratos/x.pdf",
+          },
+        ]),
+      ).toThrow(DomainError);
+    });
+
     it("refuses a hash that is not a SHA-256", () => {
       const contrato = firmado();
 
@@ -312,6 +340,44 @@ describe("Contrato", () => {
           { ...(DOCUMENTOS[1] as (typeof DOCUMENTOS)[1]), sha256: "corto" },
         ]),
       ).toThrow(DomainError);
+    });
+  });
+
+  describe("signing is all-or-nothing", () => {
+    it("leaves the draft completely untouched when the term is invalid", () => {
+      const contrato = borrador();
+
+      expect(() => contrato.firmar({ ...DATOS_FIRMA, plazoMeses: 0 })).toThrow(
+        DomainError,
+      );
+
+      // Anything that read `numero` or `firmas` as a signedness proxy would
+      // otherwise see a contract that looks signed while its state says draft.
+      expect(contrato.estado).toBe("borrador");
+      expect(contrato.numero).toBeNull();
+      expect(contrato.firmas).toHaveLength(0);
+      expect(contrato.contexto).toBeNull();
+      expect(contrato.plantillaVersionId).toBeNull();
+      expect(contrato.fechaFirma).toBeNull();
+    });
+
+    it("leaves the draft untouched when a signature is missing", () => {
+      const contrato = borrador();
+
+      expect(() =>
+        contrato.firmar({ ...DATOS_FIRMA, firmas: [firmaDe("comodato")] }),
+      ).toThrow(DomainError);
+
+      expect(contrato.numero).toBeNull();
+      expect(contrato.firmas).toHaveLength(0);
+    });
+
+    it("does not let the captured instant be moved after signing", () => {
+      const contrato = firmado();
+
+      contrato.contexto?.capturadoEn.setFullYear(1999);
+
+      expect(contrato.contexto?.capturadoEn.getFullYear()).toBe(2026);
     });
   });
 
@@ -390,6 +456,17 @@ describe("Contrato", () => {
         DomainError,
       );
     });
+
+    it("refuses a date before the contract was signed", () => {
+      const contrato = firmado();
+
+      expect(() =>
+        contrato.darDeBaja({
+          motivo: "Deuda",
+          fecha: FechaCalendario.desdeIso("2026-08-03"),
+        }),
+      ).toThrow(DomainError);
+    });
   });
 
   describe("annulment", () => {
@@ -434,6 +511,17 @@ describe("Contrato", () => {
         DomainError,
       );
     });
+
+    it("refuses a date before the contract was signed", () => {
+      const contrato = firmado();
+
+      expect(() =>
+        contrato.anular({
+          motivo: "DNI equivocado",
+          fecha: FechaCalendario.desdeIso("2026-08-03"),
+        }),
+      ).toThrow(DomainError);
+    });
   });
 
   describe("equipment restitution", () => {
@@ -462,6 +550,35 @@ describe("Contrato", () => {
       expect(() => contrato.registrarRestitucion({ fecha: FIRMA })).toThrow(
         DomainError,
       );
+    });
+
+    it("refuses a return while the contract is still in force, where the equipment belongs", () => {
+      expect(() => firmado().registrarRestitucion({ fecha: FIRMA })).toThrow(
+        DomainError,
+      );
+    });
+
+    it("refuses a return on an annulled contract, whose replacement covers the equipment", () => {
+      const contrato = firmado();
+      contrato.anular({ motivo: "DNI equivocado", fecha: FIRMA });
+
+      expect(() => contrato.registrarRestitucion({ fecha: FIRMA })).toThrow(
+        DomainError,
+      );
+    });
+
+    it("refuses a return dated before the termination", () => {
+      const contrato = firmado();
+      contrato.darDeBaja({
+        motivo: "Deuda",
+        fecha: FechaCalendario.desdeIso("2027-03-10"),
+      });
+
+      expect(() =>
+        contrato.registrarRestitucion({
+          fecha: FechaCalendario.desdeIso("2027-03-09"),
+        }),
+      ).toThrow(DomainError);
     });
   });
 

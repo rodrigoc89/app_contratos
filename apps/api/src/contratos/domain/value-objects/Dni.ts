@@ -17,8 +17,10 @@ export class Dni {
     const digitos = (entrada ?? "").replace(SOLO_SEPARADORES, "");
 
     if (!DIGITOS_VALIDOS.test(digitos)) {
+      // Never echo the attempted value: this message travels to logs and error
+      // trackers, and a national ID number does not belong there.
       throw new DomainError(
-        `El DNI "${entrada}" no es válido: tiene que tener 7 u 8 dígitos, sin letras.`,
+        "El DNI no es válido: tiene que tener 7 u 8 dígitos, sin letras.",
       );
     }
 

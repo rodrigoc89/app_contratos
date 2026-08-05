@@ -145,5 +145,38 @@ describe("FirmaCapturada", () => {
       expect(() => trazos.push([])).toThrow();
       expect(firma.cantidadTrazos).toBe(2);
     });
+
+    it("does not let the caller rewrite a single point's timestamp", () => {
+      const firma = firmaValida();
+      const punto = firma.trazos[0]?.[0] as { t: number };
+
+      expect(() => {
+        punto.t = -999999;
+      }).toThrow();
+      expect(firma.trazos[0]?.[0]?.t).toBe(0);
+    });
+
+    it("does not let the caller move a point's coordinates", () => {
+      const firma = firmaValida();
+      const punto = firma.trazos[0]?.[0] as { x: number };
+
+      expect(() => {
+        punto.x = 9999;
+      }).toThrow();
+      expect(firma.trazos[0]?.[0]?.x).toBe(10);
+    });
+
+    it("does not let the caller mutate the array it passed in afterwards", () => {
+      const trazos = [trazo(12)];
+      const firma = FirmaCapturada.crear({
+        documento: "comodato",
+        imagenPng: IMAGEN,
+        trazos,
+      });
+
+      trazos.push(trazo(5));
+
+      expect(firma.cantidadTrazos).toBe(1);
+    });
   });
 });

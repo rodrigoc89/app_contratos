@@ -81,10 +81,17 @@ export class FirmaCapturada {
       );
     }
 
+    // Deep freeze: `Object.freeze` on the arrays alone would still let anyone
+    // rewrite a point's timestamp in place, and those timestamps are the whole
+    // reason this data is kept.
     return new FirmaCapturada(
       datos.documento,
       imagenPng,
-      Object.freeze(trazos.map((trazo) => Object.freeze([...trazo]))),
+      Object.freeze(
+        trazos.map((trazo) =>
+          Object.freeze(trazo.map((punto) => Object.freeze({ ...punto }))),
+        ),
+      ),
     );
   }
 

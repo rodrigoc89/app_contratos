@@ -30,11 +30,17 @@ export class ContextoDeFirma {
   private constructor(
     readonly tecnicoId: string,
     readonly dispositivoId: string,
-    readonly capturadoEn: Date,
+    /** Stored as epoch millis: a `Date` field would be mutable evidence. */
+    private readonly capturadoEnMs: number,
     readonly ip: string | null,
     readonly userAgent: string | null,
     readonly geo: Geolocalizacion | null,
   ) {}
+
+  /** A fresh Date every read, so the captured instant cannot be moved. */
+  get capturadoEn(): Date {
+    return new Date(this.capturadoEnMs);
+  }
 
   static crear(datos: DatosContextoDeFirma): ContextoDeFirma {
     if (Number.isNaN(datos.capturadoEn?.getTime())) {
@@ -44,7 +50,7 @@ export class ContextoDeFirma {
     return new ContextoDeFirma(
       textoRequerido(datos.tecnicoId, "técnico que toma la firma"),
       textoRequerido(datos.dispositivoId, "dispositivo"),
-      new Date(datos.capturadoEn.getTime()),
+      datos.capturadoEn.getTime(),
       ContextoDeFirma.opcional(datos.ip),
       ContextoDeFirma.opcional(datos.userAgent),
       ContextoDeFirma.validarGeo(datos.geo ?? null),
@@ -60,15 +66,17 @@ export class ContextoDeFirma {
     if (geo === null) {
       return null;
     }
+    // Never echo the coordinates: they locate the customer's home, and this
+    // message travels to logs and error trackers.
     if (!Number.isFinite(geo.latitud) || geo.latitud < -90 || geo.latitud > 90) {
-      throw new DomainError(`La latitud ${geo.latitud} no es válida.`);
+      throw new DomainError("La latitud capturada no es válida.");
     }
     if (
       !Number.isFinite(geo.longitud) ||
       geo.longitud < -180 ||
       geo.longitud > 180
     ) {
-      throw new DomainError(`La longitud ${geo.longitud} no es válida.`);
+      throw new DomainError("La longitud capturada no es válida.");
     }
 
     return { latitud: geo.latitud, longitud: geo.longitud };

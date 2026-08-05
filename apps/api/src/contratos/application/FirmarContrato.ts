@@ -1,8 +1,9 @@
 import { DomainError } from "../../shared/domain/DomainError";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import type { ContextoDeFirma } from "../domain/ContextoDeFirma";
-import type { Contrato } from "../domain/Contrato";
+import { Contrato } from "../domain/Contrato";
 import type { FirmaCapturada } from "../domain/FirmaCapturada";
+import { Plazo } from "../domain/Plazo";
 import type { ContratoRepository } from "./ports/ContratoRepository";
 import type { FirmanteRepository } from "./ports/FirmanteRepository";
 import type { GeneradorDeDocumentos } from "./ports/GeneradorDeDocumentos";
@@ -47,6 +48,15 @@ export class FirmarContrato {
       );
     }
 
+    if (contrato.estaFirmado) {
+      throw new DomainError(
+        `El contrato ${comando.contratoId} no se puede firmar porque ya está ${contrato.estado}.`,
+      );
+    }
+
+    // Reject an incomplete signature set before spending a PDF render on it.
+    Contrato.validarJuegoDeFirmas(comando.firmas);
+
     const [plantilla, firmante] = await Promise.all([
       this.plantillas.vigente(),
       this.firmantes.activo(),
@@ -55,23 +65,35 @@ export class FirmarContrato {
     // The sequence may leave gaps if signing fails after this point. That is
     // preferable to a tablet-side number, which could collide outright.
     const numero = await this.contratos.siguienteNumero();
+    const fechaFirma = FechaCalendario.enZona(
+      this.reloj.ahora(),
+      ZONA_HORARIA_CONTRATO,
+    );
 
+    // Render BEFORE touching the aggregate. Chromium running out of memory is
+    // the likeliest failure on a modest VPS, and when it happens the contract
+    // has to still be a draft the technician can retry — not a half-signed
+    // record with a consumed number and no PDF behind it.
+    const documentos = await this.documentos.generar({
+      numero,
+      fechaFirma,
+      plazo: Plazo.estandarDesde(fechaFirma),
+      comodatario: contrato.comodatario,
+      equipos: contrato.equipos,
+      firmas: comando.firmas,
+      plantilla,
+      firmante,
+    });
+
+    // From here on nothing awaits: the aggregate goes from draft to fully
+    // sealed in one synchronous run.
     contrato.firmar({
       numero,
       plantillaVersionId: plantilla.id,
       firmanteId: firmante.id,
-      fechaFirma: FechaCalendario.enZona(
-        this.reloj.ahora(),
-        ZONA_HORARIA_CONTRATO,
-      ),
+      fechaFirma,
       firmas: comando.firmas,
       contexto: comando.contexto,
-    });
-
-    const documentos = await this.documentos.generar({
-      contrato,
-      plantilla,
-      firmante,
     });
     contrato.registrarDocumentos(documentos);
 

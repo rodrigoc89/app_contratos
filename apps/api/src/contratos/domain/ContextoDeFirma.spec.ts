@@ -26,6 +26,23 @@ describe("ContextoDeFirma", () => {
     );
   });
 
+  it("does not let the caller move the captured instant afterwards", () => {
+    const contexto = ContextoDeFirma.crear(DATOS);
+
+    contexto.capturadoEn.setFullYear(1999);
+
+    expect(contexto.capturadoEn.getFullYear()).toBe(2026);
+  });
+
+  it("does not let the caller mutate the Date it passed in", () => {
+    const capturadoEn = new Date("2026-08-04T21:30:00-03:00");
+    const contexto = ContextoDeFirma.crear({ ...DATOS, capturadoEn });
+
+    capturadoEn.setFullYear(1999);
+
+    expect(contexto.capturadoEn.getFullYear()).toBe(2026);
+  });
+
   it("records the network and device fingerprint when available", () => {
     const contexto = ContextoDeFirma.crear(DATOS);
 
@@ -87,6 +104,15 @@ describe("ContextoDeFirma", () => {
           geo: { latitud: 0, longitud: -200 },
         }),
       ).toThrow(DomainError);
+    });
+
+    it("never echoes the coordinates, which locate the customer's home", () => {
+      expect(() =>
+        ContextoDeFirma.crear({
+          ...DATOS,
+          geo: { latitud: 120.4567, longitud: -64.2615 },
+        }),
+      ).not.toThrow(/120\.4567|64\.2615/);
     });
   });
 });

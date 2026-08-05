@@ -9,6 +9,13 @@ import { Plazo, PLAZO_ESTANDAR_MESES } from "./Plazo";
 
 const SHA256 = /^[0-9a-f]{64}$/i;
 
+/**
+ * Absolute paths, Windows drive letters and any parent traversal. The document
+ * store is the only place a signed PDF may live, and a renderer bug that walked
+ * out of it would seal the wrong bytes as legal evidence.
+ */
+const RUTA_INSEGURA = /^\/|^[a-zA-Z]:|\.\./;
+
 const DOCUMENTOS_DEL_CONTRATO: readonly TipoDocumentoFirmado[] = [
   "condiciones_generales",
   "comodato",
@@ -159,25 +166,28 @@ export class Contrato {
       );
     }
 
-    Contrato.exigirUnaPorDocumento(
-      datos.firmas,
-      (documento) => `Falta la firma de ${NOMBRE_DOCUMENTO[documento]}.`,
-      "Hay más de una firma para el mismo documento.",
+    // Validate and derive everything BEFORE touching a single field. A
+    // half-applied signature would leave a draft carrying a contract number
+    // and two signatures, which any code using those as a signedness proxy
+    // would read as a signed contract.
+    Contrato.validarJuegoDeFirmas(datos.firmas);
+    const plantillaVersionId = textoRequerido(
+      datos.plantillaVersionId,
+      "versión de plantilla",
+    );
+    const firmanteId = textoRequerido(datos.firmanteId, "firmante comodante");
+    const plazo = Plazo.crear(
+      datos.fechaFirma,
+      datos.plazoMeses ?? PLAZO_ESTANDAR_MESES,
     );
 
     this._firmas = Object.freeze([...datos.firmas]);
     this._contexto = datos.contexto;
     this._numero = datos.numero;
-    this._plantillaVersionId = textoRequerido(
-      datos.plantillaVersionId,
-      "versión de plantilla",
-    );
-    this._firmanteId = textoRequerido(datos.firmanteId, "firmante comodante");
+    this._plantillaVersionId = plantillaVersionId;
+    this._firmanteId = firmanteId;
     this._fechaFirma = datos.fechaFirma;
-    this._plazo = Plazo.crear(
-      datos.fechaFirma,
-      datos.plazoMeses ?? PLAZO_ESTANDAR_MESES,
-    );
+    this._plazo = plazo;
     this._estado = "vigente";
 
     this.registrar("firmado", datos.fechaFirma, `Nº ${datos.numero}`);
@@ -210,7 +220,12 @@ export class Contrato {
     );
 
     for (const documento of documentos) {
-      textoRequerido(documento.ruta, "ruta del documento");
+      const ruta = textoRequerido(documento.ruta, "ruta del documento");
+      if (RUTA_INSEGURA.test(ruta)) {
+        throw new DomainError(
+          "La ruta del documento tiene que ser relativa al almacén y no puede salir de él.",
+        );
+      }
       if (!SHA256.test(documento.sha256)) {
         throw new DomainError(
           `El hash "${documento.sha256}" no es un SHA-256 válido.`,
@@ -220,6 +235,18 @@ export class Contrato {
 
     this._documentos = Object.freeze(
       documentos.map((documento) => Object.freeze({ ...documento })),
+    );
+  }
+
+  /**
+   * Both documents must be signed, exactly once each. Exposed so the signing
+   * use case can reject an incomplete set before spending a PDF render on it.
+   */
+  static validarJuegoDeFirmas(firmas: readonly FirmaCapturada[]): void {
+    Contrato.exigirUnaPorDocumento(
+      firmas,
+      (documento) => `Falta la firma de ${NOMBRE_DOCUMENTO[documento]}.`,
+      "Hay más de una firma para el mismo documento.",
     );
   }
 
@@ -252,6 +279,8 @@ export class Contrato {
       );
     }
 
+    this.exigirNoAnteriorALaFirma(datos.fecha, "baja");
+
     this._motivoBaja = textoRequerido(datos.motivo, "motivo de baja");
     this._fechaBaja = datos.fecha;
     this._estado = "dado_de_baja";
@@ -266,6 +295,8 @@ export class Contrato {
       );
     }
 
+    this.exigirNoAnteriorALaFirma(datos.fecha, "anulación");
+
     this._motivoAnulacion = textoRequerido(datos.motivo, "motivo de anulación");
     this._fechaAnulacion = datos.fecha;
     this._estado = "anulado";
@@ -273,10 +304,16 @@ export class Contrato {
     this.registrar("anulado", datos.fecha, this._motivoAnulacion);
   }
 
+  /**
+   * Equipment only comes back once the contract is out of force. While it is
+   * `vigente` the customer is entitled to hold it, and an `anulado` contract
+   * was replaced by another one covering the very same equipment, which never
+   * left the roof.
+   */
   registrarRestitucion(datos: DatosRestitucion): void {
-    if (!this.estaFirmado) {
+    if (this._estado !== "dado_de_baja") {
       throw new DomainError(
-        "No se puede registrar la restitución de un borrador: todavía no se entregó nada.",
+        `Solo se registra la restitución de un contrato dado de baja; este está ${this._estado}.`,
       );
     }
     if (this._fechaRestitucion !== null) {
@@ -284,9 +321,22 @@ export class Contrato {
         "La restitución de los equipos ya fue registrada para este contrato.",
       );
     }
+    if (this._fechaBaja !== null && datos.fecha.esAnteriorA(this._fechaBaja)) {
+      throw new DomainError(
+        "La fecha de restitución no puede ser anterior a la baja del contrato.",
+      );
+    }
 
     this._fechaRestitucion = datos.fecha;
     this.registrar("equipos_restituidos", datos.fecha, null);
+  }
+
+  private exigirNoAnteriorALaFirma(fecha: FechaCalendario, que: string): void {
+    if (this._fechaFirma !== null && fecha.esAnteriorA(this._fechaFirma)) {
+      throw new DomainError(
+        `La fecha de ${que} no puede ser anterior a la firma del contrato.`,
+      );
+    }
   }
 
   // ----------------------------------------------------------------- queries
