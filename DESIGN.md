@@ -281,13 +281,25 @@ Required behaviour:
 
 #### MAC capture by camera
 
-`BarcodeDetector` where available — natively supported by Chromium on Android,
-which is the target fleet — falling back to a WASM decoder elsewhere. Ubiquiti
-devices carry the MAC as a barcode/QR on the sticker.
+`BarcodeDetector`, natively supported by Chromium on Android, which is the
+target fleet. Ubiquiti devices carry the MAC as a barcode/QR on the sticker.
+
+**No WASM decoder fallback.** An earlier version of this document called for
+one on browsers without the API. It is not worth building: manual entry is
+reachable in every scan state anyway, so a tablet without `BarcodeDetector`
+degrades to a slower form, never to a blocked installation. Revisit only if
+the fleet stops being Chromium-on-Android.
 
 Always normalise and format-validate the decoded value, and always allow
 manual entry as a fallback: a scratched or sun-faded sticker cannot block an
 installation.
+
+**A successful scan is not a correct scan.** A camera pointed at a rack or a
+box of devices can decode a perfectly well-formed MAC belonging to a different
+antenna. Format validation cannot catch that, and a contract sealed with the
+wrong MAC cannot be edited — it has to be annulled and re-signed (§3). So a
+decode never submits on its own: the value lands in the visible, editable
+field for the technician to check against the sticker in front of them.
 
 #### One application, two areas
 
