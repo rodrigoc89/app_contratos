@@ -30,7 +30,20 @@ interface PropiedadesFormularioEquipos {
   readonly valores: ValoresEquipos;
   readonly onCambiar: (campo: CampoTextoEquipos, valor: string) => void;
   readonly onCambiarPoe: (valor: boolean) => void;
-  readonly onCrear: () => void;
+  /**
+   * Task 19.1 — the only way back to the comodatario step. Editing
+   * `comodatario` after the draft exists (spec's debounced-autosave
+   * scenario) needs a real path there; before this task no step had one.
+   */
+  readonly onVolver: () => void;
+  /**
+   * Fires on submit. Before the draft exists this creates it (`POST
+   * /contratos`); once it exists, the same submit moves into signing
+   * instead — the container decides which, this organism only renders
+   * whichever `etiquetaEnvio` it is given (task 19.1).
+   */
+  readonly onEnviar: () => void;
+  readonly etiquetaEnvio: string;
   readonly error: string | null;
   readonly deshabilitado: boolean;
 }
@@ -39,13 +52,15 @@ export function FormularioEquipos({
   valores,
   onCambiar,
   onCambiarPoe,
-  onCrear,
+  onVolver,
+  onEnviar,
+  etiquetaEnvio,
   error,
   deshabilitado,
 }: PropiedadesFormularioEquipos) {
   function manejarEnvio(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
-    onCrear();
+    onEnviar();
   }
 
   return (
@@ -94,8 +109,11 @@ export function FormularioEquipos({
         disabled={deshabilitado}
       />
       {error !== null && <p role="alert">{error}</p>}
+      <Boton type="button" onClick={onVolver} disabled={deshabilitado}>
+        Volver
+      </Boton>
       <Boton type="submit" disabled={deshabilitado}>
-        Crear borrador
+        {etiquetaEnvio}
       </Boton>
     </form>
   );
