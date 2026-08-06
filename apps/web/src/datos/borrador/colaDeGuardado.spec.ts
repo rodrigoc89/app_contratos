@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatosActualizarContrato, DatosSesion } from "@contratos/esquemas";
 
 import { establecerSesion, limpiarSesion } from "../sesion/estadoSesion";
+import { hayTrabajoEnCurso, limpiarTrabajoEnCurso } from "../../pwa/trabajoEnCurso";
 import { crearColaDeGuardado } from "./colaDeGuardado";
 
 /**
@@ -55,8 +56,35 @@ describe("ColaDeGuardado", () => {
 
   afterEach(() => {
     limpiarSesion();
+    limpiarTrabajoEnCurso();
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it("marks trabajoEnCurso active while an edit is unflushed, and clears it once the PATCH settles (DESIGN.md D9)", async () => {
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    const cola = crearColaDeGuardado("c1");
+    expect(hayTrabajoEnCurso()).toBe(false);
+
+    cola.encolar({ equipos: EQUIPOS });
+    expect(hayTrabajoEnCurso()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(800);
+    await cola.vaciar();
+
+    expect(hayTrabajoEnCurso()).toBe(false);
+  });
+
+  it("keeps trabajoEnCurso active across a failed flush — the edit is still unsaved", async () => {
+    const fetchSimulado = vi.fn().mockResolvedValue(new Response("no", { status: 500 }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    const cola = crearColaDeGuardado("c1");
+
+    cola.encolar({ equipos: EQUIPOS });
+    await expect(cola.vaciar()).rejects.toThrow();
+
+    expect(hayTrabajoEnCurso()).toBe(true);
   });
 
   it("coalesces edits made before the debounce window elapses into one PATCH", async () => {
