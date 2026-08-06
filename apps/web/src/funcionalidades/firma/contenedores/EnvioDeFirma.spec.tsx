@@ -198,6 +198,32 @@ describe("EnvioDeFirma", () => {
     expect(leerBorradorLocal()).toBeNull();
   });
 
+  it("mounts the delivery screen once signing succeeds (PR15's own composition job, DESIGN.md D11)", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    const firmar = vi.fn().mockResolvedValue(contratoSellado());
+    const entregar = vi.fn();
+
+    render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={firmar}
+        entregar={entregar}
+      />,
+    );
+    await esperarPasoListo();
+
+    await firmarAmbosDocumentos(emitir);
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("firmado"));
+    expect(screen.getByRole("button", { name: "Compartir documentos" })).toBeInTheDocument();
+    // Nothing is fetched or shared until the technician actually taps it.
+    expect(entregar).not.toHaveBeenCalled();
+  });
+
   it("shows a mapped error and a Reintentar affordance that resubmits the SAME firmas — no re-signing required", async () => {
     const { crearObservador, emitir } = observadorFalsoPorTitulo();
     const sellado = contratoSellado();

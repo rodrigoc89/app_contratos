@@ -10,6 +10,8 @@ import { limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { mensajeDeError, type MensajeDeError } from "../../../errores/mensajeDeError";
+import { EntregaDeDocumentos } from "../../entrega/contenedores/EntregaDeDocumentos";
+import type { ResultadoEntrega } from "../../entrega/logica/entregaDeDocumentos";
 import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
 import type { SuperficieDeFirma } from "../logica/superficieDeFirma";
 import { firmarContrato } from "../logica/resultadoDeFirma";
@@ -37,6 +39,8 @@ export interface PropiedadesEnvioDeFirma {
     contratoId: string,
     firmas: readonly DatosFirmaCapturada[],
   ) => Promise<DatosContratoDetalle>;
+  /** Injection seam forwarded to `EntregaDeDocumentos` (PR15). Production leaves this unset. */
+  readonly entregar?: (contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>;
 }
 
 /**
@@ -58,6 +62,7 @@ export function EnvioDeFirma({
   crearObservador,
   crearSuperficie,
   firmar,
+  entregar,
 }: PropiedadesEnvioDeFirma) {
   const [estado, establecerEstado] = useState<EstadoEnvio>({ tipo: "revisando" });
   const ejecutarFirma = firmar ?? firmarContrato;
@@ -84,9 +89,15 @@ export function EnvioDeFirma({
   if (estado.tipo === "firmado") {
     const { numero } = estado.contrato;
     return (
-      <p role="status">
-        {numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"} correctamente.
-      </p>
+      <div>
+        <p role="status">
+          {numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"} correctamente.
+        </p>
+        <EntregaDeDocumentos
+          contrato={estado.contrato}
+          {...(entregar === undefined ? {} : { entregar })}
+        />
+      </div>
     );
   }
 
