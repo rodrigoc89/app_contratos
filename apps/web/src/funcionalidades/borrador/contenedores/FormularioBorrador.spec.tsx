@@ -415,6 +415,38 @@ describe("FormularioBorrador", () => {
   });
 
   /**
+   * Task 20.1's `resumiendo` guard, hardened. Independent review found this
+   * guard had no dedicated test: deleting `if (resumiendo) { return; }` from
+   * the debounced-write effect left the full web suite at 264/264 green.
+   * The guard exists for exactly one race: while the mount-time verification
+   * (task 20.2) is still in flight, `creado` is still `null` — so an
+   * unguarded debounce firing in that window would write `contratoId:
+   * creado?.id ?? null`, clobbering the very `contratoId` the verification
+   * is trying to confirm with `null`, discarding the technician's way back
+   * to this contract. `GET /contratos/c1` is left permanently unresolved
+   * here specifically to hold the component in `resumiendo` for the whole
+   * test, so the debounce's 500ms window is guaranteed to fall inside it.
+   */
+  it("does not overwrite the stored contratoId while the resume verification is still in flight (task 20.1 race guard)", () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: VALORES_COMPLETOS });
+    // Never resolves — keeps `resumiendo` true for the whole test, so the
+    // debounced write below fires (if unguarded) squarely inside the race
+    // window the guard exists to close.
+    const fetchSimulado = vi.fn().mockReturnValue(new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    render(<FormularioBorrador />);
+    vi.advanceTimersByTime(2_000);
+    vi.useRealTimers();
+
+    const guardado = leerBorradorLocal();
+    expect(guardado).not.toBeNull();
+    expect(guardado?.contratoId).toBe("c1");
+  });
+
+  /**
    * Non-negotiable constraint — a resumed draft must never reopen a contract
    * that is no longer `borrador` (e.g. already signed elsewhere while the
    * técnico was away). Falls back to a fresh, blank draft instead of
