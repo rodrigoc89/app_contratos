@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DatosSesion } from "@contratos/esquemas";
+import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
 
+import { guardarBorradorLocal, leerBorradorLocal, limpiarBorradorLocal } from "../../almacenamiento/borradorLocal";
 import { establecerSesion, limpiarSesion, obtenerSesionActual } from "./estadoSesion";
 import { refrescarSesion } from "./refresco";
 
@@ -44,6 +45,7 @@ describe("refrescarSesion", () => {
 
   afterEach(() => {
     limpiarSesion();
+    limpiarBorradorLocal();
     vi.unstubAllGlobals();
   });
 
@@ -106,5 +108,43 @@ describe("refrescarSesion", () => {
     await expect(refrescarSesion()).rejects.toThrow();
 
     expect(obtenerSesionActual()).toBeNull();
+  });
+
+  /**
+   * Task 20.3 — spec `web-auth-session`, "Session expires mid-form": a
+   * refresh failure mid-visit MUST NOT clear the técnico's `borrador`, only
+   * `cerrarSesion` (a deliberate logout, scenario 9) does that. The two
+   * paths are already structurally separate — this function calls
+   * `limpiarSesion()` directly and never `cerrarSesion()` — so this test
+   * locks that separation in, rather than fixing a bug. See apply-progress
+   * for the full "why" investigation (what actually happens on a mid-visit
+   * expiry versus a deliberate logout).
+   */
+  it("keeps the local borrador draft — and its contratoId — when the refresh fails, unlike a deliberate logout (task 20.3)", async () => {
+    const valoresDePrueba: DatosCrearContrato = {
+      comodatario: {
+        nombreCompleto: "Ana López",
+        dni: "30123456",
+        domicilioCalle: "San Martín 123",
+        ciudad: "Santiago del Estero",
+        whatsapp: "385 4123456",
+      },
+      equipos: {
+        antenaModelo: "Ubiquiti LiteBeam",
+        antenaMac: "AC:8B:A9:12:34:56",
+        poe: true,
+        canoMetros: 7.5,
+      },
+    };
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: valoresDePrueba });
+    const fetchSimulado = vi.fn().mockResolvedValue(new Response("no", { status: 401 }));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    await expect(refrescarSesion()).rejects.toThrow();
+
+    expect(obtenerSesionActual()).toBeNull();
+    const draftRestante = leerBorradorLocal();
+    expect(draftRestante).not.toBeNull();
+    expect(draftRestante?.contratoId).toBe("c1");
   });
 });

@@ -15,6 +15,7 @@ import {
   type DatosBorradorLocal,
 } from "../../../almacenamiento/borradorLocal";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
+import { obtenerContrato } from "../../../datos/consultas/obtenerContrato";
 import { crearBorrador } from "../../../datos/borrador/crearBorrador";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
@@ -103,12 +104,16 @@ export interface PropiedadesFormularioBorrador {
  *
  * `EsquemaCrearContrato` requires both halves at once, so there is no
  * `contratoId` — and no server autosave — until this single request
- * succeeds. Local recovery of the in-progress fields (PR8) is disabled once
- * the draft exists (see the write effect below) — the server, through every
- * successful `PATCH`, is the source of truth from that point on, and a
- * technician who reloads mid-edit resumes empty rather than risking a
- * duplicate `POST /contratos` from a resurfaced pre-creation draft (open
- * item 4, `tasks`).
+ * succeeds.
+ *
+ * Task 20.1 (overrules task 19.1's own "stop writing once created" choice —
+ * see apply-progress for the full "why"): local recovery of the in-progress
+ * fields stays live for the WHOLE edit-before-signing window, not just
+ * before creation. Once `POST /contratos` succeeds, the draft is rewritten
+ * to carry the real `contratoId` instead of the previous hardcoded `null`,
+ * and every later edit keeps refreshing it. This is what makes task 20.2's
+ * resume-on-mount below possible — PR19's local draft had no `contratoId`
+ * to resume from at all.
  */
 export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }: PropiedadesFormularioBorrador) {
   // Read exactly once, on mount (spec `borrador-form`, "Recovery scope after
@@ -128,6 +133,63 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
   const [enviando, establecerEnviando] = useState(false);
   const [creado, establecerCreado] = useState<DatosContratoCreado | null>(null);
 
+  // Task 20.2 — a stored draft naming a `contratoId` is not trusted blindly:
+  // it is verified against the server before it is ever shown as editable
+  // again (non-negotiable — never resurrect a contract that already left
+  // `borrador`, e.g. signed elsewhere while the técnico was away). `true`
+  // only when there is something to verify; a brand-new visit skips this
+  // state entirely and renders the form immediately, same as before.
+  const [resumiendo, establecerResumiendo] = useState(
+    borradorLocal !== null && borradorLocal.contratoId !== null,
+  );
+
+  useEffect(() => {
+    const contratoIdARecuperar = borradorLocal?.contratoId ?? null;
+    if (contratoIdARecuperar === null) {
+      return;
+    }
+    let cancelado = false;
+    const reiniciarEnBlanco = () => {
+      limpiarBorradorLocal();
+      establecerPaso("comodatario");
+      establecerComodatario(COMODATARIO_VACIO);
+      establecerEquipos(EQUIPOS_VACIO);
+      establecerResumiendo(false);
+    };
+    void (async () => {
+      try {
+        const contrato = await obtenerContrato(contratoIdARecuperar);
+        if (cancelado) {
+          return;
+        }
+        if (contrato.estado !== "borrador") {
+          // The contract moved on without this tablet knowing — most
+          // plausibly signed from another device. Reopening it for editing
+          // would be the worst outcome this task can produce.
+          reiniciarEnBlanco();
+          return;
+        }
+        const contratoRecuperado: DatosContratoCreado = { id: contrato.id, estado: contrato.estado };
+        establecerCreado(contratoRecuperado);
+        onCreado?.(contratoRecuperado);
+        establecerResumiendo(false);
+      } catch {
+        // Gone (`no_encontrado`), unreachable, or any other failure —
+        // guessing "it is probably still fine" is exactly what the
+        // constraint above forbids. Same fresh-start fallback.
+        if (!cancelado) {
+          reiniciarEnBlanco();
+        }
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+    // Runs once per mount — `borradorLocal` is read once, above, and never
+    // changes for this component's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // DESIGN.md D8, "Written when: debounced on form change" — only once the
   // merged state actually parses as a full `DatosCrearContrato`
   // (`EsquemaEquipos.poe` is a required boolean, so a still-empty equipos
@@ -135,24 +197,25 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
   // is what makes `leerBorradorLocal` above ever find something to restore
   // — `guardarBorradorLocal` had no production caller anywhere before this.
   //
-  // Task 19.1/D8 decision: gated on `creado === null`. Once the draft
-  // exists, the server (through every successful `PATCH` below) is the
-  // recovery mechanism, not `localStorage` — writing a post-creation draft
-  // here would resurrect open item 4 (a reload restoring already-submitted
-  // values with a non-null `contratoId` this component never reads back,
-  // inviting a duplicate `POST /contratos`) rather than closing it.
+  // Task 20.1: no longer gated on `creado === null` — writes for the whole
+  // edit-before-signing window, carrying `creado`'s real `contratoId` once
+  // one exists. Gated on `!resumiendo` instead: while the mount-time
+  // verification above is still in flight, the old draft's own `contratoId`
+  // must not be prematurely overwritten with `null` by this debounce firing
+  // first (the resume it is trying to prove would be destroyed by the very
+  // write meant to preserve it).
   useEffect(() => {
-    if (creado !== null) {
+    if (resumiendo) {
       return;
     }
     const temporizador = setTimeout(() => {
       const analisis = EsquemaCrearContrato.safeParse({ comodatario, equipos });
       if (analisis.success) {
-        guardarBorradorLocal({ contratoId: null, paso, valores: analisis.data });
+        guardarBorradorLocal({ contratoId: creado?.id ?? null, paso, valores: analisis.data });
       }
     }, RETRASO_GUARDADO_LOCAL_MS);
     return () => clearTimeout(temporizador);
-  }, [comodatario, equipos, paso, creado]);
+  }, [comodatario, equipos, paso, creado, resumiendo]);
 
   // Task 18.3 — the whole updated half, never a single field (DESIGN.md D3,
   // "encolar merges ... whole comodatario/equipos halves"). Re-validated
@@ -230,13 +293,13 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
     establecerEnviando(true);
     try {
       const contrato = await crearBorrador(validacionCompleta.data);
-      // Not one of DESIGN.md D8's originally listed clearing triggers, but a
-      // deliberate addition here: once a draft exists to restore, an app
-      // kill right after this succeeds (before signing) would otherwise
-      // restore these already-submitted values on the *next* launch and
-      // invite a duplicate `POST /contratos`. Nothing downstream of this
-      // point (`EnvioDeFirma`, `PasoFirmaDual`) reads this draft at all.
-      limpiarBorradorLocal();
+      // Task 20.1 (overrules task 19.1's own choice, see apply-progress):
+      // rewritten with the real `contratoId` instead of cleared. Written
+      // synchronously here, not left to the debounced effect above, so an
+      // app kill in the instant right after this succeeds still leaves a
+      // resumable draft — not a window where neither the old write (already
+      // superseded) nor the next debounced one (not yet due) has happened.
+      guardarBorradorLocal({ contratoId: contrato.id, paso, valores: validacionCompleta.data });
       establecerCreado(contrato);
       onCreado?.(contrato);
     } catch (motivo) {
@@ -266,6 +329,13 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
     }
     establecerError(null);
     onContinuarAFirma?.();
+  }
+
+  // Task 20.2 — never renders the blank "Crear borrador" step (or a stale
+  // step 2 the técnico did not actually confirm) while the stored
+  // `contratoId` above is still being verified against the server.
+  if (resumiendo) {
+    return <p role="status">Recuperando el borrador guardado…</p>;
   }
 
   return (

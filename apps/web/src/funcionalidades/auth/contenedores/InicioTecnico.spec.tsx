@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { hayTrabajoEnCurso, limpiarTrabajoEnCurso } from "../../../pwa/trabajoEnCurso";
+import { limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import { establecerSesion, limpiarSesion } from "../../../datos/sesion/estadoSesion";
 import { InicioTecnico } from "./InicioTecnico";
 
@@ -117,6 +118,12 @@ describe("InicioTecnico", () => {
   afterEach(() => {
     limpiarSesion();
     limpiarTrabajoEnCurso();
+    // Task 20.1 (overrules task 19.1): the local draft now survives
+    // creation, carrying the real `contratoId` (see apply-progress) —
+    // without this, one test's created draft leaks into the next test in
+    // this file as a `resumiendo` mount, since neither seeds nor clears
+    // `localStorage` between tests otherwise.
+    limpiarBorradorLocal();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });

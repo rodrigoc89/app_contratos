@@ -52,8 +52,17 @@ async function ejecutarRefresco(): Promise<DatosSesion> {
   if (!respuesta.ok) {
     // A refused refresh means the session is over — expired, revoked, or
     // reused. Nothing about *why* changes what the client does: clear the
-    // session so no further request goes out with a token that will never
-    // work, and let the caller (clienteHttp's 401 handler) route to login.
+    // in-memory session so no further request goes out with a token that
+    // will never work.
+    //
+    // Task 20.3, spec `web-auth-session` ("Session expires mid-form"):
+    // deliberately `limpiarSesion()`, never `cerrarSesion()` (D4, scenario
+    // 9). A mid-visit expiry is not a decision the técnico made — the local
+    // `borrador` draft (and the `contratoId` it carries, task 20.1) must
+    // survive so `FormularioBorrador`'s resume (task 20.2) can restore it
+    // after re-login. Only an explicit logout clears that draft. See
+    // `refresco.spec.ts` for the test proving this stays true, and
+    // `sesion.spec.ts` for `cerrarSesion`'s opposite guarantee.
     limpiarSesion();
     throw new Error(`El refresco de sesión falló con estado ${respuesta.status}.`);
   }

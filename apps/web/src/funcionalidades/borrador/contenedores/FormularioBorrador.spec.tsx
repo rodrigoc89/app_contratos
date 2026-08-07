@@ -37,6 +37,35 @@ function respuestaDeErrorApi(estado: number, codigo: string, mensaje: string): R
   return respuestaJson({ error: { mensaje, codigo } }, estado);
 }
 
+/**
+ * Task 20.2/20.3 — a minimal, schema-valid `GET /contratos/:id` payload, the
+ * read this task adds to verify a resumed `contratoId` before ever showing
+ * it as editable again (non-negotiable: never resurrect a contract that has
+ * already left `borrador`).
+ */
+function contratoDetalleValido(estado: "borrador" | "vigente" = "borrador") {
+  return {
+    id: "c1",
+    estado,
+    numero: estado === "borrador" ? null : 42,
+    comodatario: {
+      nombreCompleto: "Ana López",
+      dni: "30.123.456",
+      domicilioCalle: "San Martín 123",
+      ciudad: "Santiago del Estero",
+      provincia: "Santiago del Estero",
+      whatsapp: "385 4123456",
+    },
+    equipos: VALORES_COMPLETOS.equipos,
+    plazo: null,
+    fechaFirma: null,
+    plantillaVersionId: null,
+    documentos: [],
+    eventos: [],
+    equiposPendientesDeRestitucion: false,
+  };
+}
+
 function completarComodatario() {
   fireEvent.change(screen.getByLabelText("Nombre y apellido"), { target: { value: "Ana López" } });
   fireEvent.change(screen.getByLabelText("DNI"), { target: { value: "30123456" } });
@@ -293,7 +322,18 @@ describe("FormularioBorrador", () => {
     });
   });
 
-  it("clears the local draft once the contract is actually created — avoids restoring a stale draft into a duplicate submission", async () => {
+  /**
+   * Task 20.1 (maintainer decision, overrules PR19/task 19.1's own choice to
+   * clear the draft on creation — see apply-progress for the full "why").
+   * PR19 cleared the draft the instant `POST /contratos` succeeded because,
+   * at the time, nothing downstream could ever read a `contratoId` back out
+   * of it — resuming was not built yet. This task builds that resume path
+   * (20.2 below), which makes the old behaviour actively harmful: clearing
+   * the ONE slot a reload could resume from is exactly what open item 4
+   * (`tasks`) named as the gap. The draft now survives creation and carries
+   * the real `contratoId` instead of the old hardcoded `null`.
+   */
+  it("keeps the local draft after creation, now carrying the real contratoId — the resume mechanism this task adds (task 20.1)", async () => {
     establecerSesion(sesionFalsa());
     guardarBorradorLocal({ contratoId: null, paso: "equipos", valores: VALORES_COMPLETOS });
     const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
@@ -303,6 +343,148 @@ describe("FormularioBorrador", () => {
     fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
 
     expect(await screen.findByText(/c1/)).toBeInTheDocument();
+    const guardado = leerBorradorLocal();
+    expect(guardado).not.toBeNull();
+    expect(guardado?.contratoId).toBe("c1");
+    expect(guardado?.valores.equipos.antenaMac).toBe("AC:8B:A9:12:34:56");
+  });
+
+  /**
+   * Task 20.1, write cadence — a resumed/created draft keeps reflecting
+   * post-creation edits, not just the moment of creation. Verified by
+   * breaking: reverting this to the old `if (creado !== null) return;` gate
+   * (PR19's behaviour) makes this assertion fail — `leerBorradorLocal()`
+   * would still show the pre-creation "Ubiquiti LiteBeam" instead of the
+   * post-creation edit.
+   */
+  it("keeps writing the local draft — now with the contratoId — through post-creation edits (task 20.1)", async () => {
+    establecerSesion(sesionFalsa());
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    render(<FormularioBorrador />);
+
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+    await screen.findByText(/c1/);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.change(screen.getByLabelText("Modelo de antena"), { target: { value: "TP-Link CPE210" } });
+    vi.advanceTimersByTime(2_000);
+    vi.useRealTimers();
+
+    const guardado = leerBorradorLocal();
+    expect(guardado).not.toBeNull();
+    expect(guardado?.contratoId).toBe("c1");
+    expect(guardado?.valores.equipos.antenaModelo).toBe("TP-Link CPE210");
+  });
+
+  /**
+   * Task 20.2 — the reason 20.1 persists the real `contratoId`: a reload
+   * mid-visit must resume the SAME contract, never create a second one.
+   * `obtenerContrato` (`GET /contratos/:id`) is the verification this task
+   * adds before trusting a stored `contratoId` at all (non-negotiable: never
+   * resurrect a contract that already left `borrador` for editing).
+   * Verified by breaking: writing `contratoId: null` in the seeded draft
+   * below makes this test fail — the form shows the empty comodatario step
+   * and `onCreado` is never called, because there is nothing to resume.
+   */
+  it("resumes an existing borrador from its stored contratoId on mount, without ever calling POST /contratos (task 20.2)", async () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: VALORES_COMPLETOS });
+    const alCrear = vi.fn();
+    const fetchSimulado = vi.fn().mockImplementation((ruta: unknown, init?: RequestInit) => {
+      const metodo = init?.method ?? "GET";
+      if (ruta === "/contratos/c1" && metodo === "GET") {
+        return Promise.resolve(respuestaJson(contratoDetalleValido("borrador")));
+      }
+      throw new Error(`fetch inesperado: ${metodo} ${String(ruta)}`);
+    });
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    render(<FormularioBorrador onCreado={alCrear} />);
+
+    expect(await screen.findByLabelText("Modelo de antena")).toHaveValue("Ubiquiti LiteBeam");
+    await waitFor(() => expect(alCrear).toHaveBeenCalledWith({ id: "c1", estado: "borrador" }));
+    // The stronger half of the proof: the equipos step's submit reads
+    // "Continuar", not "Crear borrador" — the only button that issues
+    // `POST /contratos` is unreachable once resumed, not merely un-tapped.
+    expect(screen.getByRole("button", { name: "Continuar" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Crear borrador" })).not.toBeInTheDocument();
+    expect(fetchSimulado.mock.calls.some((llamada) => llamada[0] === "/contratos")).toBe(false);
+  });
+
+  /**
+   * Task 20.1's `resumiendo` guard, hardened. Independent review found this
+   * guard had no dedicated test: deleting `if (resumiendo) { return; }` from
+   * the debounced-write effect left the full web suite at 264/264 green.
+   * The guard exists for exactly one race: while the mount-time verification
+   * (task 20.2) is still in flight, `creado` is still `null` — so an
+   * unguarded debounce firing in that window would write `contratoId:
+   * creado?.id ?? null`, clobbering the very `contratoId` the verification
+   * is trying to confirm with `null`, discarding the technician's way back
+   * to this contract. `GET /contratos/c1` is left permanently unresolved
+   * here specifically to hold the component in `resumiendo` for the whole
+   * test, so the debounce's 500ms window is guaranteed to fall inside it.
+   */
+  it("does not overwrite the stored contratoId while the resume verification is still in flight (task 20.1 race guard)", () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: VALORES_COMPLETOS });
+    // Never resolves — keeps `resumiendo` true for the whole test, so the
+    // debounced write below fires (if unguarded) squarely inside the race
+    // window the guard exists to close.
+    const fetchSimulado = vi.fn().mockReturnValue(new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    render(<FormularioBorrador />);
+    vi.advanceTimersByTime(2_000);
+    vi.useRealTimers();
+
+    const guardado = leerBorradorLocal();
+    expect(guardado).not.toBeNull();
+    expect(guardado?.contratoId).toBe("c1");
+  });
+
+  /**
+   * Non-negotiable constraint — a resumed draft must never reopen a contract
+   * that is no longer `borrador` (e.g. already signed elsewhere while the
+   * técnico was away). Falls back to a fresh, blank draft instead of
+   * silently exposing an editable form over a `vigente` contract.
+   */
+  it("does not resume a contratoId whose contract already left borrador — starts a fresh draft instead (non-negotiable)", async () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: VALORES_COMPLETOS });
+    const alCrear = vi.fn();
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson(contratoDetalleValido("vigente")));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    render(<FormularioBorrador onCreado={alCrear} />);
+
+    expect(await screen.findByLabelText("Nombre y apellido")).toHaveValue("");
+    expect(alCrear).not.toHaveBeenCalled();
+    expect(leerBorradorLocal()).toBeNull();
+  });
+
+  /**
+   * Same fallback for the case where the stored contract cannot even be
+   * confirmed — gone, or the tablet cannot reach the server right now.
+   * Guessing "it is probably still fine" is exactly the failure mode the
+   * constraint forbids.
+   */
+  it("does not resume when the stored contratoId can no longer be verified — starts a fresh draft instead", async () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: VALORES_COMPLETOS });
+    const alCrear = vi.fn();
+    const fetchSimulado = vi.fn().mockResolvedValue(
+      respuestaDeErrorApi(404, "no_encontrado", "Ese contrato no existe."),
+    );
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    render(<FormularioBorrador onCreado={alCrear} />);
+
+    expect(await screen.findByLabelText("Nombre y apellido")).toHaveValue("");
+    expect(alCrear).not.toHaveBeenCalled();
     expect(leerBorradorLocal()).toBeNull();
   });
 });
