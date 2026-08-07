@@ -31,9 +31,11 @@ function respuestaJson(cuerpo: unknown, estado = 200): Response {
   });
 }
 
-function renderizar() {
+function renderizar(motivo?: "sesion_expirada" | "cierre_explicito") {
+  const entrada =
+    motivo === undefined ? "/login" : { pathname: "/login", state: { motivo } };
   render(
-    <MemoryRouter initialEntries={["/login"]}>
+    <MemoryRouter initialEntries={[entrada]}>
       <PaginaLogin />
     </MemoryRouter>,
   );
@@ -89,5 +91,30 @@ describe("PaginaLogin", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
 
     expect(await screen.findByText("Usuario o contraseña incorrectos.")).toBeInTheDocument();
+  });
+
+  /**
+   * Task 21, spec `web-auth-session` — "Session expires mid-form": the app
+   * must "show a clear reason" on arrival, distinguishing a mid-visit
+   * expiry from an explicit logout. `GuardiaDeSesion` carries the reason as
+   * router `state`, not through storage (Ley 25.326 — nothing new belongs
+   * in `localStorage` here).
+   */
+  it("shows no reason banner on a plain, reason-less visit to login", () => {
+    renderizar();
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("explains a mid-visit session expiry when arriving with that reason", () => {
+    renderizar("sesion_expirada");
+
+    expect(screen.getByRole("status")).toHaveTextContent(/tu sesión expiró/i);
+  });
+
+  it("confirms an explicit logout, distinctly from an expiry", () => {
+    renderizar("cierre_explicito");
+
+    expect(screen.getByRole("status")).toHaveTextContent(/cerraste tu sesión/i);
   });
 });

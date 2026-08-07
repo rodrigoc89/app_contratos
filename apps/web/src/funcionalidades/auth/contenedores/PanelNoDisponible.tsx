@@ -13,7 +13,10 @@ export function PanelNoDisponible() {
 
   async function manejarCerrarSesion() {
     await cerrarSesion();
-    navegar("/login", { replace: true });
+    // Task 21: carries the explicit-logout reason so `PaginaLogin` shows a
+    // confirmation distinct from a mid-visit expiry, same as the reactive
+    // redirect `GuardiaDeSesion` would otherwise perform on its own.
+    navegar("/login", { replace: true, state: { motivo: "cierre_explicito" } });
   }
 
   return (
