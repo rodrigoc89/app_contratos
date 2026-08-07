@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -71,5 +71,23 @@ describe("route guards", () => {
 
     expect(screen.getByText(/no está disponible todavía/i)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Datos del cliente" })).not.toBeInTheDocument();
+  });
+
+  /**
+   * Task 21, spec `web-auth-session` — "Session expires mid-form". Before
+   * this task, `GuardiaDeSesion` only read the session at render time:
+   * `refresco.ts` clearing it out of band (a non-React call site, mid-visit)
+   * never triggered a re-render, so the técnico stayed stuck on the form.
+   */
+  it("navigates to login the instant the session is cleared out of band, with no reload", async () => {
+    establecerSesion(sesionFalsa("tecnico"));
+    renderizarEn("/");
+    expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
+
+    act(() => {
+      limpiarSesion();
+    });
+
+    expect(await screen.findByLabelText("Usuario")).toBeInTheDocument();
   });
 });
