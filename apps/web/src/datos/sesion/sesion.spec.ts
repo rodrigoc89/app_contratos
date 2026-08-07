@@ -4,7 +4,12 @@ import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
 
 import { guardarBorradorLocal, leerBorradorLocal } from "../../almacenamiento/borradorLocal";
 import { borrarTokenDeRefrescoGuardado, obtenerTokenDeRefrescoGuardado } from "./almacenSesion";
-import { establecerSesion, limpiarSesion, obtenerSesionActual } from "./estadoSesion";
+import {
+  establecerSesion,
+  limpiarSesion,
+  obtenerMotivoUltimoCierre,
+  obtenerSesionActual,
+} from "./estadoSesion";
 import { cerrarSesion, iniciarSesion } from "./sesion";
 
 /**
@@ -129,5 +134,14 @@ describe("cerrarSesion (scenario 9)", () => {
     await cerrarSesion();
 
     expect(leerBorradorLocal()).toBeNull();
+  });
+
+  it("records an explicit-logout motivo, distinct from a mid-visit expiry (task 21)", async () => {
+    establecerSesion(sesionFalsa("expirada"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+
+    await cerrarSesion();
+
+    expect(obtenerMotivoUltimoCierre()).toBe("cierre_explicito");
   });
 });

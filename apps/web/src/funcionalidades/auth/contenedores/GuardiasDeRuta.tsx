@@ -1,17 +1,26 @@
 import { Navigate, Outlet } from "react-router-dom";
 
-import { obtenerSesionActual } from "../../../datos/sesion/estadoSesion";
+import { obtenerMotivoUltimoCierre, obtenerSesionActual } from "../../../datos/sesion/estadoSesion";
+import { usarSesionActual } from "../usarSesionActual";
 
 /**
- * Requires a session to reach anything nested under it. Read at render
- * time — no reactive state needed here: every transition that changes the
- * session (login, logout) already routes through `navigate(...)`, which by
- * itself re-renders whatever the router matches next against the session
- * as it now stands.
+ * Requires a session to reach anything nested under it.
+ *
+ * Task 21, spec `web-auth-session` ("Session expires mid-form"): reads the
+ * session reactively (`usarSesionActual`, `useSyncExternalStore`-backed)
+ * rather than only at render time. A login/logout that routes through
+ * `navigate(...)` would re-render this anyway, but `refresco.ts` clears the
+ * session from a non-React call site mid-visit — without the subscription,
+ * that clear never reached this component, and the técnico stayed on a
+ * screen backed by a dead session until a manual reload. The redirect
+ * carries `state.motivo` (`obtenerMotivoUltimoCierre()`) so `PaginaLogin`
+ * can explain why — a mid-visit expiry reads differently from an explicit
+ * logout.
  */
 export function GuardiaDeSesion() {
-  if (obtenerSesionActual() === null) {
-    return <Navigate to="/login" replace />;
+  const sesion = usarSesionActual();
+  if (sesion === null) {
+    return <Navigate to="/login" replace state={{ motivo: obtenerMotivoUltimoCierre() }} />;
   }
   return <Outlet />;
 }

@@ -1,13 +1,33 @@
 import { EsquemaLogin } from "@contratos/esquemas";
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { Boton } from "../../../componentes/atomos/Boton";
 import { CampoTexto } from "../../../componentes/atomos/CampoTexto";
 import { Etiqueta } from "../../../componentes/atomos/Etiqueta";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
+import type { MotivoCierreDeSesion } from "../../../datos/sesion/estadoSesion";
 import { iniciarSesion } from "../../../datos/sesion/sesion";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
+
+/**
+ * Task 21, spec `web-auth-session` — "Session expires mid-form": the
+ * técnico-facing reason shown on arrival, distinguishing a mid-visit
+ * expiry from an explicit logout (`GuardiaDeSesion` carries this as router
+ * `state.motivo`, never through storage).
+ */
+const MENSAJE_POR_MOTIVO: Record<MotivoCierreDeSesion, string> = {
+  sesion_expirada: "Tu sesión expiró. Iniciá sesión nuevamente para continuar con la visita.",
+  cierre_explicito: "Cerraste tu sesión correctamente.",
+};
+
+function motivoDesdeEstado(estado: unknown): MotivoCierreDeSesion | null {
+  if (typeof estado !== "object" || estado === null || !("motivo" in estado)) {
+    return null;
+  }
+  const { motivo } = estado as { motivo: unknown };
+  return motivo === "sesion_expirada" || motivo === "cierre_explicito" ? motivo : null;
+}
 
 /**
  * The login screen. Validates against the shared `EsquemaLogin` before any
@@ -18,6 +38,8 @@ import { mensajeDeError } from "../../../errores/mensajeDeError";
  */
 export function PaginaLogin() {
   const navegar = useNavigate();
+  const ubicacion = useLocation();
+  const motivo = motivoDesdeEstado(ubicacion.state);
   const [nombreUsuario, establecerNombreUsuario] = useState("");
   const [contrasena, establecerContrasena] = useState("");
   const [error, establecerError] = useState<string | null>(null);
@@ -48,6 +70,7 @@ export function PaginaLogin() {
 
   return (
     <form onSubmit={(evento: FormEvent<HTMLFormElement>) => void manejarEnvio(evento)}>
+      {motivo !== null && <p role="status">{MENSAJE_POR_MOTIVO[motivo]}</p>}
       <Etiqueta htmlFor="nombreUsuario">Usuario</Etiqueta>
       <CampoTexto id="nombreUsuario" value={nombreUsuario} onCambiar={establecerNombreUsuario} />
       <Etiqueta htmlFor="contrasena">Contraseña</Etiqueta>
