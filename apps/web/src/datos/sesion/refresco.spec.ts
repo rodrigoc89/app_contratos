@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
 
 import { guardarBorradorLocal, leerBorradorLocal, limpiarBorradorLocal } from "../../almacenamiento/borradorLocal";
+import {
+  borrarTokenDeRefrescoGuardado,
+  guardarTokenDeRefresco,
+  obtenerTokenDeRefrescoGuardado,
+} from "./almacenSesion";
 import { establecerSesion, limpiarSesion, obtenerSesionActual } from "./estadoSesion";
 import { refrescarSesion } from "./refresco";
 
@@ -46,6 +51,7 @@ describe("refrescarSesion", () => {
   afterEach(() => {
     limpiarSesion();
     limpiarBorradorLocal();
+    borrarTokenDeRefrescoGuardado();
     vi.unstubAllGlobals();
   });
 
@@ -146,5 +152,76 @@ describe("refrescarSesion", () => {
     const draftRestante = leerBorradorLocal();
     expect(draftRestante).not.toBeNull();
     expect(draftRestante?.contratoId).toBe("c1");
+  });
+
+  /**
+   * Task 22, part (a) — spec `web-auth-session` / DESIGN.md D4. Refresh
+   * tokens rotate and are single-use: the copy `iniciarSesion` wrote at
+   * login is burned the first time any refresh happens in that session. If
+   * the rotated token is never persisted, the next cold start presents the
+   * server with an already-consumed token, which
+   * `RefrescarSesion.rechazarTokenMuerto` reads as theft and revokes the
+   * whole family. Persisting the rotation on every success is what makes a
+   * cold-start restore (part b) safe to wire at all.
+   */
+  it("persists the rotated refresh token after a successful refresh (task 22)", async () => {
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaSesion(sesionFalsa("nueva")));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    await refrescarSesion();
+
+    expect(obtenerTokenDeRefrescoGuardado()).toBe("refresco-nueva");
+  });
+
+  /**
+   * Task 22, part (a). A refused refresh means the stored token is already
+   * dead — leaving it in place would present it again on the next boot and
+   * re-trigger the same reuse-detection/theft path. Clearing it here is
+   * what keeps a refused refresh from becoming a poisoned next boot.
+   */
+  it("clears the stored refresh token when the server refuses the refresh (task 22)", async () => {
+    guardarTokenDeRefresco("token-por-morir");
+    const fetchSimulado = vi.fn().mockResolvedValue(new Response("no", { status: 401 }));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    await expect(refrescarSesion()).rejects.toThrow();
+
+    expect(obtenerTokenDeRefrescoGuardado()).toBeNull();
+  });
+
+  /**
+   * Task 22, part (b). A cold start has no in-memory session by
+   * definition — `estadoSesion.ts`'s module state resets on every reload —
+   * so `ejecutarRefresco` must be able to source the refresh token from
+   * `almacenSesion.ts` as well, not only from `obtenerSesionActual()`. This
+   * is what lets `refrescarSesion()` (and its single-flight mutex) serve
+   * boot and mid-visit alike through the one code path.
+   */
+  it("falls back to the stored refresh token when there is no in-memory session (cold start, task 22)", async () => {
+    limpiarSesion();
+    guardarTokenDeRefresco("token-guardado");
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaSesion(sesionFalsa("restaurada")));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    const resultado = await refrescarSesion();
+
+    expect(fetchSimulado).toHaveBeenCalledWith(
+      "/auth/refresh",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ tokenDeRefresco: "token-guardado" }),
+      }),
+    );
+    expect(resultado.tokenDeAcceso).toBe("acceso-restaurada");
+    expect(obtenerSesionActual()?.tokenDeAcceso).toBe("acceso-restaurada");
+  });
+
+  it("throws without any network call when there is no in-memory session and no stored token (task 22)", async () => {
+    limpiarSesion();
+    const fetchSimulado = vi.fn();
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    await expect(refrescarSesion()).rejects.toThrow("No hay sesión activa para refrescar.");
+    expect(fetchSimulado).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,10 @@
 import { EsquemaSesion, type DatosSesion, type DatosTokenDeRefresco } from "@contratos/esquemas";
 
+import {
+  borrarTokenDeRefrescoGuardado,
+  guardarTokenDeRefresco,
+  obtenerTokenDeRefrescoGuardado,
+} from "./almacenSesion";
 import { establecerSesion, limpiarSesion, obtenerSesionActual } from "./estadoSesion";
 
 /**
@@ -29,14 +34,23 @@ export function refrescarSesion(): Promise<DatosSesion> {
   return refrescoEnCurso;
 }
 
+/**
+ * Task 22 — the token source is "the in-memory session's, otherwise the
+ * stored one". A cold start has no in-memory session by definition
+ * (`estadoSesion.ts`'s module state resets on every reload), so this is
+ * what lets `refrescarSesion()` — and its single-flight mutex above — serve
+ * both a boot-time restore and a mid-visit 401 through the same function,
+ * instead of a second code path that could double-present the token.
+ */
 async function ejecutarRefresco(): Promise<DatosSesion> {
   const sesion = obtenerSesionActual();
+  const tokenDeRefresco = sesion?.tokenDeRefresco ?? obtenerTokenDeRefrescoGuardado();
 
-  if (sesion === null) {
+  if (tokenDeRefresco === null) {
     throw new Error("No hay sesión activa para refrescar.");
   }
 
-  const cuerpo: DatosTokenDeRefresco = { tokenDeRefresco: sesion.tokenDeRefresco };
+  const cuerpo: DatosTokenDeRefresco = { tokenDeRefresco };
 
   // Deliberately a bare `fetch`, not `clienteHttp`: this request carries no
   // Bearer header and must never itself trigger the 401 → refresh
@@ -64,11 +78,22 @@ async function ejecutarRefresco(): Promise<DatosSesion> {
     // `refresco.spec.ts` for the test proving this stays true, and
     // `sesion.spec.ts` for `cerrarSesion`'s opposite guarantee.
     limpiarSesion();
+    // Task 22, part (a): the presented token is now known-dead — leaving it
+    // in the stored copy would present it again on the next boot, which
+    // `RefrescarSesion.rechazarTokenMuerto` reads as reuse of an
+    // already-rotated token and answers by revoking the whole family.
+    borrarTokenDeRefrescoGuardado();
     throw new Error(`El refresco de sesión falló con estado ${respuesta.status}.`);
   }
 
   const datos: unknown = await respuesta.json();
   const nuevaSesion = EsquemaSesion.parse(datos);
   establecerSesion(nuevaSesion);
+  // Task 22, part (a): persist the rotated token every time, not only at
+  // login (`sesion.ts`'s `iniciarSesion`). Refresh tokens are single-use —
+  // without this, the copy written at login is burned by the very first
+  // refresh of the session, and a later cold-start restore would present a
+  // dead token and be read as theft.
+  guardarTokenDeRefresco(nuevaSesion.tokenDeRefresco);
   return nuevaSesion;
 }
