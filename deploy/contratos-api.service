@@ -1,0 +1,97 @@
+# systemd unit for the contract API (DESIGN.md §10: "Run Node under a process
+# manager with restart-on-failure").
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Before installing, replace:
+#   - `/opt/contratos`            → where the repository is deployed
+#   - `/usr/local/bin/pnpm`       → the output of `which pnpm` on the server
+#   - `/srv/contratos/documentos` → the signed-PDF archive root, which must
+#                                   match ALMACEN_DOCUMENTOS_RUTA exactly
+#
+# Install:
+#   sudo useradd --system --home /opt/contratos --shell /usr/sbin/nologin contratos
+#   sudo install -m 0750 -o contratos -g contratos -d /srv/contratos/documentos
+#   sudo install -m 0700 -o root -g root -d /etc/contratos
+#   # write /etc/contratos/api.env, then:
+#   sudo chown root:contratos /etc/contratos/api.env
+#   sudo chmod 0640 /etc/contratos/api.env
+#   sudo cp deploy/contratos-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now contratos-api
+#   systemctl status contratos-api
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=API de contratos de comodato (IES.NET)
+Documentation=file:///opt/contratos/DESIGN.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=contratos
+Group=contratos
+WorkingDirectory=/opt/contratos/apps/api
+
+# The application deliberately never loads a .env file itself —
+# `apps/api/src/config/configuracion.ts` says so at the top and names this
+# exact mechanism: supplying the environment is the operator's job. That file
+# is the typed source of truth for what must be in here.
+#
+# This file holds JWT_SECRET and DATABASE_URL. Keep it root:contratos 0640 —
+# the service reads it, nothing else on the box should.
+#
+# Two variables are easy to get wrong and both are called out below:
+#   CONFIAR_EN_PROXY=true
+#   ALMACEN_DOCUMENTOS_RUTA=/srv/contratos/documentos
+EnvironmentFile=/etc/contratos/api.env
+
+# `jiti src/main.ts` is the real entry point, in production as well as in dev
+# (see `apps/api/package.json`). There is no `dist/`: Prisma 7's generator
+# emits TypeScript outside `src`, NestJS needs legacy decorators plus
+# `emitDecoratorMetadata`, and no single build tool satisfies both together.
+# `tsc --noEmit` is the type gate; jiti is the runtime.
+ExecStart=/usr/local/bin/pnpm start
+
+Restart=on-failure
+RestartSec=5s
+
+# SIGTERM is already handled properly: `app.enableShutdownHooks()` runs every
+# provider's `onApplicationShutdown`, which closes the Prisma pool AND the
+# headless Chromium that renders PDFs. Without a clean stop, every restart
+# leaks a browser process on a VPS sized around exactly one.
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=contratos-api
+
+# ── Hardening ────────────────────────────────────────────────────────────────
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectControlGroups=true
+
+# `ProtectSystem=strict` makes the whole filesystem read-only, including the
+# signed-PDF archive. That archive is the legal evidence this system exists to
+# produce, so it has to be named here explicitly or every signature fails at
+# the moment it is stored. This path must equal ALMACEN_DOCUMENTOS_RUTA — note
+# that the schema's default is the RELATIVE `var/documentos`, which resolves
+# against WorkingDirectory and is not what you want in production.
+ReadWritePaths=/srv/contratos/documentos
+
+# Deliberately NOT set: RestrictNamespaces, PrivateUsers, SystemCallFilter.
+# Chromium's own sandbox needs user and PID namespaces, and restricting them
+# is the classic way to make Puppeteer fail only in production, only under
+# load, with an error that looks like nothing to do with systemd. If you
+# harden further, verify by actually signing a contract end to end.
+#
+# Also deliberately NOT set: MemoryMax. Chromium's peak during a render is
+# spiky; a hard cap turns a slow render into an OOM kill mid-signature.
+# DESIGN.md §10 asks for 2 GB of swap as the safety net instead.
+
+[Install]
+WantedBy=multi-user.target
