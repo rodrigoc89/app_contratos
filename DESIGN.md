@@ -248,16 +248,25 @@ for RAM on a VPS already sized around Chromium.
 |---|---|---|
 | Build / PWA | Vite + `vite-plugin-pwa` (Workbox) | Installable, app-shell cached |
 | Server state | TanStack Query | Retries and cache; no Redux needed here |
-| Forms | React Hook Form + **Zod** | See shared-schema note below |
+| Forms | Component state + **Zod** `safeParse` | No form library — see below |
 | Routing | React Router | |
 | Structure | Atomic design + container/presentational | Matches existing team conventions |
 
 **Shared validation schemas.** Define the Zod schemas once and consume them
-from both sides — React Hook Form on the client, NestJS pipes on the server.
+from both sides — the client's form state on one, NestJS pipes on the other.
 DNI format, MAC format and required fields then have exactly one definition.
 A contract rejected by the server after the customer already signed is the
 worst possible failure in this system, so client and server must agree by
 construction, not by discipline.
+
+**No form library.** An earlier version of this document specified React Hook
+Form. Two slices were built without it before anyone noticed, which is the
+useful evidence: these forms are short, single-step, and validated by a schema
+that already exists and is already shared with the server. Component state plus
+`safeParse` covers them without adding a dependency, and the property that
+actually matters — client and server agreeing by construction — comes from the
+shared schema, not from the library. Revisit only if a form appears that needs
+field-level dirty/touched tracking these do not.
 
 #### Signature capture — build it, do not install it
 
