@@ -1,6 +1,7 @@
 import { Navigate, Outlet } from "react-router-dom";
 
 import { obtenerMotivoUltimoCierre, obtenerSesionActual } from "../../../datos/sesion/estadoSesion";
+import { usarRestauracionDeSesion } from "../usarRestauracionDeSesion";
 import { usarSesionActual } from "../usarSesionActual";
 
 /**
@@ -16,9 +17,20 @@ import { usarSesionActual } from "../usarSesionActual";
  * carries `state.motivo` (`obtenerMotivoUltimoCierre()`) so `PaginaLogin`
  * can explain why — a mid-visit expiry reads differently from an explicit
  * logout.
+ *
+ * Task 22 — a third boot state. Before deciding "session" or "no session",
+ * this also asks `usarRestauracionDeSesion()` whether a stored refresh
+ * token is still being verified from a cold start. Rendering nothing while
+ * `restaurando` is true is what stops a técnico with a live stored session
+ * from ever seeing the login screen flash before the app replaces it.
  */
 export function GuardiaDeSesion() {
+  const restaurando = usarRestauracionDeSesion();
   const sesion = usarSesionActual();
+
+  if (restaurando) {
+    return null;
+  }
   if (sesion === null) {
     return <Navigate to="/login" replace state={{ motivo: obtenerMotivoUltimoCierre() }} />;
   }
