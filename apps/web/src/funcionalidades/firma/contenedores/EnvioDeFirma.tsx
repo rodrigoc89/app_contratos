@@ -3,13 +3,14 @@ import type {
   DatosFirmaCapturada,
   DatosPrevisualizacion,
 } from "@contratos/esquemas";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Boton } from "../../../componentes/atomos/Boton";
 import { limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { mensajeDeError, type MensajeDeError } from "../../../errores/mensajeDeError";
+import { marcarTrabajoEnCurso } from "../../../pwa/trabajoEnCurso";
 import { EntregaDeDocumentos } from "../../entrega/contenedores/EntregaDeDocumentos";
 import type { ResultadoEntrega } from "../../entrega/logica/entregaDeDocumentos";
 import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
@@ -66,6 +67,18 @@ export function EnvioDeFirma({
 }: PropiedadesEnvioDeFirma) {
   const [estado, establecerEstado] = useState<EstadoEnvio>({ tipo: "revisando" });
   const ejecutarFirma = firmar ?? firmarContrato;
+
+  // DESIGN.md D9 — "any contract open, any signature captured" for the
+  // signing window: active from the moment this container mounts (review,
+  // both signature canvases, the submit itself) through a failed attempt
+  // still awaiting retry, and only clears once the contract is actually
+  // sealed. Cleanup covers an unmount mid-visit too (e.g. a hard navigation
+  // away), so the marker never survives past this container's own lifetime.
+  useEffect(() => {
+    const clave = `firma:${contratoId}`;
+    marcarTrabajoEnCurso(clave, estado.tipo !== "firmado");
+    return () => marcarTrabajoEnCurso(clave, false);
+  }, [contratoId, estado.tipo]);
 
   async function manejarListo(firmas: readonly DatosFirmaCapturada[]): Promise<void> {
     establecerEstado({ tipo: "firmando", firmas });

@@ -2,6 +2,7 @@ import { EsquemaActualizarContrato, type DatosActualizarContrato, type DatosCont
 
 import { clienteHttp } from "../clienteHttp";
 import { conReintentoDeConcurrencia } from "../reintentoDeConcurrencia";
+import { marcarTrabajoEnCurso } from "../../pwa/trabajoEnCurso";
 
 const RETRASO_DEBOUNCE_MS = 800;
 
@@ -27,6 +28,15 @@ export function crearColaDeGuardado(contratoId: string): ColaDeGuardado {
   let pendiente: DatosActualizarContrato | null = null;
   let enVuelo: Promise<void> | null = null;
   let temporizador: ReturnType<typeof setTimeout> | null = null;
+  const claveTrabajoEnCurso = `autosave:${contratoId}`;
+
+  // DESIGN.md D9 — "any unflushed autosave" is exactly `pendiente !== null ||
+  // enVuelo !== null`, the same condition `hayPendiente` already exposes.
+  // Called after every mutation of either variable, so the registry can
+  // never drift from what this queue itself considers unsaved.
+  function actualizarTrabajoEnCurso(): void {
+    marcarTrabajoEnCurso(claveTrabajoEnCurso, pendiente !== null || enVuelo !== null);
+  }
 
   function cancelarTemporizador(): void {
     if (temporizador !== null) {
@@ -62,6 +72,7 @@ export function crearColaDeGuardado(contratoId: string): ColaDeGuardado {
 
     const cuerpo = validado.data;
     pendiente = null;
+    actualizarTrabajoEnCurso();
 
     const intento = conReintentoDeConcurrencia(() =>
       clienteHttp<DatosContratoDetalle>(`/contratos/${contratoId}`, {
@@ -73,6 +84,7 @@ export function crearColaDeGuardado(contratoId: string): ColaDeGuardado {
     enVuelo = intento.then(
       () => {
         enVuelo = null;
+        actualizarTrabajoEnCurso();
         if (pendiente !== null) {
           dispararSinEsperar();
         }
@@ -84,9 +96,11 @@ export function crearColaDeGuardado(contratoId: string): ColaDeGuardado {
         // This never auto-retries itself.
         pendiente = { ...cuerpo, ...pendiente };
         enVuelo = null;
+        actualizarTrabajoEnCurso();
         throw error;
       },
     );
+    actualizarTrabajoEnCurso();
 
     return enVuelo;
   }
@@ -94,6 +108,7 @@ export function crearColaDeGuardado(contratoId: string): ColaDeGuardado {
   return {
     encolar(parche) {
       pendiente = { ...pendiente, ...parche };
+      actualizarTrabajoEnCurso();
       cancelarTemporizador();
       temporizador = setTimeout(dispararSinEsperar, RETRASO_DEBOUNCE_MS);
     },

@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { guardarBorradorLocal, leerBorradorLocal, limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
+import { hayTrabajoEnCurso, limpiarTrabajoEnCurso } from "../../../pwa/trabajoEnCurso";
 import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
 import type { MedicionDeDesplazamiento } from "../../revision/logica/puertaDeLectura";
 import type { SuperficieDeFirma } from "../logica/superficieDeFirma";
@@ -163,6 +164,56 @@ const BORRADOR_DE_PRUEBA = {
 describe("EnvioDeFirma", () => {
   afterEach(() => {
     limpiarBorradorLocal();
+    limpiarTrabajoEnCurso();
+  });
+
+  it("marks trabajoEnCurso active as soon as the signing step mounts, and clears it once sealed (DESIGN.md D9)", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    const firmar = vi.fn().mockResolvedValue(contratoSellado());
+
+    const { unmount } = render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={firmar}
+      />,
+    );
+    await esperarPasoListo();
+    expect(hayTrabajoEnCurso()).toBe(true);
+
+    await firmarAmbosDocumentos(emitir);
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("firmado"));
+    expect(hayTrabajoEnCurso()).toBe(false);
+
+    unmount();
+  });
+
+  it("keeps trabajoEnCurso active while a signed-but-unsubmitted-response error is showing — a retry is still pending work", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    const firmar = vi
+      .fn()
+      .mockRejectedValueOnce(new ErrorDeApi(500, { error: { mensaje: "falla de red", codigo: "http" } }));
+
+    render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={firmar}
+      />,
+    );
+    await esperarPasoListo();
+
+    await firmarAmbosDocumentos(emitir);
+
+    await screen.findByRole("alert");
+    expect(hayTrabajoEnCurso()).toBe(true);
   });
 
   it("submits the assembled firmas[] once Firmar is tapped, and clears the local draft on success (DESIGN.md D8)", async () => {
