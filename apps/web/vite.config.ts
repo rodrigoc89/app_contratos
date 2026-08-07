@@ -1,5 +1,8 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import { VitePWA } from "vite-plugin-pwa";
+
+import { OPCIONES_VITE_PLUGIN_PWA } from "./src/pwa/configuracionPwa";
 
 /**
  * `@contratos/esquemas` ships raw TypeScript with no build step of its own —
@@ -20,5 +23,10 @@ import { defineConfig } from "vite";
  * around a constraint that does not exist.
  */
 export default defineConfig({
-  plugins: [react()],
+  // `injectRegister: false` (in `OPCIONES_VITE_PLUGIN_PWA`) means this
+  // plugin never injects its own auto-register script — `main.tsx` is the
+  // one place that imports `virtual:pwa-register` and registers explicitly,
+  // through `pwa/registro.ts`, so the update-suppression decision
+  // (DESIGN.md D9, `pwa/actualizacion.ts`) is always consulted first.
+  plugins: [react(), VitePWA(OPCIONES_VITE_PLUGIN_PWA)],
 });
