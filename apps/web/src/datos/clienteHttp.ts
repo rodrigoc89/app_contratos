@@ -43,6 +43,12 @@ export interface OpcionesPeticion {
    * *obtaining* one, would be absurd.
    */
   readonly sinAutenticacion?: boolean;
+  /**
+   * Extra headers merged in on top of `Content-Type`/`Authorization`. Used by
+   * `clienteHttpBlob` (PR15, DESIGN.md D11) to ask for `Accept: application/pdf`
+   * — the sealed-document download is the first caller that needs one.
+   */
+  readonly encabezados?: Record<string, string>;
 }
 
 /**
@@ -73,18 +79,29 @@ const CODIGOS_QUE_DISPARAN_REFRESCO: ReadonlySet<CodigoDeError> = new Set([
  *    over".
  */
 export async function clienteHttp<T>(ruta: string, opciones: OpcionesPeticion = {}): Promise<T> {
-  return await ejecutar<T>(ruta, opciones, opciones.sinAutenticacion !== true);
+  return await ejecutar<T>(ruta, opciones, opciones.sinAutenticacion !== true, analizarCuerpo);
+}
+
+/**
+ * Same seam as `clienteHttp` — Bearer header, `encabezados`, and the 401 →
+ * refresh → retry interceptor all apply unchanged — but the body is a `Blob`
+ * and is never JSON-parsed (DESIGN.md D11: the sealed PDF response). The only
+ * difference from `clienteHttp` is which function reads `Response` on success.
+ */
+export async function clienteHttpBlob(ruta: string, opciones: OpcionesPeticion = {}): Promise<Blob> {
+  return await ejecutar<Blob>(ruta, opciones, opciones.sinAutenticacion !== true, analizarBlob);
 }
 
 async function ejecutar<T>(
   ruta: string,
   opciones: OpcionesPeticion,
   permitirRefresco: boolean,
+  analizar: (respuesta: Response) => Promise<T>,
 ): Promise<T> {
   const respuesta = await enviar(ruta, opciones);
 
   if (respuesta.ok) {
-    return await analizarCuerpo<T>(respuesta);
+    return await analizar(respuesta);
   }
 
   const error = await errorDesdeRespuesta(respuesta);
@@ -102,7 +119,7 @@ async function ejecutar<T>(
       // session expired", regardless of which of the two requests failed.
       throw error;
     }
-    return await ejecutar<T>(ruta, opciones, false);
+    return await ejecutar<T>(ruta, opciones, false, analizar);
   }
 
   throw error;
@@ -122,6 +139,10 @@ async function enviar(ruta: string, opciones: OpcionesPeticion): Promise<Respons
     }
   }
 
+  if (opciones.encabezados !== undefined) {
+    Object.assign(encabezados, opciones.encabezados);
+  }
+
   return await fetch(ruta, {
     method: opciones.metodo ?? "GET",
     headers: encabezados,
@@ -132,6 +153,10 @@ async function enviar(ruta: string, opciones: OpcionesPeticion): Promise<Respons
 async function analizarCuerpo<T>(respuesta: Response): Promise<T> {
   const texto = await respuesta.text();
   return (texto.length === 0 ? undefined : JSON.parse(texto)) as T;
+}
+
+async function analizarBlob(respuesta: Response): Promise<Blob> {
+  return await respuesta.blob();
 }
 
 async function errorDesdeRespuesta(respuesta: Response): Promise<ErrorDeApi> {

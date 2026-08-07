@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatosSesion } from "@contratos/esquemas";
 
 import { establecerSesion, limpiarSesion, obtenerSesionActual } from "./sesion/estadoSesion";
-import { clienteHttp, ErrorDeApi } from "./clienteHttp";
+import { clienteHttp, clienteHttpBlob, ErrorDeApi } from "./clienteHttp";
 
 function sesionFalsa(sufijo: string): DatosSesion {
   return {
@@ -224,4 +224,87 @@ describe("clienteHttp", () => {
       ]);
     },
   );
+});
+
+/**
+ * PR15 — DESIGN.md D11 says the sealed PDF is fetched "through `clienteHttp`",
+ * meaning it shares the same Bearer-header and refresh-then-retry seam as
+ * every other request; it must simply never JSON-parse the body. This is a
+ * thin second entry point over the same `ejecutar`, not a parallel client.
+ */
+describe("clienteHttpBlob", () => {
+  afterEach(() => {
+    limpiarSesion();
+    vi.unstubAllGlobals();
+  });
+
+  it("returns the response body as a Blob, never JSON-parsed", async () => {
+    // A string body, not a Blob one — passing a jsdom `Blob` into Node's
+    // `Response` constructor is a known cross-realm mismatch (undici does
+    // not recognise it and stringifies it as "[object Blob]" instead of
+    // reading its bytes). A string body exercises the exact same
+    // `analizarBlob` code path without that environment quirk.
+    const contenidoDelPdf = "%PDF-1.4 contenido de prueba";
+    establecerSesion(sesionFalsa("actual"));
+    const fetchSimulado = vi.fn().mockResolvedValue(
+      new Response(contenidoDelPdf, { status: 200, headers: { "Content-Type": "application/pdf" } }),
+    );
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    const resultado = await clienteHttpBlob("/contratos/c1/documentos/comodato");
+
+    expect(resultado).toBeInstanceOf(Blob);
+    expect(resultado.type).toBe("application/pdf");
+    expect(await resultado.text()).toBe(contenidoDelPdf);
+  });
+
+  it("attaches the Bearer header and any extra headers passed in opciones", async () => {
+    establecerSesion(sesionFalsa("actual"));
+    const fetchSimulado = vi.fn().mockResolvedValue(
+      new Response(new Blob(["x"]), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    await clienteHttpBlob("/contratos/c1/documentos/comodato", {
+      encabezados: { Accept: "application/pdf" },
+    });
+
+    const [, init] = fetchSimulado.mock.calls[0] as [string, RequestInit];
+    const encabezados = new Headers(init.headers);
+    expect(encabezados.get("Authorization")).toBe("Bearer acceso-actual");
+    expect(encabezados.get("Accept")).toBe("application/pdf");
+  });
+
+  it("throws ErrorDeApi built from the JSON envelope on failure, same as clienteHttp", async () => {
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaDeErrorApi(404, "no_encontrado", "Ese contrato no existe."));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    await expect(clienteHttpBlob("/contratos/no-existe/documentos/comodato")).rejects.toMatchObject({
+      estado: 404,
+      codigo: "no_encontrado",
+    });
+  });
+
+  it("refreshes once and retries transparently on no_autenticado, same as clienteHttp", async () => {
+    establecerSesion(sesionFalsa("vieja"));
+    const bytesDelPdf = new Blob(["%PDF-1.4"], { type: "application/pdf" });
+
+    let intentos = 0;
+    const fetchSimulado = vi.fn(async (entrada: string) => {
+      if (entrada === "/auth/refresh") {
+        return respuestaJson(sesionFalsa("nueva"));
+      }
+      intentos += 1;
+      if (intentos === 1) {
+        return respuestaDeErrorApi(401, "no_autenticado", "Su sesión expiró.");
+      }
+      return new Response(bytesDelPdf, { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    const resultado = await clienteHttpBlob("/contratos/c1/documentos/comodato");
+
+    expect(resultado).toBeInstanceOf(Blob);
+    expect(intentos).toBe(2);
+  });
 });
