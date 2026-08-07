@@ -17,3 +17,6 @@ generated/
 
 # Editor local history (VS Code Local History extension)
 .history/
+
+# CodeGraph index — per-checkout, never shared
+.codegraph/
