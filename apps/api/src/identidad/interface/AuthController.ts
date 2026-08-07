@@ -1,4 +1,10 @@
 import {
+  EsquemaLogin,
+  EsquemaTokenDeRefresco,
+  type DatosLogin,
+  type DatosTokenDeRefresco,
+} from "@contratos/esquemas";
+import {
   Body,
   Controller,
   Get,
@@ -20,12 +26,6 @@ import { LimiteEstricto } from "./decorators/LimiteEstricto";
 import { Publico } from "./decorators/Publico";
 import { UsuarioActual } from "./decorators/UsuarioActual";
 import type { UsuarioAutenticado } from "./decorators/UsuarioActual";
-import {
-  EsquemaLogin,
-  EsquemaTokenDeRefresco,
-  type DatosLogin,
-  type DatosTokenDeRefresco,
-} from "./dto/esquemasDeAuth";
 
 /**
  * The three endpoints a tablet needs, plus one for reading back who you are.

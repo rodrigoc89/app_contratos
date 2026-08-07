@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus } from "@nestjs/common";
+import type { CodigoDeError, CuerpoDeError } from "@contratos/esquemas";
 
 import {
   CredencialesInvalidas,
@@ -10,28 +11,16 @@ import { DomainError } from "../shared/domain/DomainError";
 import { EstadoAlmacenadoInconsistente } from "../shared/domain/EstadoAlmacenadoInconsistente";
 import { RecursoNoEncontrado } from "../shared/domain/RecursoNoEncontrado";
 
-export type CodigoDeError =
-  | "credenciales_invalidas"
-  | "sesion_invalida"
-  | "no_autenticado"
-  | "sin_permiso"
-  | "no_encontrado"
-  | "demasiadas_peticiones"
-  | "validacion"
-  /** The body-parser refused the request before any controller saw it. */
-  | "cuerpo_demasiado_grande"
-  | "cuerpo_invalido"
-  | "regla_de_negocio"
-  | "conflicto_de_estado"
-  /**
-   * Same 409 as `conflicto_de_estado`, and deliberately not the same code: the
-   * client's remedy is identical, but this one means two writers collided
-   * rather than that somebody asked for something impossible. A spike of these
-   * is an incident; a state conflict is routine.
-   */
-  | "conflicto_de_concurrencia"
-  | "http"
-  | "error_interno";
+/**
+ * `CodigoDeError` and `CuerpoDeError` moved into `@contratos/esquemas`
+ * (DESIGN.md D7), so the client can switch on the same codes instead of a
+ * hand-copied union. Re-exported here, **unchanged**, because
+ * `configuracionHttp.ts` and `ZodValidationPipe.ts` both do
+ * `import type { CuerpoDeError } from "./respuestaDeError"` — dropping this
+ * re-export turns a two-file move into a four-file one for no benefit. Do
+ * not remove it without updating both of those imports first.
+ */
+export type { CodigoDeError, CuerpoDeError };
 
 /**
  * Statuses a client has to branch on, given a code of their own so the React
@@ -53,15 +42,6 @@ const CODIGO_POR_ESTADO: Readonly<Record<number, CodigoDeError>> = {
  */
 const MENSAJE_DEMASIADAS_PETICIONES =
   "Demasiados intentos seguidos. Espere un minuto y vuelva a intentar.";
-
-export interface CuerpoDeError {
-  readonly error: {
-    readonly mensaje: string;
-    readonly codigo: CodigoDeError | string;
-    readonly campos?: Record<string, string>;
-    readonly referencia?: string;
-  };
-}
 
 export interface RespuestaDeError {
   readonly estado: number;
