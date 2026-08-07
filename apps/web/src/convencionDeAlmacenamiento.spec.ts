@@ -27,10 +27,10 @@ const DIRECTORIO_SRC = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Modules outside `almacenamiento/**` allowed to touch a storage API
- * directly. `datos/dispositivo.ts` (the `dispositivoId`, D8/R8) joins this
- * list in a later slice.
+ * directly. `datos/dispositivo.ts` (the `dispositivoId`, D8/R8) joined this
+ * list in PR14, when `firmar`'s device identifier was first built.
  */
-const PERMITIDOS = new Set(["datos/sesion/almacenSesion.ts"]);
+const PERMITIDOS = new Set(["datos/sesion/almacenSesion.ts", "datos/dispositivo.ts"]);
 
 /**
  * Matches actual API *usage* — `localStorage.getItem(...)`,
