@@ -3,12 +3,14 @@ import type { FormEvent } from "react";
 import { Boton } from "../atomos/Boton";
 import { CampoTexto } from "../atomos/CampoTexto";
 import { Etiqueta } from "../atomos/Etiqueta";
+import { EscanerDeMac } from "./EscanerDeMac";
 
 /**
  * Step 2 of the `borrador` form — `EsquemaEquipos`'s four fields
- * (packages/esquemas/src/contrato.ts). `antenaMac` is manual entry only in
- * this slice; camera scanning ships in slice 12 (DESIGN.md D6) as an assist
- * beside this same field, never a replacement for it.
+ * (packages/esquemas/src/contrato.ts). `antenaMac` is offered through
+ * `EscanerDeMac` (PR16/PR18, DESIGN.md D6): the manual field stays the
+ * primary, always-reachable control, and the camera scan is an assist
+ * beside it, never a replacement for it.
  *
  * `poe` has no schema default on purpose — "a `false` the client never chose
  * is a statement about company equipment that nobody made." Two radios force
@@ -56,13 +58,10 @@ export function FormularioEquipos({
         onCambiar={(valor) => onCambiar("antenaModelo", valor)}
         disabled={deshabilitado}
       />
-      <Etiqueta htmlFor="antenaMac">Dirección MAC de la antena</Etiqueta>
-      <CampoTexto
-        id="antenaMac"
-        value={valores.antenaMac}
+      <EscanerDeMac
+        valor={valores.antenaMac}
         onCambiar={(valor) => onCambiar("antenaMac", valor)}
-        disabled={deshabilitado}
-        placeholder="AC:8B:A9:12:34:56"
+        deshabilitado={deshabilitado}
       />
       <fieldset>
         <legend>¿Se entregó inyector PoE?</legend>

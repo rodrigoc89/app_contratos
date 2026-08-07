@@ -1,8 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DatosSesion } from "@contratos/esquemas";
+import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
 
+import { guardarBorradorLocal, leerBorradorLocal, limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import { establecerSesion, limpiarSesion } from "../../../datos/sesion/estadoSesion";
 import { FormularioBorrador } from "./FormularioBorrador";
 
@@ -53,10 +54,28 @@ function completarEquipos() {
   fireEvent.change(screen.getByLabelText("Metros de caño"), { target: { value: "7,5" } });
 }
 
+const VALORES_COMPLETOS: DatosCrearContrato = {
+  comodatario: {
+    nombreCompleto: "Ana López",
+    dni: "30123456",
+    domicilioCalle: "San Martín 123",
+    ciudad: "Santiago del Estero",
+    whatsapp: "385 4123456",
+  },
+  equipos: {
+    antenaModelo: "Ubiquiti LiteBeam",
+    antenaMac: "AC:8B:A9:12:34:56",
+    poe: true,
+    canoMetros: 7.5,
+  },
+};
+
 describe("FormularioBorrador", () => {
   afterEach(() => {
     limpiarSesion();
+    limpiarBorradorLocal();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it("keeps the technician on the comodatario step and shows an error on an incomplete submit, without calling the network", () => {
@@ -134,5 +153,106 @@ describe("FormularioBorrador", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Dirección MAC de la antena")).toHaveValue("AC:8B:A9:12:34:56");
     expect(fetchSimulado).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * PR18 (task 18.2) — spec `borrador-form`, "Recovery scope after reload or
+   * kill": `almacenamiento/borradorLocal.ts` (PR8) was written and cleared
+   * correctly but never *read* on mount, so a recovered draft never actually
+   * restored. Verified by breaking: temporarily ignoring the mounted-read
+   * (falling back to the empty defaults unconditionally) made this
+   * assertion fail — the equipos step never appeared and the field values
+   * stayed empty — before the real read was wired back in.
+   */
+  it("restores comodatario and equipos values from a local draft on mount", () => {
+    guardarBorradorLocal({ contratoId: null, paso: "equipos", valores: VALORES_COMPLETOS });
+
+    render(<FormularioBorrador />);
+
+    expect(screen.getByLabelText("Modelo de antena")).toHaveValue("Ubiquiti LiteBeam");
+    expect(screen.getByLabelText("Dirección MAC de la antena")).toHaveValue("AC:8B:A9:12:34:56");
+    expect(screen.getByLabelText("Metros de caño")).toHaveValue("7.5");
+    expect(screen.getByLabelText("Sí")).toBeChecked();
+  });
+
+  it("does not restore anything when there is no saved draft — the comodatario step still starts empty", () => {
+    render(<FormularioBorrador />);
+
+    expect(screen.getByLabelText("Nombre y apellido")).toHaveValue("");
+  });
+
+  /**
+   * The other half of "Recovery scope": firmas must never come back. This is
+   * already proven directly against `borradorLocal.ts` itself
+   * (`borradorLocal.spec.ts`, "strips any field not on EsquemaCrearContrato
+   * from valores on read") — `DatosBorradorLocal.valores` structurally has
+   * no `firmas` slot, and `leerBorradorLocal`'s `safeParse` strips one even
+   * from a payload written directly to storage. This test proves the same
+   * guarantee holds one layer up, through the component this PR wires the
+   * read into: a tampered payload still restores the form fields, with no
+   * trace of the injected `firmas` key anywhere in the rendered form.
+   */
+  it("restores fields from a tampered draft containing a firmas key, without ever exposing it", () => {
+    const CLAVE_BORRADOR = "contratos.borrador.v1";
+    localStorage.setItem(
+      CLAVE_BORRADOR,
+      JSON.stringify({
+        version: 1,
+        guardadoEn: Date.now(),
+        contratoId: null,
+        paso: "equipos",
+        valores: {
+          ...VALORES_COMPLETOS,
+          firmas: [{ documento: "comodato", imagenPng: "data:image/png;base64,x", trazos: [] }],
+        },
+      }),
+    );
+
+    render(<FormularioBorrador />);
+
+    expect(screen.getByLabelText("Modelo de antena")).toHaveValue("Ubiquiti LiteBeam");
+    expect(document.body.innerHTML).not.toContain("firmas");
+    expect(document.body.innerHTML).not.toContain("imagenPng");
+  });
+
+  /**
+   * The write half of D8 ("Written when: debounced on form change"). Without
+   * it, `leerBorradorLocal` above would always return `null` in production —
+   * `guardarBorradorLocal` had no production caller anywhere in this app
+   * before this task. Only writes once the merged `comodatario`+`equipos`
+   * state actually parses against `EsquemaCrearContrato` (design decision,
+   * see apply-progress: `EsquemaEquipos.poe` is a required boolean, so a
+   * partially-filled equipos step cannot type-check as a `DatosCrearContrato`
+   * yet — the draft becomes recoverable exactly when the technician could
+   * otherwise tap "Crear borrador").
+   */
+  it("saves a debounced local draft once both steps are valid", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.stubGlobal("fetch", vi.fn());
+    render(<FormularioBorrador />);
+
+    completarComodatario();
+    completarEquipos();
+
+    expect(leerBorradorLocal()).toBeNull();
+    vi.advanceTimersByTime(2_000);
+
+    const guardado = leerBorradorLocal();
+    expect(guardado).not.toBeNull();
+    expect(guardado?.valores.equipos.antenaMac).toBe("AC:8B:A9:12:34:56");
+    expect(guardado?.valores.comodatario.nombreCompleto).toBe("Ana López");
+  });
+
+  it("clears the local draft once the contract is actually created — avoids restoring a stale draft into a duplicate submission", async () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: null, paso: "equipos", valores: VALORES_COMPLETOS });
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    render(<FormularioBorrador />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+
+    expect(await screen.findByText(/c1/)).toBeInTheDocument();
+    expect(leerBorradorLocal()).toBeNull();
   });
 });
