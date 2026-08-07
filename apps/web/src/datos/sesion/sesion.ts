@@ -45,7 +45,7 @@ export async function iniciarSesion(datos: DatosLogin): Promise<DatosSesion> {
 export async function cerrarSesion(): Promise<void> {
   const tokenDeRefresco = obtenerSesionActual()?.tokenDeRefresco;
 
-  limpiarSesion();
+  limpiarSesion("cierre_explicito");
   borrarTokenDeRefrescoGuardado();
   limpiarBorradorLocal();
 
