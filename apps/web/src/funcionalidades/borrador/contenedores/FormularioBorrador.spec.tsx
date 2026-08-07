@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
 
 import { guardarBorradorLocal, leerBorradorLocal, limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
+import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { establecerSesion, limpiarSesion } from "../../../datos/sesion/estadoSesion";
 import { FormularioBorrador } from "./FormularioBorrador";
 
@@ -241,6 +242,55 @@ describe("FormularioBorrador", () => {
     expect(guardado).not.toBeNull();
     expect(guardado?.valores.equipos.antenaMac).toBe("AC:8B:A9:12:34:56");
     expect(guardado?.valores.comodatario.nombreCompleto).toBe("Ana López");
+  });
+
+  /**
+   * Task 18.3/19.1 (maintainer decision, see apply-progress) — the form
+   * stays mounted and editable once the draft exists, and `InicioTecnico`
+   * hands down the ONE `ColaDeGuardado` it creates for this contract
+   * (DESIGN.md D3, task 19.2's shared-instance decision) once `onCreado`
+   * fires. This proves the wiring at this component's own level: an edit
+   * made with no `cola` yet (the render right after `onCreado` fires, before
+   * the parent's own state update lands) must not throw or call anything;
+   * an edit made once `cola` is available must reach `encolar` with the
+   * WHOLE updated half (never a single field), for both steps — `Volver`
+   * (task 19.1) is what makes the comodatario half reachable again at all.
+   */
+  it("reaches ColaDeGuardado.encolar with the whole updated half for post-creation edits, never before cola is available", async () => {
+    establecerSesion(sesionFalsa());
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    const encolar = vi.fn();
+    const colaFalsa: ColaDeGuardado = {
+      encolar,
+      vaciar: vi.fn().mockResolvedValue(undefined),
+      get hayPendiente() {
+        return false;
+      },
+    };
+
+    const { rerender } = render(<FormularioBorrador />);
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+    await screen.findByText(/c1/);
+
+    fireEvent.change(screen.getByLabelText("Modelo de antena"), { target: { value: "TP-Link CPE210" } });
+    expect(encolar).not.toHaveBeenCalled();
+
+    rerender(<FormularioBorrador cola={colaFalsa} />);
+    fireEvent.change(screen.getByLabelText("Modelo de antena"), {
+      target: { value: "Ubiquiti NanoStation" },
+    });
+    expect(encolar).toHaveBeenCalledWith({
+      equipos: expect.objectContaining({ antenaModelo: "Ubiquiti NanoStation" }),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Volver" }));
+    fireEvent.change(screen.getByLabelText("Nombre y apellido"), { target: { value: "Ana Gómez" } });
+    expect(encolar).toHaveBeenCalledWith({
+      comodatario: expect.objectContaining({ nombreCompleto: "Ana Gómez" }),
+    });
   });
 
   it("clears the local draft once the contract is actually created — avoids restoring a stale draft into a duplicate submission", async () => {

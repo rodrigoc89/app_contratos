@@ -41,7 +41,9 @@ describe("FormularioEquipos", () => {
         valores={VALORES_VACIOS}
         onCambiar={onCambiar}
         onCambiarPoe={vi.fn()}
-        onCrear={vi.fn()}
+        onVolver={vi.fn()}
+        onEnviar={vi.fn()}
+        etiquetaEnvio="Crear borrador"
         error={null}
         deshabilitado={false}
       />,
@@ -64,7 +66,9 @@ describe("FormularioEquipos", () => {
         valores={VALORES_VACIOS}
         onCambiar={vi.fn()}
         onCambiarPoe={onCambiarPoe}
-        onCrear={vi.fn()}
+        onVolver={vi.fn()}
+        onEnviar={vi.fn()}
+        etiquetaEnvio="Crear borrador"
         error={null}
         deshabilitado={false}
       />,
@@ -78,14 +82,16 @@ describe("FormularioEquipos", () => {
     expect(onCambiarPoe).toHaveBeenCalledWith(false);
   });
 
-  it("calls onCrear when the form is submitted", async () => {
-    const onCrear = vi.fn();
+  it("calls onEnviar with the given etiquetaEnvio label when the form is submitted", async () => {
+    const onEnviar = vi.fn();
     render(
       <FormularioEquipos
         valores={VALORES_VACIOS}
         onCambiar={vi.fn()}
         onCambiarPoe={vi.fn()}
-        onCrear={onCrear}
+        onVolver={vi.fn()}
+        onEnviar={onEnviar}
+        etiquetaEnvio="Crear borrador"
         error={null}
         deshabilitado={false}
       />,
@@ -94,7 +100,65 @@ describe("FormularioEquipos", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
 
-    expect(onCrear).toHaveBeenCalledTimes(1);
+    expect(onEnviar).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Task 19.1 (maintainer decision — overrules task 7.3's single-click
+   * auto-transition): once the draft exists, this same step's submit action
+   * moves into signing instead of creating a second draft. The button's
+   * label is a prop precisely so the container decides which action is live
+   * — never a hidden mode this organism infers on its own.
+   */
+  it("renders the given etiquetaEnvio as the submit button's own label, not a fixed one", async () => {
+    const onEnviar = vi.fn();
+    render(
+      <FormularioEquipos
+        valores={VALORES_VACIOS}
+        onCambiar={vi.fn()}
+        onCambiarPoe={vi.fn()}
+        onVolver={vi.fn()}
+        onEnviar={onEnviar}
+        etiquetaEnvio="Continuar"
+        error={null}
+        deshabilitado={false}
+      />,
+    );
+    await esperarComprobacionDeCamara();
+
+    expect(screen.queryByRole("button", { name: "Crear borrador" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+
+    expect(onEnviar).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * Task 19.1 — editing `comodatario` post-creation requires a way back to
+   * that step; `FormularioEquipos` is the only step with no way back before
+   * this. `Volver` is a plain `type="button"`, never the form's submit, so
+   * tapping it can never accidentally fire `onEnviar`.
+   */
+  it("calls onVolver, and only onVolver, when Volver is tapped", async () => {
+    const onVolver = vi.fn();
+    const onEnviar = vi.fn();
+    render(
+      <FormularioEquipos
+        valores={VALORES_VACIOS}
+        onCambiar={vi.fn()}
+        onCambiarPoe={vi.fn()}
+        onVolver={onVolver}
+        onEnviar={onEnviar}
+        etiquetaEnvio="Crear borrador"
+        error={null}
+        deshabilitado={false}
+      />,
+    );
+    await esperarComprobacionDeCamara();
+
+    fireEvent.click(screen.getByRole("button", { name: "Volver" }));
+
+    expect(onVolver).toHaveBeenCalledTimes(1);
+    expect(onEnviar).not.toHaveBeenCalled();
   });
 
   it("shows the given error message and disables the fields while submitting", async () => {
@@ -103,7 +167,9 @@ describe("FormularioEquipos", () => {
         valores={VALORES_VACIOS}
         onCambiar={vi.fn()}
         onCambiarPoe={vi.fn()}
-        onCrear={vi.fn()}
+        onVolver={vi.fn()}
+        onEnviar={vi.fn()}
+        etiquetaEnvio="Crear borrador"
         error="La dirección MAC no es válida."
         deshabilitado={true}
       />,
@@ -113,6 +179,7 @@ describe("FormularioEquipos", () => {
     expect(screen.getByText("La dirección MAC no es válida.")).toBeInTheDocument();
     expect(screen.getByLabelText("Dirección MAC de la antena")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Crear borrador" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Volver" })).toBeDisabled();
   });
 
   /**
@@ -138,7 +205,9 @@ describe("FormularioEquipos", () => {
         valores={VALORES_VACIOS}
         onCambiar={vi.fn()}
         onCambiarPoe={vi.fn()}
-        onCrear={vi.fn()}
+        onVolver={vi.fn()}
+        onEnviar={vi.fn()}
+        etiquetaEnvio="Crear borrador"
         error={null}
         deshabilitado={false}
       />,
