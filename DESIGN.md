@@ -219,7 +219,7 @@ src/
     interface/       # HTTP controllers, DTOs, validation
   plantillas/        # versioned contract templates
   firmantes/         # comodante signatories + their signature assets
-  entrega/           # WhatsApp delivery + delivery event log
+  entrega/           # sealed-PDF download for the tablet to share (§8)
   identidad/         # users, roles, authentication
   shared/            # cross-cutting kernel
 ```
@@ -331,7 +331,9 @@ split is a packaging change, not a rewrite.
 6. **Server seals the contract.** Allocates `Nº`, stamps the server timestamp,
    snapshots the template version and the comodante signatory, renders both
    PDFs, computes SHA-256 of each, persists everything, emits `firmado`.
-7. **Deliver by WhatsApp.** Asynchronous, outside the signing transaction.
+7. **Deliver by WhatsApp.** The technician shares the sealed PDFs from the
+   tablet, during the visit — outside the signing transaction, never a
+   background job (§8).
 
 ### Signature capture
 
@@ -391,28 +393,35 @@ Losing the PDF archive is a business-ending event, not an incident.
 The paper contract says *"firman las partes dos ejemplares"* — the customer is
 entitled to their copy.
 
-### The obstacle
+### The decision: the technician sends it, the app does not
 
-WhatsApp does not let a business message a person freely. Automatic delivery
-requires the **official WhatsApp Cloud API** from Meta, which means:
+**The WhatsApp Cloud API is not used, and this is not a deferral.** Automatic
+delivery would require a verified WhatsApp Business account, a pre-approved
+template message, and per-conversation pricing. IES.NET is not paying for it,
+so the app never sends anything to anyone.
 
-1. A **verified WhatsApp Business account** — a Meta business verification
-   process, which is paperwork and takes time, not code.
-2. Because the business initiates the conversation, the first message must be
-   a **pre-approved template**. Free-form text is rejected. The template *can*
-   carry the PDF as a document header, so this works — but the template must
-   be created and approved first.
-3. **Per-conversation pricing.** Inexpensive, but not free.
+Instead: the tablet fetches both sealed PDFs and hands them to the operating
+system's share sheet, where WhatsApp is one of the targets. The technician
+picks the customer's chat and sends — standing in the customer's house, with
+the customer watching. Where the share sheet is unavailable, the PDFs download
+to the tablet and the technician attaches them by hand.
 
-> **Start the Meta verification early.** It is the longest-lead item in this
-> project and it blocks nothing else, so it should run in parallel with
-> development from day one.
+This is better than the Cloud API in two ways, not merely cheaper. **The
+customer's phone number never leaves for a third-party processor**, which under
+Ley 25.326 is one less data controller to account for. And the technician sees
+the message leave, rather than trusting an asynchronous job to have run.
 
-### Fallback
+### What this costs, accepted deliberately
 
-If verification is delayed, the app opens WhatsApp on the tablet with the
-number pre-filled and the technician taps send. Free and immediate — but that
-path **cannot attach a file**, only a link.
+**There is no delivery record.** No target number, no timestamp, no provider
+message id — the system has no concept of a contract having been delivered. If
+a customer ever claims they never received their copy, the system cannot
+answer.
+
+This was weighed and accepted: the **signed contract is the legal artifact**,
+and handing over a copy is a courtesy step around it. Revisit only if a real
+dispute makes the record worth building; do not add a delivery flag on
+speculation.
 
 ### Never do this
 
@@ -421,14 +430,15 @@ bans the number. That number is IES.NET's customer service line.
 
 ### Delivery rules
 
-- Send **both** the PDF and a permanent tokenised link. WhatsApp media is lost
-  when the customer clears their phone; the link always resolves.
-- Record delivery as an **event**: target number, timestamp, provider message
-  id, and delivery confirmation. If a customer ever claims they never received
-  a copy, that record is the answer.
-- Delivery failure must **never** roll back a signature. The contract is
-  already legally complete at signing; delivery is a separate concern that
-  retries on its own.
+- Delivery is **attempted during the visit**, from the tablet, by a person —
+  never by a background job.
+- Delivery failure must **never** roll back a signature, and must never be
+  presented as one. The contract is already legally complete at signing; a
+  share that fails offers a retry of the share, nothing more.
+- The share sheet **does** carry the PDFs themselves as attachments
+  (`navigator.share({ files })`), not a link to them. An earlier version of
+  this document claimed the manual path could only send a link; that was
+  wrong.
 
 ---
 
@@ -461,7 +471,7 @@ root access to a real instance.
 - Node.js runtime running as a managed long-lived process
 - PostgreSQL, self-hosted on the instance or managed
 - A domain name and TLS certificate (Let's Encrypt is sufficient)
-- Outbound HTTPS, for the WhatsApp Cloud API
+- Outbound HTTPS (general; no WhatsApp Cloud API is used — see §8)
 - Automated, offsite, **restore-tested** backups of the database *and* the PDF
   archive
 
@@ -619,11 +629,11 @@ carrying paper.
 Search, contract detail, termination with reason, equipment restitution,
 unreturned-equipment report, resend copy.
 
-**Phase 3 — Automatic WhatsApp delivery.**
-Cloud API integration behind the delivery port. The manual fallback ships in
-Phase 1, so this phase is an upgrade rather than a blocker.
-
-Meta business verification starts **now**, in parallel with Phase 1.
+**There is no automatic-WhatsApp-delivery phase.** An earlier version of this
+document planned one, and listed Meta business verification as the project's
+longest-lead item. Both are cancelled — see §8. Delivery ships complete in
+Phase 1: the technician shares the sealed PDFs from the tablet during the
+visit.
 
 ---
 
