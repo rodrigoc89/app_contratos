@@ -33,4 +33,17 @@ export default defineConfig({
   // Makes the dev server same-origin, the way Nginx does in production.
   // See `src/dev/proxyDeDesarrollo.ts` for why this is not optional.
   server: { proxy: PROXY_DE_DESARROLLO },
+  // `vite preview` serves the real production bundle, service worker included,
+  // so it is what a phone should be pointed at — but it is a separate server
+  // from `server` above and does not inherit its proxy. Without this, a
+  // previewed build sends `/auth/login` into the static file server and gets
+  // the SPA fallback back, exactly the failure the dev proxy exists to remove.
+  //
+  // `allowedHosts` is needed because Vite rejects unknown `Host` headers, and a
+  // tunnel arrives under someone else's hostname. Scoped to the tunnel provider
+  // rather than opened to everything.
+  preview: {
+    proxy: PROXY_DE_DESARROLLO,
+    allowedHosts: [".trycloudflare.com"],
+  },
 });
