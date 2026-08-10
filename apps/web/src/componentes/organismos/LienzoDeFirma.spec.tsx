@@ -359,3 +359,21 @@ describe("LienzoDeFirma", () => {
     ]);
   });
 });
+
+describe("LienzoDeFirma — destructive action (PR25)", () => {
+  it("marks Borrar as destructive in the DOM, so the danger colour is bound to the action and not to its position", () => {
+    render(<LienzoDeFirma etiqueta="Firma" />);
+
+    const borrar = screen.getByRole("button", { name: "Borrar" });
+    const deshacer = screen.getByRole("button", { name: "Deshacer" });
+
+    // Borrar discards every stroke the customer already made; Deshacer
+    // removes one. Only the unrecoverable one carries the warning.
+    expect(borrar).toHaveClass("boton--destructivo");
+    expect(deshacer).not.toHaveClass("boton--destructivo");
+
+    // The base class must survive alongside the modifier — the atom used to
+    // overwrite an incoming className outright.
+    expect(borrar).toHaveClass("boton");
+  });
+});

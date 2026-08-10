@@ -176,17 +176,33 @@ describe("destructive signature actions stay separated from the commit action (P
     expect(valorPx ?? 0).toBeGreaterThanOrEqual(SEPARACION_MINIMA_PX);
   });
 
-  it("styles Borrar — the last action in .lienzo-de-firma__acciones — with the error token, distinct from the primary .boton background", () => {
+  it("marks the destructive action by name, never by position", () => {
     const organismos = archivo("estilos/organismos.css");
     expect(organismos, "estilos/organismos.css is missing").toBeDefined();
+    const contenido = organismos?.contenido ?? "";
 
-    const regla = /\.lienzo-de-firma__acciones\s+\.boton:last-child\s*\{([^}]*)\}/.exec(organismos?.contenido ?? "");
+    // A positional selector binds the danger colour to whichever control
+    // happens to be last. Reorder the pair, or add a third action, and the
+    // red moves to the wrong button — the one that does NOT destroy the
+    // customer's signature — silently, with every test still green. The
+    // warning has to name what it warns about.
+    expect(
+      /\.lienzo-de-firma__acciones\s+\.boton:last-child/.test(contenido),
+      "the destructive action is styled by position (:last-child) instead of by a class that says what it is",
+    ).toBe(false);
+
+    const regla = /\.boton--destructivo\s*\{([^}]*)\}/.exec(contenido);
     expect(
       regla,
-      "no rule styles .lienzo-de-firma__acciones .boton:last-child (Borrar) — a destructive action must read differently from a commit action",
+      "no .boton--destructivo rule in estilos/organismos.css — a destructive action must read differently from a commit action",
     ).not.toBeNull();
     expect(/background-color\s*:\s*var\(--color-error\)/.test(regla?.[1] ?? "")).toBe(true);
   });
+
+  // Whether the class actually reaches Borrar is asserted where it can be
+  // observed rather than inferred — against the rendered DOM, in
+  // `LienzoDeFirma.spec.tsx`. A source scan would pass even if `Boton`
+  // dropped the prop on the floor, which is exactly what it used to do.
 });
 
 describe("the document viewer stays bounded to a fraction of the viewport, never to its content", () => {

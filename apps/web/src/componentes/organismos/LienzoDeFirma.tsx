@@ -213,7 +213,7 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
         <Boton type="button" onClick={manejarDeshacer}>
           Deshacer
         </Boton>
-        <Boton type="button" onClick={manejarBorrar}>
+        <Boton type="button" className="boton--destructivo" onClick={manejarBorrar}>
           Borrar
         </Boton>
       </div>

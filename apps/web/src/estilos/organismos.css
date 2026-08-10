@@ -71,7 +71,7 @@
  * from every other button, instead of sitting next to Firmar looking like
  * an equally safe primary action (PR25).
  */
-.lienzo-de-firma__acciones .boton:last-child {
+.boton--destructivo {
   border-color: var(--color-error);
   background-color: var(--color-error);
 }
