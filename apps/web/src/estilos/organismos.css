@@ -150,3 +150,55 @@
 .panel-no-disponible {
   padding: var(--espacio-5);
 }
+
+/* --- shared: progress rows, Spinner + text (PR26) ------------------------ */
+
+/**
+ * design.md "Progress" category — same copy, same role, same position as
+ * before; only a spinner added beside the words. The Spinner atom inside
+ * each of these is wrapped in an `aria-hidden` span by the callers, so this
+ * row's own `role="status"` stays the single live region a screen reader
+ * announces — never two.
+ */
+.progreso {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+}
+
+/* --- shared: Toast confirmation (PR26) ------------------------------------ */
+
+/**
+ * design.md "Toast" category — bottom-anchored, brand colour, high
+ * contrast. Auto-dismiss/tap-dismiss timing lives in `Toast.tsx`; this only
+ * owns position and contrast.
+ */
+.toast {
+  position: fixed;
+  left: var(--espacio-4);
+  right: var(--espacio-4);
+  bottom: var(--espacio-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  padding: var(--espacio-4);
+  border-radius: var(--radio-borde);
+  background-color: var(--color-primario);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.toast__mensaje {
+  margin: 0;
+}
+
+.toast__cerrar {
+  min-height: var(--tamano-toque-minimo);
+  min-width: var(--tamano-toque-minimo);
+  border: none;
+  background: transparent;
+  color: #ffffff;
+  font-size: var(--fuente-grande);
+  cursor: pointer;
+}
