@@ -25,7 +25,16 @@ export function redimensionarSuperficie(canvas: HTMLCanvasElement): void {
   const rect = canvas.getBoundingClientRect();
   canvas.width = Math.round(rect.width * relacion);
   canvas.height = Math.round(rect.height * relacion);
-  canvas.getContext("2d")?.scale(relacion, relacion);
+  const contexto = canvas.getContext("2d");
+  // Resetting to the identity matrix before scaling again matters: the spec
+  // says setting `width`/`height` resets the context, but not every engine
+  // re-applies that reset when the numeric value happens not to change (two
+  // resize events quantizing to the same backing-store size, for instance).
+  // Without this reset, calling this function twice — e.g. on two rotations
+  // in a row — would compound the devicePixelRatio scale instead of leaving
+  // it fixed (PR25).
+  contexto?.setTransform(1, 0, 0, 1, 0, 0);
+  contexto?.scale(relacion, relacion);
 }
 
 /**

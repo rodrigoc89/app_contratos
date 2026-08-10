@@ -61,6 +61,32 @@ describe("redimensionarSuperficie", () => {
 
     expect(() => redimensionarSuperficie(canvas)).not.toThrow();
   });
+
+  it("resets the context transform before every scale, so repeated resizes (a rotation, then another) never compound the devicePixelRatio factor", () => {
+    const canvas = document.createElement("canvas");
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue(rectanguloDe(300, 150));
+    vi.stubGlobal("devicePixelRatio", 2);
+    const contextoFalso = { scale: vi.fn(), setTransform: vi.fn() };
+    vi.spyOn(canvas, "getContext").mockReturnValue(
+      contextoFalso as unknown as CanvasRenderingContext2D,
+    );
+
+    redimensionarSuperficie(canvas);
+    redimensionarSuperficie(canvas);
+
+    // A naive re-scale without resetting first would leave the second call
+    // at scale(4, 4) effectively (2 × 2) — the transform is reset to the
+    // identity matrix before every scale, so both calls apply the exact same
+    // factor instead of compounding.
+    expect(contextoFalso.setTransform).toHaveBeenNthCalledWith(1, 1, 0, 0, 1, 0, 0);
+    expect(contextoFalso.setTransform).toHaveBeenNthCalledWith(2, 1, 0, 0, 1, 0, 0);
+    expect(contextoFalso.scale).toHaveBeenNthCalledWith(1, 2, 2);
+    expect(contextoFalso.scale).toHaveBeenNthCalledWith(2, 2, 2);
+    const ordenReset = contextoFalso.setTransform.mock.invocationCallOrder;
+    const ordenEscala = contextoFalso.scale.mock.invocationCallOrder;
+    expect(ordenReset[0]).toBeLessThan(ordenEscala[0] ?? Number.POSITIVE_INFINITY);
+    expect(ordenReset[1]).toBeLessThan(ordenEscala[1] ?? Number.POSITIVE_INFINITY);
+  });
 });
 
 describe("crearSuperficieDeCanvas", () => {

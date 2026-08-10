@@ -138,6 +138,73 @@ describe("primary actions meet the 48px touch-target minimum", () => {
   });
 });
 
+describe("destructive signature actions stay separated from the commit action (PR25)", () => {
+  /**
+   * PR25 — `Deshacer`/`Borrar` render directly above the step's `Firmar`;
+   * `Borrar` and `Firmar` are both reachable by a técnico's thumb while
+   * standing in a customer's house. Tapping `Borrar` instead of `Firmar`
+   * destroys a signature the customer already made. Two independent guards:
+   * a minimum spatial gap, and a distinct destructive colour so the pair
+   * does not read like two equally safe actions.
+   */
+  const SEPARACION_MINIMA_PX = 32;
+
+  function valorDeToken(tokens: string, nombreToken: string): number | undefined {
+    const patron = new RegExp(`--${nombreToken}\\s*:\\s*(\\d+(?:\\.\\d+)?)px`);
+    const encontrado = patron.exec(tokens);
+    return encontrado ? Number(encontrado[1]) : undefined;
+  }
+
+  it(`keeps at least ${SEPARACION_MINIMA_PX}px below .lienzo-de-firma__acciones before the next control, so a thumb reaching for Firmar cannot land on Borrar`, () => {
+    const organismos = archivo("estilos/organismos.css");
+    const tokens = archivo("estilos/tokens.css");
+    expect(organismos, "estilos/organismos.css is missing").toBeDefined();
+    expect(tokens, "estilos/tokens.css is missing").toBeDefined();
+
+    const regla = /\.lienzo-de-firma__acciones\s*\{([^}]*)\}/.exec(organismos?.contenido ?? "");
+    expect(regla, ".lienzo-de-firma__acciones rule not found in estilos/organismos.css").not.toBeNull();
+    const cuerpo = regla?.[1] ?? "";
+
+    const declaracion = /margin-bottom\s*:\s*(?:var\(--(espacio-\d+)\)|(\d+(?:\.\d+)?)px)/.exec(cuerpo);
+    expect(declaracion, ".lienzo-de-firma__acciones has no margin-bottom declaration").not.toBeNull();
+
+    const nombreToken = declaracion?.[1];
+    const valorLiteral = declaracion?.[2];
+    const valorPx = nombreToken !== undefined ? valorDeToken(tokens?.contenido ?? "", nombreToken) : Number(valorLiteral);
+
+    expect(valorPx, "could not resolve .lienzo-de-firma__acciones's margin-bottom to a px value").toBeDefined();
+    expect(valorPx ?? 0).toBeGreaterThanOrEqual(SEPARACION_MINIMA_PX);
+  });
+
+  it("marks the destructive action by name, never by position", () => {
+    const organismos = archivo("estilos/organismos.css");
+    expect(organismos, "estilos/organismos.css is missing").toBeDefined();
+    const contenido = organismos?.contenido ?? "";
+
+    // A positional selector binds the danger colour to whichever control
+    // happens to be last. Reorder the pair, or add a third action, and the
+    // red moves to the wrong button — the one that does NOT destroy the
+    // customer's signature — silently, with every test still green. The
+    // warning has to name what it warns about.
+    expect(
+      /\.lienzo-de-firma__acciones\s+\.boton:last-child/.test(contenido),
+      "the destructive action is styled by position (:last-child) instead of by a class that says what it is",
+    ).toBe(false);
+
+    const regla = /\.boton--destructivo\s*\{([^}]*)\}/.exec(contenido);
+    expect(
+      regla,
+      "no .boton--destructivo rule in estilos/organismos.css — a destructive action must read differently from a commit action",
+    ).not.toBeNull();
+    expect(/background-color\s*:\s*var\(--color-error\)/.test(regla?.[1] ?? "")).toBe(true);
+  });
+
+  // Whether the class actually reaches Borrar is asserted where it can be
+  // observed rather than inferred — against the rendered DOM, in
+  // `LienzoDeFirma.spec.tsx`. A source scan would pass even if `Boton`
+  // dropped the prop on the floor, which is exactly what it used to do.
+});
+
 describe("the document viewer stays bounded to a fraction of the viewport, never to its content", () => {
   it("finds and constrains .visor-documento__iframe in estilos/organismos.css", () => {
     const organismos = archivo("estilos/organismos.css");

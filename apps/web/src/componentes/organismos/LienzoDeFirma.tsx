@@ -51,12 +51,33 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
   const inicioDeTrazoRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas === null) {
+    if (canvasRef.current === null) {
       return;
     }
+    // A plain, never-reassigned `HTMLCanvasElement` binding — narrowing a
+    // `.current` read does not carry into the nested listener below, since
+    // the ref could in principle change before it runs.
+    const canvas: HTMLCanvasElement = canvasRef.current;
     redimensionarSuperficie(canvas);
     superficieRef.current = (crearSuperficie ?? crearSuperficieDeCanvas)(canvas);
+
+    // PR25 — a rotation changes the canvas's CSS box but never its backing
+    // store on its own: `redimensionarSuperficie` clears the bitmap by
+    // assigning `width`/`height`, so it can only run again paired with a
+    // full replay from `capturaRef` (the source of truth for what was
+    // actually drawn) — never alone, or a half-finished signature is erased
+    // the moment the técnico tilts the tablet.
+    function alRotarORedimensionar() {
+      redimensionarSuperficie(canvas);
+      redibujarTodo();
+    }
+
+    window.addEventListener("resize", alRotarORedimensionar);
+    window.addEventListener("orientationchange", alRotarORedimensionar);
+    return () => {
+      window.removeEventListener("resize", alRotarORedimensionar);
+      window.removeEventListener("orientationchange", alRotarORedimensionar);
+    };
   }, [crearSuperficie]);
 
   function notificarCambio() {
@@ -192,7 +213,7 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
         <Boton type="button" onClick={manejarDeshacer}>
           Deshacer
         </Boton>
-        <Boton type="button" onClick={manejarBorrar}>
+        <Boton type="button" className="boton--destructivo" onClick={manejarBorrar}>
           Borrar
         </Boton>
       </div>

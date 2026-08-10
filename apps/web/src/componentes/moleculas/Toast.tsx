@@ -1,0 +1,42 @@
+import { useEffect, useRef } from "react";
+
+interface PropiedadesToast {
+  readonly mensaje: string;
+  readonly onDescartar: () => void;
+}
+
+const DURACION_MS = 5_000;
+
+/**
+ * PR26 — the shared surface for exactly three transient confirmations
+ * (design.md "Toast" category): "Borrador creado", "Documentos compartidos
+ * correctamente." and the signing confirmation. Bottom-anchored, brand
+ * colour, high contrast (CSS: `.toast`, `estilos/organismos.css`).
+ * `role="status"` is what makes this announced at all — a toast without a
+ * live region is invisible to a screen reader, and it is `status` (polite),
+ * never `alert`, because nothing breaks if one of these three is missed.
+ *
+ * Mount-only timer, read through a ref: a caller re-rendering with a fresh
+ * `onDescartar` closure (the common React shape) must not restart the 5s
+ * window on every render — the toast owns one window from when it first
+ * appears, not from whichever render last passed a new closure.
+ */
+export function Toast({ mensaje, onDescartar }: PropiedadesToast) {
+  const alDescartarRef = useRef(onDescartar);
+  alDescartarRef.current = onDescartar;
+
+  useEffect(() => {
+    const temporizador = setTimeout(() => alDescartarRef.current(), DURACION_MS);
+    return () => clearTimeout(temporizador);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div role="status" className="toast">
+      <p className="toast__mensaje">{mensaje}</p>
+      <button type="button" className="toast__cerrar" aria-label="Cerrar aviso" onClick={onDescartar}>
+        ×
+      </button>
+    </div>
+  );
+}

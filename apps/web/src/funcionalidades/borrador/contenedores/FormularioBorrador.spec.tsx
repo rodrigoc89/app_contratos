@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
@@ -464,6 +464,95 @@ describe("FormularioBorrador", () => {
     expect(await screen.findByLabelText("Nombre y apellido")).toHaveValue("");
     expect(alCrear).not.toHaveBeenCalled();
     expect(leerBorradorLocal()).toBeNull();
+  });
+
+  /**
+   * PR26 — design.md "Toast" category: "Borrador creado. ID: …" becomes a
+   * dismissible, auto-hiding confirmation instead of a permanent status
+   * line.
+   */
+  it("shows the draft-created confirmation as an auto-dismissing toast", async () => {
+    establecerSesion(sesionFalsa());
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    render(<FormularioBorrador />);
+
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+    await vi.waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("c1"));
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(screen.queryByText(/Borrador creado/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * PR26 — design.md "The tone": draft creation plays a discreet
+   * confirmation tone through the injectable `TonoDeConfirmacion` port
+   * (same shape as `SuperficieDeFirma`/`ObservadorDeDocumento`) —
+   * testable with a fake, no audio hardware.
+   */
+  it("plays the confirmation tone when a draft is created", async () => {
+    establecerSesion(sesionFalsa());
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    const reproducir = vi.fn();
+
+    render(<FormularioBorrador tono={{ reproducir }} />);
+
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+
+    await waitFor(() => expect(reproducir).toHaveBeenCalledTimes(1));
+  });
+
+  /**
+   * Verification-by-breaking (c): a blocked or throwing tone must never
+   * break or delay the flow — the toast is the primary confirmation, the
+   * tone only supplements it.
+   */
+  it("still completes draft creation and shows the toast even when the confirmation tone throws", async () => {
+    establecerSesion(sesionFalsa());
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    const tonoQueFalla = {
+      reproducir: () => {
+        throw new Error("AudioContext bloqueado");
+      },
+    };
+
+    render(<FormularioBorrador tono={tonoQueFalla} />);
+
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+
+    expect(await screen.findByText(/Borrador creado/)).toBeInTheDocument();
+  });
+
+  /**
+   * Verification-by-breaking (d) guard: the recovery message stays a
+   * progress indicator (design.md "Progress" category) — same role, same
+   * position, never a toast. Proven by advancing well past the toast's 5s
+   * auto-dismiss window and asserting the message is still there.
+   */
+  it("never auto-dismisses the borrador-recovery progress message", () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: VALORES_COMPLETOS });
+    const fetchSimulado = vi.fn().mockReturnValue(new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    render(<FormularioBorrador />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Recuperando el borrador guardado");
+    vi.advanceTimersByTime(10_000);
+    expect(screen.getByRole("status")).toHaveTextContent("Recuperando el borrador guardado");
   });
 
   /**

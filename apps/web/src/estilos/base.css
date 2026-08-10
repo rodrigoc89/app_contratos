@@ -57,7 +57,23 @@ h2 {
   outline-offset: 2px;
 }
 
+/**
+ * PR26 — errors (design.md "Errors" category) get a distinct block, not
+ * just coloured text: a border + tinted background, built only from tokens
+ * already declared (`--color-error`, `--color-fondo` via `color-mix`), so
+ * `Reintentar`/retry controls rendered inside the same element (the
+ * containers put them there) read as visually bound to the message that
+ * explains them. Global by selector on purpose — every `role="alert"` in
+ * the app gets this automatically, and it never auto-dismisses: nothing
+ * here is timer-driven, unlike `.toast`.
+ */
 [role="alert"] {
+  display: block;
+  margin: var(--espacio-3) 0;
+  padding: var(--espacio-4);
+  border: 2px solid var(--color-error);
+  border-radius: var(--radio-borde);
+  background-color: color-mix(in srgb, var(--color-error) 12%, var(--color-fondo));
   color: var(--color-error);
   font-weight: 600;
 }

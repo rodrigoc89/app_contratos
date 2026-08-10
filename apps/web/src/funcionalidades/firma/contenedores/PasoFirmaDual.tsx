@@ -8,6 +8,7 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import { Boton } from "../../../componentes/atomos/Boton";
+import { Spinner } from "../../../componentes/atomos/Spinner";
 import { LienzoDeFirma, type DatosLienzoDeFirma } from "../../../componentes/organismos/LienzoDeFirma";
 import { VisorDeDocumento } from "../../../componentes/organismos/VisorDeDocumento";
 import { crearColaDeGuardado, type ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
@@ -120,7 +121,14 @@ export function PasoFirmaDual({
   }, []);
 
   if (fase.tipo === "vaciando") {
-    return <p role="status">Guardando los últimos cambios antes de continuar…</p>;
+    return (
+      <div role="status" className="progreso">
+        <span aria-hidden="true">
+          <Spinner etiqueta="Guardando los últimos cambios antes de continuar" />
+        </span>
+        Guardando los últimos cambios antes de continuar…
+      </div>
+    );
   }
 
   if (fase.tipo === "error_vaciado") {
@@ -135,7 +143,14 @@ export function PasoFirmaDual({
   }
 
   if (fase.tipo === "cargando") {
-    return <p role="status">Cargando los documentos para la revisión…</p>;
+    return (
+      <div role="status" className="progreso">
+        <span aria-hidden="true">
+          <Spinner etiqueta="Cargando los documentos para la revisión" />
+        </span>
+        Cargando los documentos para la revisión…
+      </div>
+    );
   }
 
   if (fase.tipo === "error_carga") {

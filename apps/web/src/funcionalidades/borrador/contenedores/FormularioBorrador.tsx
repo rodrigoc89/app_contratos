@@ -6,6 +6,8 @@ import {
 } from "@contratos/esquemas";
 import { useEffect, useState } from "react";
 
+import { Spinner } from "../../../componentes/atomos/Spinner";
+import { Toast } from "../../../componentes/moleculas/Toast";
 import { FormularioComodatario, type ValoresComodatario } from "../../../componentes/organismos/FormularioComodatario";
 import { FormularioEquipos, type ValoresEquipos } from "../../../componentes/organismos/FormularioEquipos";
 import {
@@ -19,6 +21,8 @@ import { obtenerContrato } from "../../../datos/consultas/obtenerContrato";
 import { crearBorrador } from "../../../datos/borrador/crearBorrador";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
+import { tonoWebAudio } from "../infraestructura/tonoWebAudio";
+import type { TonoDeConfirmacion } from "../logica/tonoDeConfirmacion";
 
 const COMODATARIO_VACIO: ValoresComodatario = {
   nombreCompleto: "",
@@ -89,6 +93,12 @@ export interface PropiedadesFormularioBorrador {
    * queue that would let a stale preview render.
    */
   readonly cola?: ColaDeGuardado | null;
+  /**
+   * PR26 — injection seam for the confirmation tone (design.md "The tone"),
+   * same shape as `SuperficieDeFirma`/`ObservadorDeDocumento`. Production
+   * leaves this unset and gets the real WebAudio implementation.
+   */
+  readonly tono?: TonoDeConfirmacion;
 }
 
 /**
@@ -115,7 +125,12 @@ export interface PropiedadesFormularioBorrador {
  * resume-on-mount below possible — PR19's local draft had no `contratoId`
  * to resume from at all.
  */
-export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }: PropiedadesFormularioBorrador) {
+export function FormularioBorrador({
+  onCreado,
+  onContinuarAFirma,
+  cola = null,
+  tono = tonoWebAudio,
+}: PropiedadesFormularioBorrador) {
   // Read exactly once, on mount (spec `borrador-form`, "Recovery scope after
   // reload or kill") — `leerBorradorLocal` already discards anything
   // expired, malformed or version-mismatched, and structurally cannot
@@ -132,6 +147,12 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
   const [error, establecerError] = useState<string | null>(null);
   const [enviando, establecerEnviando] = useState(false);
   const [creado, establecerCreado] = useState<DatosContratoCreado | null>(null);
+  // PR26 — design.md "Toast" category: separate from `creado` on purpose.
+  // `creado` keeps its existing meaning everywhere else (drives the
+  // equipos-step submit label, is read on every debounced local-draft
+  // write); this only tracks whether the transient confirmation toast is
+  // still showing, so dismissing it never touches anything else.
+  const [avisoBorradorVisible, establecerAvisoBorradorVisible] = useState(false);
 
   // Task 20.2 — a stored draft naming a `contratoId` is not trusted blindly:
   // it is verified against the server before it is ever shown as editable
@@ -171,6 +192,7 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
         }
         const contratoRecuperado: DatosContratoCreado = { id: contrato.id, estado: contrato.estado };
         establecerCreado(contratoRecuperado);
+        establecerAvisoBorradorVisible(true);
         onCreado?.(contratoRecuperado);
         establecerResumiendo(false);
       } catch {
@@ -301,6 +323,14 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
       // superseded) nor the next debounced one (not yet due) has happened.
       guardarBorradorLocal({ contratoId: contrato.id, paso, valores: validacionCompleta.data });
       establecerCreado(contrato);
+      establecerAvisoBorradorVisible(true);
+      // DESIGN.md "The tone" — a discreet confirmation, only on an actual
+      // creation (never on the resume path above). Fire-and-forget, and
+      // called only after the toast state above is already set: the port
+      // contract guarantees `reproducir` never throws, but this ordering
+      // means even a contract-violating fake cannot hide the toast (see
+      // FormularioBorrador.spec.tsx's verification-by-breaking test).
+      tono.reproducir();
       onCreado?.(contrato);
     } catch (motivo) {
       // The entered values are never cleared here — a business-rule
@@ -335,12 +365,24 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
   // step 2 the técnico did not actually confirm) while the stored
   // `contratoId` above is still being verified against the server.
   if (resumiendo) {
-    return <p role="status">Recuperando el borrador guardado…</p>;
+    return (
+      <div role="status" className="progreso">
+        <span aria-hidden="true">
+          <Spinner etiqueta="Recuperando el borrador guardado" />
+        </span>
+        Recuperando el borrador guardado…
+      </div>
+    );
   }
 
   return (
     <>
-      {creado !== null && <p role="status">Borrador creado. ID: {creado.id}</p>}
+      {creado !== null && avisoBorradorVisible && (
+        <Toast
+          mensaje={`Borrador creado. ID: ${creado.id}`}
+          onDescartar={() => establecerAvisoBorradorVisible(false)}
+        />
+      )}
       {paso === "comodatario" ? (
         <FormularioComodatario
           valores={comodatario}

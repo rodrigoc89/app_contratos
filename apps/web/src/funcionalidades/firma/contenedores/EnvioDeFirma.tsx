@@ -6,6 +6,8 @@ import type {
 import { useEffect, useState } from "react";
 
 import { Boton } from "../../../componentes/atomos/Boton";
+import { Spinner } from "../../../componentes/atomos/Spinner";
+import { Toast } from "../../../componentes/moleculas/Toast";
 import { limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
@@ -66,6 +68,11 @@ export function EnvioDeFirma({
   entregar,
 }: PropiedadesEnvioDeFirma) {
   const [estado, establecerEstado] = useState<EstadoEnvio>({ tipo: "revisando" });
+  // PR26 — design.md "Toast" category: whether the signing-confirmation
+  // toast is still showing. `EntregaDeDocumentos` below is unaffected by
+  // this — it was already always rendered alongside the confirmation, not
+  // gated by it.
+  const [avisoFirmaVisible, establecerAvisoFirmaVisible] = useState(true);
   const ejecutarFirma = firmar ?? firmarContrato;
 
   // DESIGN.md D9 — "any contract open, any signature captured" for the
@@ -96,16 +103,24 @@ export function EnvioDeFirma({
   }
 
   if (estado.tipo === "firmando") {
-    return <p role="status">Enviando la firma…</p>;
+    return (
+      <div role="status" className="progreso">
+        <span aria-hidden="true">
+          <Spinner etiqueta="Enviando la firma" />
+        </span>
+        Enviando la firma…
+      </div>
+    );
   }
 
   if (estado.tipo === "firmado") {
     const { numero } = estado.contrato;
+    const mensaje = `${numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"} correctamente.`;
     return (
       <div className="envio-firma__resultado">
-        <p role="status">
-          {numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"} correctamente.
-        </p>
+        {avisoFirmaVisible && (
+          <Toast mensaje={mensaje} onDescartar={() => establecerAvisoFirmaVisible(false)} />
+        )}
         <EntregaDeDocumentos
           contrato={estado.contrato}
           {...(entregar === undefined ? {} : { entregar })}
