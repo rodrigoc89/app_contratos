@@ -21,6 +21,8 @@ import { obtenerContrato } from "../../../datos/consultas/obtenerContrato";
 import { crearBorrador } from "../../../datos/borrador/crearBorrador";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
+import { tonoWebAudio } from "../infraestructura/tonoWebAudio";
+import type { TonoDeConfirmacion } from "../logica/tonoDeConfirmacion";
 
 const COMODATARIO_VACIO: ValoresComodatario = {
   nombreCompleto: "",
@@ -91,6 +93,12 @@ export interface PropiedadesFormularioBorrador {
    * queue that would let a stale preview render.
    */
   readonly cola?: ColaDeGuardado | null;
+  /**
+   * PR26 — injection seam for the confirmation tone (design.md "The tone"),
+   * same shape as `SuperficieDeFirma`/`ObservadorDeDocumento`. Production
+   * leaves this unset and gets the real WebAudio implementation.
+   */
+  readonly tono?: TonoDeConfirmacion;
 }
 
 /**
@@ -121,6 +129,7 @@ export function FormularioBorrador({
   onCreado,
   onContinuarAFirma,
   cola = null,
+  tono = tonoWebAudio,
 }: PropiedadesFormularioBorrador) {
   // Read exactly once, on mount (spec `borrador-form`, "Recovery scope after
   // reload or kill") — `leerBorradorLocal` already discards anything
@@ -315,6 +324,13 @@ export function FormularioBorrador({
       guardarBorradorLocal({ contratoId: contrato.id, paso, valores: validacionCompleta.data });
       establecerCreado(contrato);
       establecerAvisoBorradorVisible(true);
+      // DESIGN.md "The tone" — a discreet confirmation, only on an actual
+      // creation (never on the resume path above). Fire-and-forget, and
+      // called only after the toast state above is already set: the port
+      // contract guarantees `reproducir` never throws, but this ordering
+      // means even a contract-violating fake cannot hide the toast (see
+      // FormularioBorrador.spec.tsx's verification-by-breaking test).
+      tono.reproducir();
       onCreado?.(contrato);
     } catch (motivo) {
       // The entered values are never cleared here — a business-rule

@@ -491,6 +491,51 @@ describe("FormularioBorrador", () => {
   });
 
   /**
+   * PR26 — design.md "The tone": draft creation plays a discreet
+   * confirmation tone through the injectable `TonoDeConfirmacion` port
+   * (same shape as `SuperficieDeFirma`/`ObservadorDeDocumento`) —
+   * testable with a fake, no audio hardware.
+   */
+  it("plays the confirmation tone when a draft is created", async () => {
+    establecerSesion(sesionFalsa());
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    const reproducir = vi.fn();
+
+    render(<FormularioBorrador tono={{ reproducir }} />);
+
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+
+    await waitFor(() => expect(reproducir).toHaveBeenCalledTimes(1));
+  });
+
+  /**
+   * Verification-by-breaking (c): a blocked or throwing tone must never
+   * break or delay the flow — the toast is the primary confirmation, the
+   * tone only supplements it.
+   */
+  it("still completes draft creation and shows the toast even when the confirmation tone throws", async () => {
+    establecerSesion(sesionFalsa());
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
+    vi.stubGlobal("fetch", fetchSimulado);
+    const tonoQueFalla = {
+      reproducir: () => {
+        throw new Error("AudioContext bloqueado");
+      },
+    };
+
+    render(<FormularioBorrador tono={tonoQueFalla} />);
+
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+
+    expect(await screen.findByText(/Borrador creado/)).toBeInTheDocument();
+  });
+
+  /**
    * Verification-by-breaking (d) guard: the recovery message stays a
    * progress indicator (design.md "Progress" category) — same role, same
    * position, never a toast. Proven by advancing well past the toast's 5s
