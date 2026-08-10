@@ -6,6 +6,8 @@ import {
 } from "@contratos/esquemas";
 import { useEffect, useState } from "react";
 
+import { Spinner } from "../../../componentes/atomos/Spinner";
+import { Toast } from "../../../componentes/moleculas/Toast";
 import { FormularioComodatario, type ValoresComodatario } from "../../../componentes/organismos/FormularioComodatario";
 import { FormularioEquipos, type ValoresEquipos } from "../../../componentes/organismos/FormularioEquipos";
 import {
@@ -115,7 +117,11 @@ export interface PropiedadesFormularioBorrador {
  * resume-on-mount below possible — PR19's local draft had no `contratoId`
  * to resume from at all.
  */
-export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }: PropiedadesFormularioBorrador) {
+export function FormularioBorrador({
+  onCreado,
+  onContinuarAFirma,
+  cola = null,
+}: PropiedadesFormularioBorrador) {
   // Read exactly once, on mount (spec `borrador-form`, "Recovery scope after
   // reload or kill") — `leerBorradorLocal` already discards anything
   // expired, malformed or version-mismatched, and structurally cannot
@@ -132,6 +138,12 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
   const [error, establecerError] = useState<string | null>(null);
   const [enviando, establecerEnviando] = useState(false);
   const [creado, establecerCreado] = useState<DatosContratoCreado | null>(null);
+  // PR26 — design.md "Toast" category: separate from `creado` on purpose.
+  // `creado` keeps its existing meaning everywhere else (drives the
+  // equipos-step submit label, is read on every debounced local-draft
+  // write); this only tracks whether the transient confirmation toast is
+  // still showing, so dismissing it never touches anything else.
+  const [avisoBorradorVisible, establecerAvisoBorradorVisible] = useState(false);
 
   // Task 20.2 — a stored draft naming a `contratoId` is not trusted blindly:
   // it is verified against the server before it is ever shown as editable
@@ -171,6 +183,7 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
         }
         const contratoRecuperado: DatosContratoCreado = { id: contrato.id, estado: contrato.estado };
         establecerCreado(contratoRecuperado);
+        establecerAvisoBorradorVisible(true);
         onCreado?.(contratoRecuperado);
         establecerResumiendo(false);
       } catch {
@@ -301,6 +314,7 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
       // superseded) nor the next debounced one (not yet due) has happened.
       guardarBorradorLocal({ contratoId: contrato.id, paso, valores: validacionCompleta.data });
       establecerCreado(contrato);
+      establecerAvisoBorradorVisible(true);
       onCreado?.(contrato);
     } catch (motivo) {
       // The entered values are never cleared here — a business-rule
@@ -335,12 +349,24 @@ export function FormularioBorrador({ onCreado, onContinuarAFirma, cola = null }:
   // step 2 the técnico did not actually confirm) while the stored
   // `contratoId` above is still being verified against the server.
   if (resumiendo) {
-    return <p role="status">Recuperando el borrador guardado…</p>;
+    return (
+      <div role="status" className="progreso">
+        <span aria-hidden="true">
+          <Spinner etiqueta="Recuperando el borrador guardado" />
+        </span>
+        Recuperando el borrador guardado…
+      </div>
+    );
   }
 
   return (
     <>
-      {creado !== null && <p role="status">Borrador creado. ID: {creado.id}</p>}
+      {creado !== null && avisoBorradorVisible && (
+        <Toast
+          mensaje={`Borrador creado. ID: ${creado.id}`}
+          onDescartar={() => establecerAvisoBorradorVisible(false)}
+        />
+      )}
       {paso === "comodatario" ? (
         <FormularioComodatario
           valores={comodatario}
