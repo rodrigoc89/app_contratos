@@ -2,6 +2,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+import { PROXY_DE_DESARROLLO } from "./src/dev/proxyDeDesarrollo";
 import { OPCIONES_VITE_PLUGIN_PWA } from "./src/pwa/configuracionPwa";
 
 /**
@@ -29,4 +30,7 @@ export default defineConfig({
   // through `pwa/registro.ts`, so the update-suppression decision
   // (DESIGN.md D9, `pwa/actualizacion.ts`) is always consulted first.
   plugins: [react(), VitePWA(OPCIONES_VITE_PLUGIN_PWA)],
+  // Makes the dev server same-origin, the way Nginx does in production.
+  // See `src/dev/proxyDeDesarrollo.ts` for why this is not optional.
+  server: { proxy: PROXY_DE_DESARROLLO },
 });
