@@ -29,6 +29,9 @@ import { crearPrismaClient } from "../src/shared/infrastructure/persistence/pris
  */
 const ADMIN_ID = "usuario-admin-inicial";
 
+/** Same reasoning as `ADMIN_ID`, for the técnico account. */
+const TECNICO_ID = "usuario-tecnico-inicial";
+
 const prisma = crearPrismaClient();
 
 try {
@@ -44,8 +47,17 @@ try {
       nombreUsuario: process.env.SEED_ADMIN_USERNAME ?? "admin",
       nombreCompleto: process.env.SEED_ADMIN_NOMBRE ?? "Administrador",
       // Read straight from the environment and never echoed anywhere. There
-      // is deliberately no `?? "algo"` on this line — see `sembrarAdministrador`.
+      // is deliberately no `?? "algo"` on this line — see `sembrarCuenta`.
       contrasena: process.env.SEED_ADMIN_PASSWORD,
+      usuarios: new PrismaUsuarioRepository(prisma),
+      hasher: new HashDeContrasenaArgon2(),
+    },
+    tecnico: {
+      id: TECNICO_ID,
+      nombreUsuario: process.env.SEED_TECNICO_USERNAME ?? "tecnico",
+      nombreCompleto: process.env.SEED_TECNICO_NOMBRE ?? "Técnico",
+      // Same deliberate absence of a fallback as the admin's — see `sembrarCuenta`.
+      contrasena: process.env.SEED_TECNICO_PASSWORD,
       usuarios: new PrismaUsuarioRepository(prisma),
       hasher: new HashDeContrasenaArgon2(),
     },
