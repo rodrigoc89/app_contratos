@@ -176,18 +176,19 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
   }
 
   return (
-    <div>
+    <div className="lienzo-de-firma">
       <canvas
         ref={canvasRef}
         role="img"
         aria-label={etiqueta}
+        className="lienzo-de-firma__lienzo"
         style={{ touchAction: "none", width: "100%", height: "100%" }}
         onPointerDown={manejarPointerDown}
         onPointerMove={manejarPointerMove}
         onPointerUp={manejarFinDeTrazo}
         onPointerCancel={manejarFinDeTrazo}
       />
-      <div>
+      <div className="lienzo-de-firma__acciones">
         <Boton type="button" onClick={manejarDeshacer}>
           Deshacer
         </Boton>

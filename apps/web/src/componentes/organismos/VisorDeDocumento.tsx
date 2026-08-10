@@ -58,8 +58,14 @@ export function VisorDeDocumento({ html, titulo, onCambiaEstado, crearObservador
     estado.estado === "pendiente" && estado.motivo === "cabe_sin_desplazar_falta_confirmar";
 
   return (
-    <div>
-      <iframe ref={iframeRef} title={titulo} srcDoc={html} sandbox="allow-same-origin" />
+    <div className="visor-documento">
+      <iframe
+        ref={iframeRef}
+        title={titulo}
+        srcDoc={html}
+        sandbox="allow-same-origin"
+        className="visor-documento__iframe"
+      />
       {requiereConfirmacionExplicita ? (
         <Boton type="button" onClick={() => establecerEstado((previo) => confirmar(previo))}>
           Leí el documento completo

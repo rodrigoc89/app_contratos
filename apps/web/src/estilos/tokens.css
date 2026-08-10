@@ -1,0 +1,46 @@
+/**
+ * Design tokens for the field-technician tablet UI (PR24a).
+ *
+ * One committed palette, built around the brand colour already declared in
+ * `pwa/configuracionPwa.ts`'s manifest (`#0b634a`). No dark-mode variant is
+ * defined on purpose — a técnico signs contracts standing in a customer's
+ * house, often in direct Santiago del Estero sunlight, never in the dark,
+ * and a second theme is a second thing that can be unreadable outdoors.
+ */
+:root {
+  /* Brand */
+  --color-primario: #0b634a;
+  --color-primario-oscuro: #094f3b;
+
+  /* Neutrals — dark text on a white background maximises contrast in sun */
+  --color-fondo: #ffffff;
+  --color-texto: #14181b;
+  --color-texto-suave: #3f4b52;
+  --color-borde: #4b5563;
+  --color-borde-suave: #d0d7dc;
+
+  /* Semantic */
+  --color-error: #b3261e;
+  --color-foco: #0b634a;
+
+  /* Spacing scale */
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-5: 24px;
+  --espacio-6: 32px;
+
+  /* Touch targets — a técnico taps standing up, sometimes with a gloved
+     thumb; see convencionesDeEstilos.spec.ts for the guard that enforces
+     this value never drops below 48px. */
+  --tamano-toque-minimo: 48px;
+
+  /* Type — assumes a tablet held at arm's length, not read up close */
+  --fuente-base: 18px;
+  --fuente-grande: 22px;
+  --familia-tipografica:
+    system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radio-borde: 8px;
+}

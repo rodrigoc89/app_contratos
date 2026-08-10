@@ -9,4 +9,10 @@ describe("Spinner", () => {
 
     expect(screen.getByRole("status", { name: "Guardando cambios" })).toBeInTheDocument();
   });
+
+  it("carries the shared spinner styling class (PR24a — atoms are the styling seam)", () => {
+    render(<Spinner etiqueta="Guardando cambios" />);
+
+    expect(screen.getByRole("status", { name: "Guardando cambios" })).toHaveClass("spinner");
+  });
 });

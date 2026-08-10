@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./app/App";
 import { RaizConActualizacion } from "./app/RaizConActualizacion";
+import "./estilos/index.css";
 
 const contenedor = document.getElementById("app");
 

@@ -278,4 +278,13 @@ describe("LienzoDeFirma", () => {
       fireEvent.pointerUp(lienzo, { pointerId: 1, clientX: 10, clientY: 0, pointerType: "touch" });
     }).not.toThrow();
   });
+
+  it("carries the viewport-bounded signature-canvas class (PR24b — as large as the viewport reasonably allows, but never unbounded)", () => {
+    const { superficie } = superficieFalsa();
+    render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficie} />);
+    const lienzo = screen.getByRole("img", { name: "Firma" });
+
+    expect(lienzo).toHaveClass("lienzo-de-firma__lienzo");
+    expect(lienzo.parentElement).toHaveClass("lienzo-de-firma");
+  });
 });

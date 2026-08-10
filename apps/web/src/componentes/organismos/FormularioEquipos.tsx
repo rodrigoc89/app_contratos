@@ -64,7 +64,7 @@ export function FormularioEquipos({
   }
 
   return (
-    <form onSubmit={manejarEnvio}>
+    <form onSubmit={manejarEnvio} className="formulario">
       <h2>Equipos entregados</h2>
       <Etiqueta htmlFor="antenaModelo">Modelo de antena</Etiqueta>
       <CampoTexto
@@ -78,7 +78,7 @@ export function FormularioEquipos({
         onCambiar={(valor) => onCambiar("antenaMac", valor)}
         deshabilitado={deshabilitado}
       />
-      <fieldset>
+      <fieldset className="formulario__fieldset">
         <legend>¿Se entregó inyector PoE?</legend>
         <Etiqueta>
           <input

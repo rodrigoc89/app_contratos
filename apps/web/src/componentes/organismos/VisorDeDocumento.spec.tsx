@@ -102,4 +102,11 @@ describe("VisorDeDocumento", () => {
     expect(estados.at(-1)).toEqual({ estado: "completo", motivo: "desplazado_al_final" });
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
+
+  it("carries the bounded document-viewer class (PR24b) — CSS sizing lives in convencionesDeEstilos.spec.ts's guard, not here", () => {
+    render(<VisorDeDocumento html="<p>hola</p>" titulo="Comodato" />);
+    const iframe = screen.getByTitle("Comodato");
+    expect(iframe).toHaveClass("visor-documento__iframe");
+    expect(iframe.parentElement).toHaveClass("visor-documento");
+  });
 });

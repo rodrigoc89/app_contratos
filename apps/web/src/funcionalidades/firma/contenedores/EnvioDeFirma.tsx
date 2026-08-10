@@ -102,7 +102,7 @@ export function EnvioDeFirma({
   if (estado.tipo === "firmado") {
     const { numero } = estado.contrato;
     return (
-      <div>
+      <div className="envio-firma__resultado">
         <p role="status">
           {numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"} correctamente.
         </p>
@@ -116,7 +116,7 @@ export function EnvioDeFirma({
 
   if (estado.tipo === "error") {
     return (
-      <div role="alert">
+      <div role="alert" className="envio-firma__error">
         <p>{estado.mensaje.titulo}</p>
         <p>{estado.mensaje.mensaje}</p>
         <Boton type="button" onClick={() => void manejarListo(estado.firmas)}>

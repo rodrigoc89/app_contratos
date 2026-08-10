@@ -9,5 +9,5 @@ export function CampoTexto({ onCambiar, type = "text", ...resto }: PropiedadesCa
     onCambiar(evento.target.value);
   }
 
-  return <input type={type} {...resto} onChange={manejarCambio} />;
+  return <input type={type} {...resto} className="campo-texto" onChange={manejarCambio} />;
 }
