@@ -6,7 +6,7 @@ import {
 } from "@contratos/esquemas";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
@@ -138,6 +138,12 @@ async function esperarPasoListo(): Promise<void> {
 }
 
 describe("PasoFirmaDual", () => {
+  afterEach(() => {
+    // PR26 — a timed-out fake-timer test below must never leave fake
+    // timers active for the next test in this file.
+    vi.useRealTimers();
+  });
+
   it("blocks review content until the pending autosave flush resolves (task 7.3, DESIGN.md D3)", async () => {
     let resolverVaciado: (() => void) | undefined;
     const vaciar = () =>
@@ -157,6 +163,35 @@ describe("PasoFirmaDual", () => {
 
     resolverVaciado?.();
     await waitFor(() => expect(screen.getByTitle("Condiciones Generales de Uso")).toBeInTheDocument());
+  });
+
+  /**
+   * PR26, verification-by-breaking (d) guard — design.md "Progress"
+   * category: "Guardando los últimos cambios…" stays a progress indicator
+   * (Spinner beside the words), never a toast — no auto-dismiss, ever.
+   */
+  it("never auto-dismisses the Guardando los últimos cambios progress message", () => {
+    const vaciar = () => new Promise<void>(() => {});
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    render(
+      <PasoFirmaDual
+        contratoId="c1"
+        crearCola={() => colaFalsa(vaciar)}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+      />,
+    );
+
+    const region = screen.getByRole("status");
+    expect(region).toHaveTextContent("Guardando los últimos cambios");
+    // The Spinner atom is wired in beside the words (design.md "Progress"),
+    // hidden from the accessibility tree so this status region stays the
+    // one live region a screen reader announces.
+    expect(region.querySelector(".spinner")).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Guardando los últimos cambios");
   });
 
   it("shows a retry affordance and stays out of the review step when the flush fails", async () => {
