@@ -138,6 +138,57 @@ describe("primary actions meet the 48px touch-target minimum", () => {
   });
 });
 
+describe("destructive signature actions stay separated from the commit action (PR25)", () => {
+  /**
+   * PR25 — `Deshacer`/`Borrar` render directly above the step's `Firmar`;
+   * `Borrar` and `Firmar` are both reachable by a técnico's thumb while
+   * standing in a customer's house. Tapping `Borrar` instead of `Firmar`
+   * destroys a signature the customer already made. Two independent guards:
+   * a minimum spatial gap, and a distinct destructive colour so the pair
+   * does not read like two equally safe actions.
+   */
+  const SEPARACION_MINIMA_PX = 32;
+
+  function valorDeToken(tokens: string, nombreToken: string): number | undefined {
+    const patron = new RegExp(`--${nombreToken}\\s*:\\s*(\\d+(?:\\.\\d+)?)px`);
+    const encontrado = patron.exec(tokens);
+    return encontrado ? Number(encontrado[1]) : undefined;
+  }
+
+  it(`keeps at least ${SEPARACION_MINIMA_PX}px below .lienzo-de-firma__acciones before the next control, so a thumb reaching for Firmar cannot land on Borrar`, () => {
+    const organismos = archivo("estilos/organismos.css");
+    const tokens = archivo("estilos/tokens.css");
+    expect(organismos, "estilos/organismos.css is missing").toBeDefined();
+    expect(tokens, "estilos/tokens.css is missing").toBeDefined();
+
+    const regla = /\.lienzo-de-firma__acciones\s*\{([^}]*)\}/.exec(organismos?.contenido ?? "");
+    expect(regla, ".lienzo-de-firma__acciones rule not found in estilos/organismos.css").not.toBeNull();
+    const cuerpo = regla?.[1] ?? "";
+
+    const declaracion = /margin-bottom\s*:\s*(?:var\(--(espacio-\d+)\)|(\d+(?:\.\d+)?)px)/.exec(cuerpo);
+    expect(declaracion, ".lienzo-de-firma__acciones has no margin-bottom declaration").not.toBeNull();
+
+    const nombreToken = declaracion?.[1];
+    const valorLiteral = declaracion?.[2];
+    const valorPx = nombreToken !== undefined ? valorDeToken(tokens?.contenido ?? "", nombreToken) : Number(valorLiteral);
+
+    expect(valorPx, "could not resolve .lienzo-de-firma__acciones's margin-bottom to a px value").toBeDefined();
+    expect(valorPx ?? 0).toBeGreaterThanOrEqual(SEPARACION_MINIMA_PX);
+  });
+
+  it("styles Borrar — the last action in .lienzo-de-firma__acciones — with the error token, distinct from the primary .boton background", () => {
+    const organismos = archivo("estilos/organismos.css");
+    expect(organismos, "estilos/organismos.css is missing").toBeDefined();
+
+    const regla = /\.lienzo-de-firma__acciones\s+\.boton:last-child\s*\{([^}]*)\}/.exec(organismos?.contenido ?? "");
+    expect(
+      regla,
+      "no rule styles .lienzo-de-firma__acciones .boton:last-child (Borrar) — a destructive action must read differently from a commit action",
+    ).not.toBeNull();
+    expect(/background-color\s*:\s*var\(--color-error\)/.test(regla?.[1] ?? "")).toBe(true);
+  });
+});
+
 describe("the document viewer stays bounded to a fraction of the viewport, never to its content", () => {
   it("finds and constrains .visor-documento__iframe in estilos/organismos.css", () => {
     const organismos = archivo("estilos/organismos.css");

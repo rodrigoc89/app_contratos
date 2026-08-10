@@ -57,7 +57,23 @@
 .lienzo-de-firma__acciones {
   display: flex;
   gap: var(--espacio-2);
-  margin-bottom: var(--espacio-5);
+  /* PR25 — bumped from --espacio-5 (24px) to --espacio-6 (32px, the guarded
+     minimum in convencionesDeEstilos.spec.ts): Deshacer/Borrar render right
+     above the step's Firmar, and Borrar destroys an already-captured
+     signature. A técnico taps standing up, with a thumb — this is the
+     minimum gap that keeps a miss on Firmar from landing on Borrar. */
+  margin-bottom: var(--espacio-6);
+}
+
+/**
+ * Borrar is the last (and only destructive) action in this group. Reusing
+ * the semantic error token — never a new colour — makes it read differently
+ * from every other button, instead of sitting next to Firmar looking like
+ * an equally safe primary action (PR25).
+ */
+.lienzo-de-firma__acciones .boton:last-child {
+  border-color: var(--color-error);
+  background-color: var(--color-error);
 }
 
 /* --- mac-scanning: EscanerDeMac camera preview -------------------------- */
