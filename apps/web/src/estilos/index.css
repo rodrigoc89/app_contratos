@@ -2,8 +2,11 @@
  * Single stylesheet entry point, imported once from `main.tsx`. Order
  * matters: tokens before base (base's radio/checkbox sizing reads the
  * tokens), base before atoms (atoms read the tokens too and base's
- * `[hidden]` reset must land before anything that could compete with it).
+ * `[hidden]` reset must land before anything that could compete with it),
+ * atoms before organisms (organisms/layout, PR24b, only ever add spacing
+ * and sizing around the atoms — never redefine them).
  */
 @import "./tokens.css";
 @import "./base.css";
 @import "./atomos.css";
+@import "./organismos.css";

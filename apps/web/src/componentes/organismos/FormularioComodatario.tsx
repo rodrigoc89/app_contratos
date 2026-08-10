@@ -49,10 +49,10 @@ export function FormularioComodatario({
   }
 
   return (
-    <form onSubmit={manejarEnvio}>
+    <form onSubmit={manejarEnvio} className="formulario">
       <h2>Datos del cliente</h2>
       {CAMPOS.map(({ campo, etiqueta }) => (
-        <div key={campo}>
+        <div key={campo} className="formulario__campo">
           <Etiqueta htmlFor={campo}>{etiqueta}</Etiqueta>
           <CampoTexto
             id={campo}

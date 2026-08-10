@@ -20,7 +20,7 @@ export function PanelNoDisponible() {
   }
 
   return (
-    <div>
+    <div className="panel-no-disponible">
       <p>El panel de oficina no está disponible todavía.</p>
       <Boton onClick={manejarCerrarSesion}>Cerrar sesión</Boton>
     </div>

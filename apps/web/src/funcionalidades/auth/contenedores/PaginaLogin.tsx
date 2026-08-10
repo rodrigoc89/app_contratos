@@ -69,7 +69,10 @@ export function PaginaLogin() {
   }
 
   return (
-    <form onSubmit={(evento: FormEvent<HTMLFormElement>) => void manejarEnvio(evento)}>
+    <form
+      onSubmit={(evento: FormEvent<HTMLFormElement>) => void manejarEnvio(evento)}
+      className="formulario"
+    >
       {motivo !== null && <p role="status">{MENSAJE_POR_MOTIVO[motivo]}</p>}
       <Etiqueta htmlFor="nombreUsuario">Usuario</Etiqueta>
       <CampoTexto id="nombreUsuario" value={nombreUsuario} onCambiar={establecerNombreUsuario} />

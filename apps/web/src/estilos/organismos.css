@@ -1,0 +1,136 @@
+/**
+ * Organism- and layout-level styling (PR24b). Where `atomos.css` (PR24a)
+ * styled the passthrough seam (Boton, CampoTexto, ...), this file covers
+ * the surfaces whose sizing decisions carry real weight: the document
+ * viewer, the signature canvas, the camera preview, and the form/page
+ * shells around them.
+ */
+
+/* --- document-review: VisorDeDocumento --------------------------------- */
+
+.visor-documento {
+  margin-bottom: var(--espacio-5);
+}
+
+/**
+ * Bounded to a FRACTION of the viewport height — never to content, never
+ * unbounded. See `convencionesDeEstilos.spec.ts`, "the document viewer
+ * stays bounded to a fraction of the viewport". `funcionalidades/revision/
+ * logica/puertaDeLectura.ts` distinguishes "scrolled to the end" from
+ * "fits without scrolling — confirmation pending"; sizing this rule to
+ * content (`height: auto`) or leaving it unbounded (an open-ended
+ * `min-height`) would silently move every real two-page comodato onto the
+ * confirmation branch by making it fit without scrolling. `height` only —
+ * deliberately no `min-height` here.
+ */
+.visor-documento__iframe {
+  display: block;
+  width: 100%;
+  height: 45vh;
+  border: 2px solid var(--color-borde-suave);
+  border-radius: var(--radio-borde);
+  background-color: var(--color-fondo);
+}
+
+/* --- firma-capture: LienzoDeFirma --------------------------------------- */
+
+/**
+ * As large as the viewport reasonably allows (maintainer priority 3), but
+ * bounded the same way as the viewer above — a fixed viewport fraction,
+ * never `height: auto`. `.lienzo-de-firma__acciones` (Deshacer/Borrar)
+ * renders immediately below and stays reachable without scrolling because
+ * the canvas itself never grows past this cap.
+ */
+.lienzo-de-firma {
+  height: 40vh;
+  margin-bottom: var(--espacio-2);
+  border: 2px solid var(--color-borde);
+  border-radius: var(--radio-borde);
+  background-color: var(--color-fondo);
+}
+
+.lienzo-de-firma__lienzo {
+  display: block;
+  cursor: crosshair;
+}
+
+.lienzo-de-firma__acciones {
+  display: flex;
+  gap: var(--espacio-2);
+  margin-bottom: var(--espacio-5);
+}
+
+/* --- mac-scanning: EscanerDeMac camera preview -------------------------- */
+
+/**
+ * A bare, non-important `display` rule living right next to base.css's
+ * `[hidden]` protection rule — safe by the CSS cascade itself: an important
+ * declaration always outranks a non-important one for the same property on
+ * the same element, regardless of selector specificity or source order. So
+ * this rule cannot re-enable the preview while `EscanerDeMac.tsx`'s
+ * `hidden` attribute is present.
+ */
+.escaner-de-mac__video {
+  display: block;
+  width: 100%;
+  max-height: 40vh;
+  margin-bottom: var(--espacio-3);
+  border: 2px solid var(--color-borde);
+  border-radius: var(--radio-borde);
+  background-color: #000000;
+  object-fit: cover;
+}
+
+/* --- shared form shell: comodatario / equipos / login ------------------- */
+
+.formulario {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--espacio-5);
+}
+
+.formulario__campo {
+  margin-bottom: var(--espacio-2);
+}
+
+.formulario__fieldset {
+  margin: var(--espacio-4) 0;
+  padding: var(--espacio-3);
+  border: 2px solid var(--color-borde-suave);
+  border-radius: var(--radio-borde);
+}
+
+/* --- app shell: LayoutTablet --------------------------------------------- */
+
+.layout-tablet {
+  min-height: 100%;
+}
+
+.layout-tablet__contenido {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--espacio-4);
+}
+
+/* --- firma / entrega / panel layout -------------------------------------- */
+
+.paso-firma {
+  padding: var(--espacio-4);
+}
+
+.paso-firma__documento {
+  margin-bottom: var(--espacio-6);
+}
+
+.envio-firma__resultado,
+.envio-firma__error {
+  padding: var(--espacio-4);
+}
+
+.entrega-documentos {
+  padding: var(--espacio-4);
+}
+
+.panel-no-disponible {
+  padding: var(--espacio-5);
+}

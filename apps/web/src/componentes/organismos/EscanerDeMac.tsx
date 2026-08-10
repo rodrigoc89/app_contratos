@@ -155,6 +155,7 @@ export function EscanerDeMac({
         muted
         playsInline
         aria-label="Vista de la cámara"
+        className="escaner-de-mac__video"
         hidden={estado !== "escaneando" && estado !== "abriendo"}
       />
       {estado === "abriendo" && <p>Abriendo cámara…</p>}

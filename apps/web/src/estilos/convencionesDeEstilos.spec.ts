@@ -5,10 +5,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * PR24a — source-scanning guards over `src/**\/*.css`, same shape as
+ * PR24a/24b — source-scanning guards over `src/**\/*.css`, same shape as
  * `convencionDeAlmacenamiento.spec.ts` and `componentes/convencionDeCapas.spec.ts`.
  * jsdom performs no layout, and Vitest does not load real stylesheets into a
- * document during a test run, so none of the three invariants below can be
+ * document during a test run, so none of the invariants below can be
  * asserted by rendering — each is a text-level check of the actual shipped
  * CSS instead.
  *
@@ -32,6 +32,18 @@ import { describe, expect, it } from "vitest";
  *    (`Boton.tsx`) — and the shared `--tamano-toque-minimo` token both stay
  *    at or above 48px. A técnico taps standing up, sometimes with a gloved
  *    thumb; a mis-tap in front of a customer is the cost of shrinking this.
+ * 4. (PR24b) `.visor-documento__iframe` — the document-viewer surface itself
+ *    — stays bounded to a FRACTION of the viewport, never to its content.
+ *    Guard 1 above stops the surface from being clipped; it does nothing to
+ *    stop the *other* failure the same legal distinction is exposed to: an
+ *    iframe sized generously enough (or sized to content, or left
+ *    unbounded) makes a real two-page comodato fit without scrolling, which
+ *    silently routes every signing onto the "confirmation pending" branch
+ *    instead of "scrolled to the end". So this rule must declare a `height`
+ *    (or `max-height`) as an explicit `vh` fraction, must not declare
+ *    `height: auto`, and must not declare any `min-height` at all — an
+ *    unbounded `min-height` would let content stretch the frame exactly
+ *    like `auto` does.
  */
 
 const DIRECTORIO_ESTILOS = dirname(fileURLToPath(import.meta.url));
@@ -41,6 +53,7 @@ const PATRON_OVERFLOW_CLIP = /overflow(?:-y|-x)?\s*:\s*(hidden|clip)\b/i;
 const REGLA_HIDDEN_PROTEGIDA = /\[hidden\]\s*\{\s*display\s*:\s*none\s*!important\s*;?\s*\}/;
 const PATRON_DISPLAY_IMPORTANT = /display\s*:\s*[^;]+!important/gi;
 const PATRON_TAMANO_MINIMO = /--tamano-toque-minimo\s*:\s*(\d+)px/;
+const PATRON_ALTURA_ACOTADA_VH = /(?:^|\s)(?:height|max-height)\s*:\s*\d+(?:\.\d+)?vh\b/i;
 
 function archivosCss(directorio: string): ReadonlyArray<{ ruta: string; contenido: string }> {
   return readdirSync(directorio).flatMap((nombre) => {
@@ -122,5 +135,31 @@ describe("primary actions meet the 48px touch-target minimum", () => {
     const valor = PATRON_TAMANO_MINIMO.exec(tokens?.contenido ?? "");
     expect(valor, "--tamano-toque-minimo is not declared").not.toBeNull();
     expect(Number(valor?.[1])).toBeGreaterThanOrEqual(48);
+  });
+});
+
+describe("the document viewer stays bounded to a fraction of the viewport, never to its content", () => {
+  it("finds and constrains .visor-documento__iframe in estilos/organismos.css", () => {
+    const organismos = archivo("estilos/organismos.css");
+    expect(organismos, "estilos/organismos.css is missing").toBeDefined();
+
+    const regla = /\.visor-documento__iframe\s*\{([^}]*)\}/.exec(organismos?.contenido ?? "");
+    expect(regla, ".visor-documento__iframe rule not found in estilos/organismos.css").not.toBeNull();
+    const cuerpo = regla?.[1] ?? "";
+
+    expect(
+      /height\s*:\s*auto\b/i.test(cuerpo),
+      "the document viewer must not size to its content via height: auto — a real two-page comodato would then fit without scrolling, silently moving the reading gate onto the wrong legal branch (puertaDeLectura.ts)",
+    ).toBe(false);
+
+    expect(
+      /min-height/i.test(cuerpo),
+      "the document viewer must declare no min-height at all — an unbounded min-height lets content stretch the frame exactly like height: auto does",
+    ).toBe(false);
+
+    expect(
+      PATRON_ALTURA_ACOTADA_VH.test(cuerpo),
+      "the document viewer must declare height or max-height as an explicit vh fraction of the viewport",
+    ).toBe(true);
   });
 });

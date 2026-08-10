@@ -174,11 +174,11 @@ export function PasoFirmaDual({
   }
 
   return (
-    <div>
+    <div className="paso-firma">
       {DOCUMENTOS_DEL_CONTRATO.map((documento) => {
         const html = previsualizacion.documentos.find((doc) => doc.documento === documento)?.html ?? "";
         return (
-          <section key={documento}>
+          <section key={documento} className="paso-firma__documento">
             <VisorDeDocumento
               html={html}
               titulo={TITULOS[documento]}

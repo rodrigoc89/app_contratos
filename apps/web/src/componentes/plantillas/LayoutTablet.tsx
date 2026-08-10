@@ -6,8 +6,8 @@ interface PropiedadesLayoutTablet {
 
 export function LayoutTablet({ children }: PropiedadesLayoutTablet) {
   return (
-    <div>
-      <main>{children}</main>
+    <div className="layout-tablet">
+      <main className="layout-tablet__contenido">{children}</main>
     </div>
   );
 }

@@ -59,7 +59,7 @@ export function EntregaDeDocumentos({ contrato, entregar }: PropiedadesEntregaDe
   }
 
   return (
-    <div>
+    <div className="entrega-documentos">
       {estado.tipo === "error" && (
         <p role="alert">No se pudieron preparar los documentos. Podés intentar de nuevo.</p>
       )}
