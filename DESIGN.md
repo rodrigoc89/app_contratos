@@ -466,11 +466,21 @@ layer, not just in the UI.
 
 ## 10. Hosting
 
-**Reopened before purchase (August 2026).** This section originally decided on
-a HostGator VPS, chosen over DonWeb on price. Two facts that decision did not
-have are now measured, and both push the other way — see "Provider decision,
-reopened" below. Nothing has been bought yet, which is the cheapest moment for
-this to change.
+**Decided: a DonWeb Cloud Server, 2 vCPU / 4 GB RAM / 20 GB SSD** (August 2026).
+
+This section originally decided on HostGator, chosen over DonWeb on price. It
+was reopened before anything was bought — two facts that comparison did not
+have turned out to be measurable, and both pushed the other way — and then
+settled on DonWeb. See "Provider decision" and the DonWeb catalogue check
+below.
+
+The deciding argument was not in any table: **the operator has used DonWeb for
+years.** Knowing how a provider behaves when something breaks, and how its
+support answers, outweighs a price delta on a system whose downtime means a
+técnico standing in a customer's house unable to finish. Configurability and an
+Argentine provider made it defensible on the recorded criteria too, but that
+operational familiarity is the reason, and it is written here so it is not
+mistaken later for a purely economic choice.
 
 The one hard constraint behind that choice: shared web hosting (cPanel, aimed
 at PHP/WordPress) **cannot run NestJS** — a Node application needs its own
@@ -573,7 +583,61 @@ and the requirement drops to **2 vCPU / 2 GB RAM / 15 GB disk**. That is a
 real cost saving, paid for with a hand-built layout that will not match the
 paper original as closely.
 
-### Provider decision, reopened
+### DonWeb catalogue check (August 2026)
+
+Quoted directly in DonWeb's Cloud Server configurator. Unlike HostGator's fixed
+tiers, resources are chosen individually, which is what lets the measured
+sizing above be bought exactly rather than rounded up.
+
+| Resource | Quoted | Against §10's requirement |
+|---|---|---|
+| vCPU | 2 | ✅ matches |
+| RAM | **4 GB** | ✅ matches — the one figure that must not be traded down |
+| Disk | 20 GB SSD | ✅ matches the measured sizing |
+| Transfer | 1 TB | ✅ far beyond need; a sealed PDF is 112 KB |
+| Backup storage | 20 GB | Sized to the disk |
+| Extra | Free domain for one year | Useful — TLS needs a domain |
+
+Pricing quoted in Argentine pesos, VAT included, and **not converted to USD
+here on purpose**: the exchange rate at the time of writing was not verified,
+and an invented conversion in a purchasing decision is worse than none.
+
+| Term | Per month | Note |
+|---|---|---|
+| List | $25.969 | Struck through in the configurator |
+| 1 month | $19.477 | |
+| 6 months | $18.178 | |
+| **12 months** | **$11.686** | Total $140.236, VAT $24.338 included |
+
+**The 12-month rate is almost certainly first-term promotional.** Budget
+against the renewal figure, and confirm it before prepaying a year — the same
+warning this document already carries for HostGator, and a prepaid year is a
+year of not being able to act on the answer.
+
+**Backup tier — change this before buying.** The configurator offers Estándar
+Semanal (last copy), Premium Semanal (weekly, last 2) and Premium Diario
+(daily, last 30). The quote had **Premium Semanal** selected, which means a
+worst case of **seven days of signed contracts lost**. At 20 installations per
+working day that is roughly 100 contracts, and they are not re-typed data:
+recovering them means **returning to 100 customers' homes to have them sign
+again**, which §3 identifies as the most expensive failure this system has.
+**Premium Diario** bounds that at one day and pays for itself with a single
+avoided visit.
+
+Neither tier satisfies the requirement above on its own. Provider backup
+protects against disk failure, not against an account problem — if the account
+goes, the server and its backups go together. **The independent copy of the
+database and the PDF archive, outside the provider, still has to be built.**
+
+**Confirm before paying: where the datacentre physically is**, in writing, not
+the company's address. The residency argument below is the reason an Argentine
+provider was attractive, and it only holds if the machine is actually in
+Argentina — some Argentine providers host in the United States or Brazil. If it
+is not, the international-transfer consent clause
+(`docs/borrador-clausula-datos-personales.md`) is required exactly as it would
+have been with HostGator.
+
+### Provider decision
 
 The original choice was HostGator on price. Two things changed, and neither was
 knowable when that comparison was made.
@@ -618,7 +682,9 @@ was recorded in this document's own dated-check convention; an equivalent
 DonWeb check should be recorded beside it before committing, with current specs
 and prices rather than remembered ones.
 
-### HostGator catalogue check (August 2026)
+### HostGator catalogue check (August 2026) — alternative, not chosen
+
+Kept as the record of what was compared against. DonWeb was chosen; see above.
 
 HostGator's VPS line is fixed tiers, not build-to-order. The entry tier
 already matches §10's sizing:
@@ -629,7 +695,7 @@ already matches §10's sizing:
 | **Snappy 2000** | 2 vCPU / 4 GB RAM / 100 GB NVMe | ✅ Exactly the target sizing |
 | Snappy 4000 | 4 vCPU / 8 GB RAM / 200 GB NVMe | Headroom, not needed today |
 
-**Target: Snappy 2000.** Around USD 35/mo promotional, renewing near USD 54 —
+**Would have been Snappy 2000.** Around USD 35/mo promotional, renewing near USD 54 —
 confirm both numbers at purchase, and confirm which regional HostGator entity
 sells to Argentina, since pricing and support differ between them.
 
@@ -648,7 +714,11 @@ against DonWeb actually is or is not.
 
 ### Consequence of a foreign datacentre
 
-HostGator's datacentres are in the United States. Two things follow.
+Written when HostGator, whose datacentres are in the United States, was the
+decision. It still applies: DonWeb was chosen partly because an Argentine
+provider ought to remove this problem, but **the datacentre's physical location
+has not been confirmed** (see the catalogue check above). Until it is in
+writing, assume this section governs. Two things follow.
 
 **Latency** is not a problem. Signing is a handful of requests and the office
 panel is low-traffic; a few hundred milliseconds is invisible in this
