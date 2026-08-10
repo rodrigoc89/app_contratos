@@ -1,0 +1,70 @@
+/**
+ * Global reset plus the one structural invariant that protects the
+ * `EscanerDeMac` camera preview from an accidental `display:` collision
+ * (see `convencionesDeEstilos.spec.ts`, which fails if either this rule is
+ * removed or a second `!important` display declaration appears anywhere).
+ *
+ * `EscanerDeMac.tsx` hides its `<video>` with `hidden={...}` while the
+ * camera is closed. A later `display: flex/grid/block` rule that happens to
+ * match it would override `[hidden]` and turn the preview back on. This
+ * rule is the whole mitigation — it must stay `!important` and it must stay
+ * the only one.
+ */
+[hidden] {
+  display: none !important;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  /* No dark-mode variant (see tokens.css) — do not let the OS theme reach
+     native form controls or scrollbars either. */
+  color-scheme: light;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-fondo);
+  color: var(--color-texto);
+  font-family: var(--familia-tipografica);
+  font-size: var(--fuente-base);
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--fuente-grande);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+[role="alert"] {
+  color: var(--color-error);
+  font-weight: 600;
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  width: var(--tamano-toque-minimo);
+  height: var(--tamano-toque-minimo);
+  accent-color: var(--color-primario);
+}

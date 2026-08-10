@@ -29,4 +29,10 @@ describe("Boton", () => {
 
     expect(alHacerClic).not.toHaveBeenCalled();
   });
+
+  it("carries the shared button styling class (PR24a — atoms are the styling seam)", () => {
+    render(<Boton onClick={() => {}}>Guardar</Boton>);
+
+    expect(screen.getByRole("button", { name: "Guardar" })).toHaveClass("boton");
+  });
 });

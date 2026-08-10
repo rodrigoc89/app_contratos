@@ -7,7 +7,7 @@ interface PropiedadesIcono {
 
 export function Icono({ etiqueta, children }: PropiedadesIcono) {
   return (
-    <span role="img" aria-label={etiqueta}>
+    <span role="img" aria-label={etiqueta} className="icono">
       {children}
     </span>
   );

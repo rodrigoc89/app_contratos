@@ -6,7 +6,7 @@ interface PropiedadesBoton extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Boton({ children, type = "button", ...resto }: PropiedadesBoton) {
   return (
-    <button type={type} {...resto}>
+    <button type={type} {...resto} className="boton">
       {children}
     </button>
   );

@@ -4,8 +4,8 @@ interface PropiedadesSpinner {
 
 export function Spinner({ etiqueta }: PropiedadesSpinner) {
   return (
-    <div role="status" aria-label={etiqueta}>
-      <span aria-hidden="true" />
+    <div role="status" aria-label={etiqueta} className="spinner">
+      <span aria-hidden="true" className="spinner__punto" />
     </div>
   );
 }

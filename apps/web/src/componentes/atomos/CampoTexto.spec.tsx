@@ -18,4 +18,10 @@ describe("CampoTexto", () => {
 
     expect(screen.getByLabelText("nombre")).toHaveValue("Ana");
   });
+
+  it("carries the shared text-field styling class (PR24a — atoms are the styling seam)", () => {
+    render(<CampoTexto aria-label="dni" value="" onCambiar={() => {}} />);
+
+    expect(screen.getByLabelText("dni")).toHaveClass("campo-texto");
+  });
 });

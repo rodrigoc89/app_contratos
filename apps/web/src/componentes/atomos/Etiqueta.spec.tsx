@@ -9,4 +9,10 @@ describe("Etiqueta", () => {
 
     expect(screen.getByText("DNI")).toHaveAttribute("for", "dni");
   });
+
+  it("carries the shared label styling class (PR24a — atoms are the styling seam)", () => {
+    render(<Etiqueta htmlFor="dni">DNI</Etiqueta>);
+
+    expect(screen.getByText("DNI")).toHaveClass("etiqueta");
+  });
 });

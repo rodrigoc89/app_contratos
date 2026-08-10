@@ -5,5 +5,9 @@ interface PropiedadesEtiqueta extends LabelHTMLAttributes<HTMLLabelElement> {
 }
 
 export function Etiqueta({ children, ...resto }: PropiedadesEtiqueta) {
-  return <label {...resto}>{children}</label>;
+  return (
+    <label {...resto} className="etiqueta">
+      {children}
+    </label>
+  );
 }

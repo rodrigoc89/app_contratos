@@ -1,0 +1,9 @@
+/**
+ * Single stylesheet entry point, imported once from `main.tsx`. Order
+ * matters: tokens before base (base's radio/checkbox sizing reads the
+ * tokens), base before atoms (atoms read the tokens too and base's
+ * `[hidden]` reset must land before anything that could compete with it).
+ */
+@import "./tokens.css";
+@import "./base.css";
+@import "./atomos.css";
