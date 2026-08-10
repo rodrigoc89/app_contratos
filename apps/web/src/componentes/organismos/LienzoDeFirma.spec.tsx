@@ -287,4 +287,75 @@ describe("LienzoDeFirma", () => {
     expect(lienzo).toHaveClass("lienzo-de-firma__lienzo");
     expect(lienzo.parentElement).toHaveClass("lienzo-de-firma");
   });
+
+  /**
+   * PR25 — a rotation on a real Android tablet changed the canvas's CSS box
+   * without ever re-measuring the backing store, so the drawing surface
+   * stretched a stale bitmap into the new box and the stroke stopped
+   * tracking the finger. These three tests prove the seam, not pixels:
+   * jsdom gives a zero-size rect and a null 2D context, so nothing here can
+   * assert what the surface actually looks like on screen.
+   */
+  it("re-measures the canvas backing store on a window resize, not just once on mount — the rotation bug", () => {
+    const { superficie } = superficieFalsa();
+    render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficie} />);
+    const lienzo = screen.getByRole("img", { name: "Firma" }) as HTMLCanvasElement;
+    expect(lienzo.width).toBe(0); // jsdom's default zero-size rect, at mount
+
+    vi.spyOn(lienzo, "getBoundingClientRect").mockReturnValue({
+      width: 600,
+      height: 300,
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 600,
+      bottom: 300,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent(window, new Event("resize"));
+
+    expect(lienzo.width).toBe(600);
+    expect(lienzo.height).toBe(300);
+  });
+
+  it("re-renders every captured stroke after a window resize, so a rotation never erases an in-progress signature", () => {
+    const { superficie, segmentos, vecesLimpiada } = superficieFalsa();
+    render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficie} />);
+    const lienzo = screen.getByRole("img", { name: "Firma" });
+
+    fireEvent.pointerDown(lienzo, { pointerId: 1, clientX: 0, clientY: 0, pointerType: "touch" });
+    fireEvent.pointerMove(lienzo, { pointerId: 1, clientX: 10, clientY: 0, pointerType: "touch" });
+    fireEvent.pointerUp(lienzo, { pointerId: 1, clientX: 10, clientY: 0, pointerType: "touch" });
+    const limpiezasAntes = vecesLimpiada();
+
+    fireEvent(window, new Event("resize"));
+
+    expect(vecesLimpiada()).toBeGreaterThan(limpiezasAntes);
+    // The replayed segment comes from the captured points, not the DOM rect
+    // — the same coordinates the customer actually drew, unmodified.
+    expect(segmentos.at(-1)?.map(({ x, y }) => ({ x, y }))).toEqual([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+    ]);
+  });
+
+  it("also re-renders on orientationchange — the event that actually fires on a tablet rotation", () => {
+    const { superficie, segmentos, vecesLimpiada } = superficieFalsa();
+    render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficie} />);
+    const lienzo = screen.getByRole("img", { name: "Firma" });
+
+    fireEvent.pointerDown(lienzo, { pointerId: 1, clientX: 5, clientY: 5, pointerType: "touch" });
+    fireEvent.pointerMove(lienzo, { pointerId: 1, clientX: 15, clientY: 5, pointerType: "touch" });
+    fireEvent.pointerUp(lienzo, { pointerId: 1, clientX: 15, clientY: 5, pointerType: "touch" });
+    const limpiezasAntes = vecesLimpiada();
+
+    fireEvent(window, new Event("orientationchange"));
+
+    expect(vecesLimpiada()).toBeGreaterThan(limpiezasAntes);
+    expect(segmentos.at(-1)?.map(({ x, y }) => ({ x, y }))).toEqual([
+      { x: 5, y: 5 },
+      { x: 15, y: 5 },
+    ]);
+  });
 });
