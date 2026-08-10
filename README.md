@@ -71,8 +71,22 @@ pnpm --filter @contratos/api prisma:seed
 ```
 
 The seed is idempotent. It creates the contract templates, the comodante
-signatory (with a placeholder signature image), and one **admin** account —
-`SEED_ADMIN_USERNAME` (default `admin`) with `SEED_ADMIN_PASSWORD`.
+signatory (with a placeholder signature image), one **admin** account —
+`SEED_ADMIN_USERNAME` (default `admin`) with `SEED_ADMIN_PASSWORD` — and one
+**técnico** account — `SEED_TECNICO_USERNAME` (default `tecnico`),
+`SEED_TECNICO_NOMBRE` (default `Técnico`) with `SEED_TECNICO_PASSWORD`.
+
+**Neither password has a default, on purpose.** Leave `SEED_ADMIN_PASSWORD` or
+`SEED_TECNICO_PASSWORD` unset and the seed still runs — it creates the
+template and signatory, skips the account, and says so loudly on stdout. Set
+one to log in as that role; the técnico account is the one that can open
+`apps/web`'s signing flow at all, since only `tecnico` sessions pass the
+route guard. Both passwords need at least 12 characters — the técnico's is
+not a smaller minimum than the admin's, because it authenticates the same
+internet-facing login endpoint and it is the credential that signs a legally
+binding contract on the company's behalf; see the comment beside
+`LARGO_MINIMO_CONTRASENA_TECNICO` in `apps/api/src/seed/seedDatabase.ts` for
+the full reasoning.
 
 ### 4. Run both processes
 
@@ -88,28 +102,26 @@ and `/salud` to the API (`apps/web/src/dev/proxyDeDesarrollo.ts`), so the app is
 same-origin locally exactly as it is behind Nginx — the client never knows the
 API's port, and there is no CORS anywhere.
 
-## You cannot reach the signing flow yet
+## Reaching the signing flow
 
-**There is currently no supported way to create a `tecnico` user, and the app
-implements only the técnico route tree.**
+Set `SEED_TECNICO_PASSWORD` (step 3, above) and seed the database — that
+creates the account the client's route guard actually admits into the signing
+flow, since `apps/web` implements only the técnico route tree. Log in with
+that account and the whole flow is reachable: the borrador form, the reading
+gate, signature capture, signing and delivery.
 
-- The seed creates one account and hardcodes `rol: "admin"`
-  (`apps/api/src/seed/seedDatabase.ts`).
-- `AuthController` exposes only `login`, `refresh` and `logout` — nothing
-  creates users.
-- `GuardiaDeRolTecnico` sends `admin` and `oficina` sessions to
-  `/panel-no-disponible`.
-
-So logging in with the seeded admin correctly shows the *"no disponible
-todavía"* screen, and the borrador form, the reading gate, signature capture
-and delivery are unreachable. That is not a bug in the client; it is a missing
-path in provisioning. Until it exists, the flow can only be exercised through
-`apps/web`'s own test suite.
+Logging in with the **admin** account instead correctly shows the *"no
+disponible todavía"* screen. That is not a bug — `apps/web`'s office panel is
+an explicit non-goal for this phase (`DESIGN.md`), so `admin` and `oficina`
+sessions land on a plain screen offering only logout, never a login error.
+`AuthController` still exposes only `login`, `refresh` and `logout`; there is
+no user-management UI yet, which is why both accounts are provisioned by the
+seed rather than created at runtime.
 
 ## Checks
 
 ```bash
-pnpm -r test            # 1052 tests: api 650, esquemas 105, web 297
+pnpm -r test            # 1063 tests: api 661, esquemas 105, web 297
 pnpm -r typecheck
 pnpm --filter @contratos/web build
 pnpm --filter @contratos/api test:integration   # needs the database up
