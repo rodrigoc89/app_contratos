@@ -1,6 +1,7 @@
 import type { FirmanteComodante } from "../firmantes/domain/FirmanteComodante";
 import type { HashDeContrasena } from "../identidad/application/ports/puertos";
 import { Usuario } from "../identidad/domain/Usuario";
+import type { RolUsuario } from "../identidad/domain/Usuario";
 import type { PlantillaContrato } from "../plantillas/domain/PlantillaContrato";
 import {
   PROVISIONAL_SIGNATORY_VERSION,
@@ -22,19 +23,38 @@ export interface SignatorySeedStore {
   instalarComoActivo(firmante: FirmanteComodante): Promise<void>;
 }
 
-/** The one write the admin half needs, named as a port like the two above. */
+/**
+ * The one write a seeded account needs, named as a port like the two above.
+ * Shared by the admin and the técnico halves — neither needs anything the
+ * other doesn't.
+ */
 export interface AdminSeedStore {
   buscarPorNombreUsuario(nombreUsuario: string): Promise<Usuario | null>;
   guardar(usuario: Usuario): Promise<void>;
 }
 
 /**
- * Shortest password the seed will accept.
+ * Shortest password the seed will accept for the `admin` account.
  *
  * This is the `admin` account of an internet-facing box, created once by
  * someone at a keyboard — there is no usability argument for a short one.
  */
 export const LARGO_MINIMO_CONTRASENA_ADMIN = 12;
+
+/**
+ * Shortest password the seed will accept for the `tecnico` account —
+ * deliberately the same as the admin's, not lowered for the touch keyboard.
+ *
+ * Usability is a real cost here: typed by hand, sometimes in direct sun, in a
+ * customer's home. It does not win. `POST /auth/login` is the same
+ * internet-facing, same-origin endpoint for every role, so a shorter técnico
+ * password is not a shorter attack surface — only a weaker credential on an
+ * equally exposed door. And what it authenticates is at least as
+ * consequential as `admin`: it signs a legally binding comodato contract on
+ * the company's behalf (DESIGN.md §6). A different blast radius, not a
+ * lesser one.
+ */
+export const LARGO_MINIMO_CONTRASENA_TECNICO = 12;
 
 export interface AdminSeedInput {
   readonly id: string;
@@ -42,23 +62,33 @@ export interface AdminSeedInput {
   readonly nombreCompleto: string;
   /**
    * From `SEED_ADMIN_PASSWORD`. `undefined` when the operator did not set it —
-   * which is a supported outcome, not an error. See `sembrarAdministrador`.
+   * which is a supported outcome, not an error. See `sembrarCuenta`.
    */
   readonly contrasena: string | undefined;
   readonly usuarios: AdminSeedStore;
   readonly hasher: HashDeContrasena;
 }
 
+/**
+ * The técnico input has the exact same shape as the admin's — see
+ * `sembrarCuenta`, the one place both are provisioned from.
+ */
+export type TecnicoSeedInput = AdminSeedInput;
+
 export type SeedAction = "created" | "already-present" | "omitido";
+
+interface EstadoDeCuenta {
+  readonly nombreUsuario: string;
+  readonly action: SeedAction;
+}
 
 export interface SeedReport {
   readonly plantilla: { readonly version: string; readonly action: SeedAction };
   readonly firmante: { readonly version: string; readonly action: SeedAction };
   /** `null` when the caller did not ask for an admin at all. */
-  readonly administrador: {
-    readonly nombreUsuario: string;
-    readonly action: SeedAction;
-  } | null;
+  readonly administrador: EstadoDeCuenta | null;
+  /** `null` when the caller did not ask for a técnico at all. */
+  readonly tecnico: EstadoDeCuenta | null;
 }
 
 export interface SeedDatabaseInput {
@@ -69,6 +99,8 @@ export interface SeedDatabaseInput {
   readonly nodeEnv: string | undefined;
   /** Optional: omitting it seeds the template and signatory only. */
   readonly administrador?: AdminSeedInput;
+  /** Optional: omitting it leaves the signing flow unreachable — see README.md. */
+  readonly tecnico?: TecnicoSeedInput;
 }
 
 /**
@@ -112,64 +144,86 @@ export async function seedDatabase(
     administrador:
       input.administrador === undefined
         ? null
-        : await sembrarAdministrador(input.administrador),
+        : await sembrarCuenta(input.administrador, {
+            rol: "admin",
+            variableContrasena: "SEED_ADMIN_PASSWORD",
+            largoMinimoContrasena: LARGO_MINIMO_CONTRASENA_ADMIN,
+            descripcionParaError:
+              "es la cuenta de administración de un servidor expuesto a internet.",
+          }),
+    tecnico:
+      input.tecnico === undefined
+        ? null
+        : await sembrarCuenta(input.tecnico, {
+            rol: "tecnico",
+            variableContrasena: "SEED_TECNICO_PASSWORD",
+            largoMinimoContrasena: LARGO_MINIMO_CONTRASENA_TECNICO,
+            descripcionParaError:
+              "firma contratos vinculantes en nombre de la empresa desde el dispositivo de campo.",
+          }),
   };
 }
 
+/** What distinguishes one seedable account (admin, técnico) from another. */
+interface ConfiguracionDeCuenta {
+  readonly rol: RolUsuario;
+  /** The environment variable named in every message about this account's password. */
+  readonly variableContrasena: string;
+  readonly largoMinimoContrasena: number;
+  /** Completes "`${variableContrasena}` tiene que tener al menos N caracteres: `${descripcionParaError}`". */
+  readonly descripcionParaError: string;
+}
+
 /**
- * Creates the first `admin` account — or refuses to.
+ * Creates one seeded account — admin or técnico — or refuses to.
  *
- * **There is no default password, and there will not be one.** This is the
- * same call the seed already makes about the placeholder signature: a bad
- * default that reaches production is not something a later stage catches, so
- * the only reliable defence is to make it impossible to create by accident.
- * The password comes from `SEED_ADMIN_PASSWORD` or the account is not created.
- *
- * The alternative — seed a known password and force a change at first login —
- * was rejected on two counts. It leaves a window in which a publicly-known
- * credential is live on an internet-facing box, and that window closes only
- * when someone gets round to logging in. And "must change password" is
- * application logic: it lives in a flag that every future code path has to
- * remember to check, so the first path that forgets silently reopens the hole.
- * Requiring the operator to supply the password means there is never a moment
- * when a credential exists that the operator did not choose.
+ * **There is no default password, and there will not be one.** Same call the
+ * seed already makes about the placeholder signature: a bad default that
+ * reaches production is not something a later stage catches, so the only
+ * reliable defence is to make it impossible to create by accident. The
+ * password comes from the account's own environment variable
+ * (`SEED_ADMIN_PASSWORD`, `SEED_TECNICO_PASSWORD`) or the account is not
+ * created — seeding a known password and forcing a change at first login was
+ * rejected: it leaves a public credential live until someone logs in, and
+ * "must change password" is a flag every future path must remember to check.
  *
  * An absent variable is a supported outcome (the template and signatory still
  * seed, and the report says so loudly). A *weak* one is not: the operator
  * clearly meant to set a password, and silently skipping would read as success
  * in a deploy log.
  */
-async function sembrarAdministrador(
-  admin: AdminSeedInput,
-): Promise<{ nombreUsuario: string; action: SeedAction }> {
-  const nombreUsuario = admin.nombreUsuario.trim().toLowerCase();
+async function sembrarCuenta(
+  cuenta: AdminSeedInput,
+  configuracion: ConfiguracionDeCuenta,
+): Promise<EstadoDeCuenta> {
+  const nombreUsuario = cuenta.nombreUsuario.trim().toLowerCase();
 
-  const existente = await admin.usuarios.buscarPorNombreUsuario(nombreUsuario);
+  const existente = await cuenta.usuarios.buscarPorNombreUsuario(nombreUsuario);
   if (existente !== null) {
     // Never re-hash over an existing account. Otherwise re-running the seed
-    // with a stale environment variable would silently reset an admin
-    // password that had already been rotated.
+    // with a stale environment variable would silently reset a password that
+    // had already been rotated.
     return { nombreUsuario, action: "already-present" };
   }
 
-  if (admin.contrasena === undefined || admin.contrasena.trim() === "") {
+  if (cuenta.contrasena === undefined || cuenta.contrasena.trim() === "") {
     return { nombreUsuario, action: "omitido" };
   }
 
-  if (admin.contrasena.length < LARGO_MINIMO_CONTRASENA_ADMIN) {
+  if (cuenta.contrasena.length < configuracion.largoMinimoContrasena) {
     throw new Error(
-      `SEED_ADMIN_PASSWORD tiene que tener al menos ${LARGO_MINIMO_CONTRASENA_ADMIN} caracteres: es la cuenta de administración de un servidor expuesto a internet.`,
+      `${configuracion.variableContrasena} tiene que tener al menos ${configuracion.largoMinimoContrasena} caracteres: ${configuracion.descripcionParaError}`,
     );
   }
 
-  await admin.usuarios.guardar(
+  await cuenta.usuarios.guardar(
     Usuario.crear({
-      id: admin.id,
+      id: cuenta.id,
       nombreUsuario,
-      nombreCompleto: admin.nombreCompleto,
-      rol: "admin",
+      nombreCompleto: cuenta.nombreCompleto,
+      rol: configuracion.rol,
       activo: true,
-      hashDeContrasena: await admin.hasher.hashear(admin.contrasena),
+      hashDeContrasena: await cuenta.hasher.hashear(cuenta.contrasena),
     }),
   );
 
@@ -216,8 +270,17 @@ export function describeSeedReport(reporte: SeedReport): string {
   if (admin !== null) {
     lineas.push(
       admin.action === "omitido"
-        ? `ATENCION: no se creó el usuario administrador "${admin.nombreUsuario}" porque no se definió SEED_ADMIN_PASSWORD. Nadie puede entrar al sistema todavía. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`
+        ? `ATENCION: no se creó el usuario administrador "${admin.nombreUsuario}" porque no se definió SEED_ADMIN_PASSWORD. El panel de administración no estará disponible hasta que la cree. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`
         : `Usuario administrador "${admin.nombreUsuario}": ${frase(admin.action)}.`,
+    );
+  }
+
+  const tecnico = reporte.tecnico;
+  if (tecnico !== null) {
+    lineas.push(
+      tecnico.action === "omitido"
+        ? `ATENCION: no se creó el usuario técnico "${tecnico.nombreUsuario}" porque no se definió SEED_TECNICO_PASSWORD. Nadie puede firmar un contrato todavía: la aplicación solo implementa el flujo del técnico, así que sin esta cuenta el flujo de firma es inalcanzable. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`
+        : `Usuario técnico "${tecnico.nombreUsuario}": ${frase(tecnico.action)}.`,
     );
   }
 
