@@ -466,7 +466,11 @@ layer, not just in the UI.
 
 ## 10. Hosting
 
-**Decided: a HostGator VPS.** Chosen over DonWeb on price.
+**Reopened before purchase (August 2026).** This section originally decided on
+a HostGator VPS, chosen over DonWeb on price. Two facts that decision did not
+have are now measured, and both push the other way — see "Provider decision,
+reopened" below. Nothing has been bought yet, which is the cheapest moment for
+this to change.
 
 The one hard constraint behind that choice: shared web hosting (cPanel, aimed
 at PHP/WordPress) **cannot run NestJS** — a Node application needs its own
@@ -516,7 +520,7 @@ traffic.
 |---|---|---|---|
 | vCPU | **2** | 2 | PDF rendering is CPU-bursty; 1 vCPU makes a render block the API |
 | RAM | **4 GB** | 2 GB | See breakdown below |
-| Disk | **80 GB SSD/NVMe** | 40 GB | ~15 GB system footprint; the rest is the growing PDF archive |
+| Disk | **20 GB SSD/NVMe** | 15 GB | ~13 GB system footprint; the archive grows far more slowly than first estimated — see below |
 
 **RAM breakdown at 4 GB:**
 
@@ -535,16 +539,84 @@ render, a `npm install` during deploy, or a Postgres vacuum can push it into
 swap. 4 GB is the difference between a server you operate and a server you
 babysit.
 
-**Disk growth** is modest: roughly 1 MB per contract (two PDFs plus signature
-assets). At 20 contracts per working day that is about 5 GB per year, so 80 GB
-covers many years with room for the OS, database and local backup staging.
+**Disk growth, measured rather than estimated.** This originally read "roughly
+1 MB per contract … about 5 GB per year". A real contract was signed end to end
+on an Android device in August 2026 and the result weighed:
+
+| Per signed contract | Measured |
+|---|---|
+| Two sealed PDFs on disk | 112 KB (48 KB + 66 KB) |
+| Signature PNGs and stroke data in Postgres | 49 KB |
+| **Total** | **~161 KB** |
+
+That is about **six times smaller** than the original estimate. At 20 contracts
+per working day the archive grows roughly **800 MB per year**, not 5 GB.
+
+The system footprint is what actually sizes the disk, and it is measured too:
+`node_modules` 621 MB, Chromium 651 MB, the 2 GB swap file §10 requires, plus
+roughly 8–10 GB for Ubuntu Server and PostgreSQL — about **13 GB before the
+first contract exists**.
+
+So **20 GB is comfortable and 10 GB is not**: at 10 GB the instance is near
+capacity on day one, with nothing left for local backup staging. 20 GB leaves
+around 7 GB of headroom, which at the measured rate is the better part of a
+decade of contracts.
+
+**Do not trade RAM for disk.** Disk is the cheap axis here and it turned out
+cheaper still; RAM is the one that is genuinely constrained, and the breakdown
+above already assumes only one concurrent render.
 
 ### Sizing if Puppeteer is dropped
 
 If §7's lighter alternative (pdfmake/PDFKit) is chosen, Chromium disappears
-and the requirement drops to **2 vCPU / 2 GB RAM / 40 GB disk**. That is a
+and the requirement drops to **2 vCPU / 2 GB RAM / 15 GB disk**. That is a
 real cost saving, paid for with a hand-built layout that will not match the
 paper original as closely.
+
+### Provider decision, reopened
+
+The original choice was HostGator on price. Two things changed, and neither was
+knowable when that comparison was made.
+
+**1. The disk requirement collapsed.** The sizing above dropped from 80 GB to
+20 GB on measured data. HostGator's line is fixed tiers — the entry tier ships
+100 GB whether or not it is wanted, so the saving cannot be taken. A provider
+that lets the instance be configured can be sized to what this system actually
+needs, and that is where the price comparison now lives. **This is the fact
+that reopened the decision.**
+
+**2. Data residency stopped being free.** The subsection below explains the
+legal position. The short version: a datacentre outside Argentina puts this
+system on Ley 25.326's international-transfer rules, and the mitigation is a
+consent clause in the contract the customer signs (drafted for review in
+`docs/borrador-clausula-datos-personales.md`). That clause is worth having
+regardless, but with a foreign datacentre the deployment *depends* on it, and
+on the AAIP adequacy position holding.
+
+**An Argentine datacentre removes that dependency entirely.** Nothing about
+this system needs to leave the country: the users are in Santiago del Estero,
+the customers are Argentine, and there is no foreign integration left now that
+the WhatsApp Cloud API is cancelled (§8). Latency, the usual argument for a US
+datacentre, was already dismissed above as invisible in this workflow.
+
+**What to confirm before buying, whichever provider wins:**
+
+- Root access to a real instance, not shared/cPanel — still the one hard
+  constraint (a Node process needs its own port and lifetime).
+- **4 GB RAM.** Non-negotiable while Puppeteer renders the PDFs. The only way
+  to 2 GB is §7's pdfmake/PDFKit alternative, paid for in fidelity to the paper
+  original.
+- 2 vCPU, 20 GB disk.
+- Physical datacentre location, in writing — not the company's address.
+- Renewal price, not the promotional one, and whether a prepaid term is
+  cheaper.
+- Whether provider backups are restore-tested, and where the offsite copy of
+  the PDF archive will live regardless of the answer.
+
+**The DonWeb catalogue has not been checked here.** The HostGator table below
+was recorded in this document's own dated-check convention; an equivalent
+DonWeb check should be recorded beside it before committing, with current specs
+and prices rather than remembered ones.
 
 ### HostGator catalogue check (August 2026)
 
