@@ -2,6 +2,8 @@ import type { DatosContratoDetalle } from "@contratos/esquemas";
 import { useState } from "react";
 
 import { Boton } from "../../../componentes/atomos/Boton";
+import { Spinner } from "../../../componentes/atomos/Spinner";
+import { Toast } from "../../../componentes/moleculas/Toast";
 import { entregarDocumentos, type ResultadoEntrega } from "../logica/entregaDeDocumentos";
 
 /**
@@ -28,6 +30,9 @@ export interface PropiedadesEntregaDeDocumentos {
 
 export function EntregaDeDocumentos({ contrato, entregar }: PropiedadesEntregaDeDocumentos) {
   const [estado, establecerEstado] = useState<EstadoEntrega>({ tipo: "inicial" });
+  // PR26 — design.md "Toast" category: only "Documentos compartidos
+  // correctamente." is a toast, never the download-fallback message.
+  const [avisoEntregaVisible, establecerAvisoEntregaVisible] = useState(true);
   const ejecutarEntrega = entregar ?? entregarDocumentos;
 
   async function manejarCompartir(): Promise<void> {
@@ -47,22 +52,41 @@ export function EntregaDeDocumentos({ contrato, entregar }: PropiedadesEntregaDe
   }
 
   if (estado.tipo === "entregando") {
-    return <p role="status">Preparando los documentos…</p>;
+    return (
+      <div role="status" className="progreso">
+        <span aria-hidden="true">
+          <Spinner etiqueta="Preparando los documentos" />
+        </span>
+        Preparando los documentos…
+      </div>
+    );
   }
 
   if (estado.tipo === "entregado") {
-    const mensaje =
-      estado.resultado.via === "compartido"
-        ? "Documentos compartidos correctamente."
-        : "Los documentos se descargaron. Adjuntalos manualmente por WhatsApp.";
-    return <p role="status">{mensaje}</p>;
+    if (estado.resultado.via === "compartido") {
+      return avisoEntregaVisible ? (
+        <Toast
+          mensaje="Documentos compartidos correctamente."
+          onDescartar={() => establecerAvisoEntregaVisible(false)}
+        />
+      ) : null;
+    }
+    return <p role="status">Los documentos se descargaron. Adjuntalos manualmente por WhatsApp.</p>;
+  }
+
+  if (estado.tipo === "error") {
+    return (
+      <div role="alert">
+        <p>No se pudieron preparar los documentos. Podés intentar de nuevo.</p>
+        <Boton type="button" onClick={() => void manejarCompartir()}>
+          Compartir documentos
+        </Boton>
+      </div>
+    );
   }
 
   return (
     <div className="entrega-documentos">
-      {estado.tipo === "error" && (
-        <p role="alert">No se pudieron preparar los documentos. Podés intentar de nuevo.</p>
-      )}
       <Boton type="button" onClick={() => void manejarCompartir()}>
         Compartir documentos
       </Boton>

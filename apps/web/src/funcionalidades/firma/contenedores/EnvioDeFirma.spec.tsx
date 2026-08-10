@@ -165,6 +165,9 @@ describe("EnvioDeFirma", () => {
   afterEach(() => {
     limpiarBorradorLocal();
     limpiarTrabajoEnCurso();
+    // PR26 — a timed-out fake-timer test below must never leave fake timers
+    // active for the next test in this file (userEvent hangs under them).
+    vi.useRealTimers();
   });
 
   it("marks trabajoEnCurso active as soon as the signing step mounts, and clears it once sealed (DESIGN.md D9)", async () => {
@@ -273,6 +276,126 @@ describe("EnvioDeFirma", () => {
     expect(screen.getByRole("button", { name: "Compartir documentos" })).toBeInTheDocument();
     // Nothing is fetched or shared until the technician actually taps it.
     expect(entregar).not.toHaveBeenCalled();
+  });
+
+  /**
+   * PR26 — design.md "Toast" category: the signing confirmation becomes an
+   * auto-dismissing, dismissible toast, but `EntregaDeDocumentos` (mounted
+   * alongside it since PR15) must stay reachable throughout — dismissing or
+   * auto-hiding the toast must never unmount the delivery screen.
+   */
+  it("auto-dismisses the signing-confirmation toast after ~5s while EntregaDeDocumentos stays mounted", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    const firmar = vi.fn().mockResolvedValue(contratoSellado());
+
+    render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={firmar}
+      />,
+    );
+    await esperarPasoListo();
+
+    // `fireEvent`, not `userEvent`, throughout this test — `userEvent`'s
+    // internal delays rely on real timers, and this test needs fake timers
+    // active from BEFORE the toast mounts (its own 5s window starts at
+    // mount, not from whenever the test later switches timer modes).
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    act(() => {
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Contrato de Comodato", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+    });
+    const [condiciones, comodato] = screen.getAllByRole("img");
+    firmarEnLienzo(condiciones as Element, MINIMO_PUNTOS_FIRMA);
+    firmarEnLienzo(comodato as Element, MINIMO_PUNTOS_FIRMA);
+    fireEvent.click(screen.getByRole("button", { name: "Firmar" }));
+
+    await vi.waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("firmado"));
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+
+    expect(screen.queryByText(/firmado correctamente/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compartir documentos" })).toBeInTheDocument();
+  });
+
+  /**
+   * Verification-by-breaking (a) guard: an error must never auto-dismiss —
+   * only toasts do. Proven by advancing well past the toast's 5s window.
+   */
+  it("never auto-dismisses the signing error, unlike a toast", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    const firmar = vi
+      .fn()
+      .mockRejectedValue(new ErrorDeApi(500, { error: { mensaje: "falla de red", codigo: "http" } }));
+
+    render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={firmar}
+      />,
+    );
+    await esperarPasoListo();
+
+    await firmarAmbosDocumentos(emitir);
+    await screen.findByRole("alert");
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  /**
+   * Verification-by-breaking (d) guard: the signing-in-progress message
+   * stays a progress indicator, never a toast — same role, same position,
+   * no auto-dismiss.
+   */
+  it("never auto-dismisses the Enviando la firma progress message", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    // Never resolves — holds the "firmando" state for the whole test.
+    const firmar = vi.fn().mockReturnValue(new Promise<never>(() => {}));
+
+    render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={firmar}
+      />,
+    );
+    await esperarPasoListo();
+
+    const usuario = userEvent.setup();
+    act(() => {
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Contrato de Comodato", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+    });
+    const [condiciones, comodato] = screen.getAllByRole("img");
+    firmarEnLienzo(condiciones as Element, MINIMO_PUNTOS_FIRMA);
+    firmarEnLienzo(comodato as Element, MINIMO_PUNTOS_FIRMA);
+    await usuario.click(screen.getByRole("button", { name: "Firmar" }));
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    expect(screen.getByRole("status")).toHaveTextContent("Enviando la firma");
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Enviando la firma");
+    vi.useRealTimers();
   });
 
   it("shows a mapped error and a Reintentar affordance that resubmits the SAME firmas — no re-signing required", async () => {

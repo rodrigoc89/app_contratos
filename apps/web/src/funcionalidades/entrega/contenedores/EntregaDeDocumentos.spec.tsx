@@ -1,7 +1,7 @@
 import type { DatosContratoDetalle } from "@contratos/esquemas";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ResultadoEntrega } from "../logica/entregaDeDocumentos";
 import { EntregaDeDocumentos } from "./EntregaDeDocumentos";
@@ -42,6 +42,52 @@ function contratoSellado(): DatosContratoDetalle {
 }
 
 describe("EntregaDeDocumentos", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * PR26 — design.md "Toast" category: exactly "Documentos compartidos
+   * correctamente." becomes an auto-dismissing, dismissible toast — the
+   * download-fallback message stays a plain, persistent status line
+   * ("and nothing else").
+   */
+  it("dismisses the share-confirmation toast on tap, before its auto-dismiss timer", async () => {
+    const usuario = userEvent.setup();
+    const entregar = vi.fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>().mockResolvedValue({
+      via: "compartido",
+    });
+
+    render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
+    await usuario.click(screen.getByRole("button", { name: "Compartir documentos" }));
+    await screen.findByRole("status");
+
+    await usuario.click(screen.getByRole("button", { name: "Cerrar aviso" }));
+
+    expect(screen.queryByText(/compartidos correctamente/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * Verification-by-breaking (d) guard, this container's own progress
+   * message: "Preparando los documentos…" stays a progress indicator, not
+   * a toast — no auto-dismiss.
+   */
+  it("never auto-dismisses the Preparando los documentos progress message", async () => {
+    const entregar = vi
+      .fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>()
+      .mockReturnValue(new Promise(() => {}));
+
+    render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    fireEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("Preparando los documentos");
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Preparando los documentos");
+  });
+
   it("shows a confirmation once the documents are shared successfully", async () => {
     const usuario = userEvent.setup();
     const entregar = vi.fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>().mockResolvedValue({
