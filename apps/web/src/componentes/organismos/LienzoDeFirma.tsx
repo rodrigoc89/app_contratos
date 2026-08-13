@@ -203,7 +203,17 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
         role="img"
         aria-label={etiqueta}
         className="lienzo-de-firma__lienzo"
-        style={{ touchAction: "none", width: "100%", height: "100%" }}
+        /*
+          `touch-action` stays inline because it must win unconditionally —
+          without it the browser scrolls the page instead of drawing.
+
+          The SIZE deliberately does not: it used to be `height: 100%` here,
+          which no stylesheet could override, and which made the canvas
+          consume its wrapper whole so Deshacer/Borrar fell outside the box
+          and the next document's iframe covered them. The bound belongs in
+          `organismos.css`, where the sheet can state it.
+        */
+        style={{ touchAction: "none" }}
         onPointerDown={manejarPointerDown}
         onPointerMove={manejarPointerMove}
         onPointerUp={manejarFinDeTrazo}

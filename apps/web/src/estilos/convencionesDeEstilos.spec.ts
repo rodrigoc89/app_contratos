@@ -1101,3 +1101,48 @@ describe("a BEM modifier is never declared above the base it overrides", () => {
     },
   );
 });
+
+/**
+ * The signature surface is bounded, and the bound belongs on the CANVAS —
+ * not on the wrapper that also holds Deshacer/Borrar.
+ *
+ * The wrapper used to carry `height: 40vh` while the canvas took `height:
+ * 100%` inline, so the canvas consumed the wrapper whole and the actions
+ * were laid out past the bottom of their own parent. Normal flow reserves no
+ * space for overflow, so the next document's iframe was placed on top of
+ * them. Measured with `elementFromPoint` at each button's centre, on the
+ * phone and on the tablet alike:
+ *
+ *   ✗ Deshacer  tapado por <iframe class="visor-documento__iframe">
+ *   ✗ Borrar    tapado por <iframe class="visor-documento__iframe">
+ *
+ * Two separate statements, because either one alone lets the bug back:
+ * the canvas must stay bounded (a `height: auto` canvas would grow with the
+ * viewport and push Firmar off-screen — the reason the cap exists), and the
+ * wrapper must not be the thing bounded, or its children overflow it again.
+ */
+describe("the signature surface is bounded on the canvas, never on the box holding its actions", () => {
+  const organismosCss = archivo("estilos/organismos.css");
+
+  it("finds estilos/organismos.css", () => {
+    expect(organismosCss).toBeDefined();
+  });
+
+  it("bounds .lienzo-de-firma__lienzo to an explicit vh fraction", () => {
+    const regla = /\.lienzo-de-firma__lienzo\s*\{([^}]*)\}/.exec(organismosCss?.contenido ?? "");
+    expect(regla, ".lienzo-de-firma__lienzo rule not found").not.toBeNull();
+    expect(
+      PATRON_ALTURA_ACOTADA_VH.test(regla?.[1] ?? ""),
+      "the signature canvas must declare height or max-height as an explicit vh fraction",
+    ).toBe(true);
+  });
+
+  it("does not pin .lienzo-de-firma itself, whose children would then overflow it", () => {
+    const regla = /\.lienzo-de-firma\s*\{([^}]*)\}/.exec(organismosCss?.contenido ?? "");
+    expect(regla, ".lienzo-de-firma rule not found").not.toBeNull();
+    expect(
+      /(?:^|\s|;)height\s*:/i.test(regla?.[1] ?? ""),
+      ".lienzo-de-firma must not declare a height: Deshacer/Borrar live inside it and would be laid out past its bottom edge, where the next document's iframe covers them",
+    ).toBe(false);
+  });
+});
