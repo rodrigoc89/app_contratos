@@ -249,7 +249,7 @@ export class ContratosController {
    * not exist until it is signed), so enforcing it needs a schema change and
    * belongs with the office panel in Phase 2.
    */
-  @Roles("tecnico", "oficina")
+  @Roles("tecnico", "oficina", "admin")
   @Get(":id")
   async detalle(
     @Param("id", new ZodValidationPipe(EsquemaIdDeContrato)) id: string,
@@ -266,7 +266,7 @@ export class ContratosController {
    * validated when the contract was sealed. `AlmacenDeDocumentosEnDisco`
    * checks containment once more before reading.
    */
-  @Roles("tecnico", "oficina")
+  @Roles("tecnico", "oficina", "admin")
   @Get(":id/documentos/:tipo")
   async descargar(
     @Param("id", new ZodValidationPipe(EsquemaIdDeContrato)) id: string,
