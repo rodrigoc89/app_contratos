@@ -395,6 +395,122 @@
   color: var(--color-estado-anulado-texto);
 }
 
+/* --- DetalleDeContrato ----------------------------------------------------- */
+
+/**
+ * The office detail. Same language as the list: quiet chrome, one loud
+ * thing per screen, and every label lighter than the value it labels.
+ *
+ * The name link in the list is styled here too — it must read as a link
+ * without turning the row into one, so it takes the brand colour and an
+ * underline on hover only, while the row keeps its plain cursor (R-3.8).
+ */
+.tabla-de-contratos__enlace {
+  color: var(--color-primario);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.tabla-de-contratos__enlace:hover {
+  text-decoration: underline;
+}
+
+.pagina-detalle-contrato__volver {
+  margin: 0 0 var(--espacio-4);
+}
+
+.pagina-detalle-contrato__volver a {
+  color: var(--color-primario);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pagina-detalle-contrato__volver a:hover {
+  text-decoration: underline;
+}
+
+.detalle-contrato__cabecera {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-4);
+  padding-bottom: var(--espacio-3);
+  border-bottom: 2px solid var(--color-primario);
+}
+
+.detalle-contrato__cabecera h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* The only thing on this screen that asks anyone to act, so it is the only
+   thing allowed to shout. */
+.detalle-contrato__pendiente {
+  margin: 0 0 var(--espacio-4);
+  padding: var(--espacio-3);
+  border: 1px solid var(--color-estado-baja-texto);
+  border-radius: var(--radio-borde);
+  background-color: var(--color-estado-baja-fondo);
+  color: var(--color-estado-baja-texto);
+  font-weight: 600;
+}
+
+.detalle-contrato__seccion {
+  margin-bottom: var(--espacio-5);
+}
+
+.detalle-contrato__seccion h2 {
+  margin: 0 0 var(--espacio-3);
+  color: var(--color-texto-suave);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* One column while narrow; the base layout is the narrow one (D13). */
+.detalle-contrato__datos {
+  display: grid;
+  gap: var(--espacio-3);
+  margin: 0;
+}
+
+.detalle-contrato__dato dt {
+  color: var(--color-texto-suave);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.detalle-contrato__dato dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.detalle-contrato__documentos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 640px) {
+  .detalle-contrato__datos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--espacio-3) var(--espacio-5);
+  }
+}
+
+@media (min-width: 1024px) {
+  .detalle-contrato__datos {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 /* --- Paginador (R-3.9, D16) ------------------------------------------------ */
 
 /**

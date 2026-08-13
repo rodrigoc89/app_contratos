@@ -17,4 +17,11 @@ export interface FiltrosDeListaContratos {
 export const clavesDeContratos = {
   todo: ["contratos"] as const,
   lista: (filtros: FiltrosDeListaContratos) => ["contratos", "lista", filtros] as const,
+  /**
+   * One contract's detail. A sibling of `lista` rather than a child of it:
+   * the detail is reachable by URL without any list ever having been
+   * fetched, so it cannot depend on a list key existing. Both stay under
+   * `todo`, so invalidating everything contract-related still reaches both.
+   */
+  detalle: (id: string) => ["contratos", "detalle", id] as const,
 };

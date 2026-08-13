@@ -1,4 +1,7 @@
-import type { DatosContratoResumen, EstadoContrato } from "@contratos/esquemas";
+import type { DatosContratoResumen } from "@contratos/esquemas";
+import { Link } from "react-router-dom";
+
+import { InsigniaDeEstado } from "./estadoDeContrato";
 
 interface PropiedadesTablaDeContratos {
   readonly contratos: readonly DatosContratoResumen[];
@@ -16,13 +19,6 @@ const COLUMNAS: readonly Columna[] = [
   { clave: "dni", etiqueta: "DNI" },
   { clave: "fechaFirma", etiqueta: "Fecha de firma" },
 ];
-
-const ETIQUETA_ESTADO: Record<EstadoContrato, string> = {
-  borrador: "Borrador",
-  vigente: "Vigente",
-  dado_de_baja: "Dado de baja",
-  anulado: "Anulado",
-};
 
 const SIN_VALOR = "—";
 
@@ -43,10 +39,12 @@ function textoDeFecha(fecha: string | null): string {
  * `display: block` on table elements destroys the implicit table semantics
  * several screen readers rely on (R-3.6).
  *
- * Rows carry no `link`/`button` role and no click handler (R-3.4) — no
- * office contract-detail screen exists to land on, and the row-hover
- * treatment in `panel.css` is a background tint only, never a pointer
- * cursor, so nothing here promises an action that does not happen.
+ * The row itself carries no click handler (R-3.4). It used to carry no link
+ * either, because no office detail screen existed to land on; now that
+ * `/contratos/:id` does, the name carries exactly one link per row and the
+ * row stays a plain row. The hover treatment in `panel.css` is still a
+ * background tint only, never a pointer cursor on the row — what is
+ * clickable is the link, and it looks like one.
  */
 export function TablaDeContratos({ contratos }: PropiedadesTablaDeContratos) {
   return (
@@ -85,12 +83,21 @@ export function TablaDeContratos({ contratos }: PropiedadesTablaDeContratos) {
                   a colour-blind reader — or a greyscale printout — the
                   Spanish word is the whole meaning.
                 */}
-                <span className="insignia-estado" data-estado={contrato.estado}>
-                  {ETIQUETA_ESTADO[contrato.estado]}
-                </span>
+                <InsigniaDeEstado estado={contrato.estado} />
               </td>
               <td role="cell" data-etiqueta="Nombre completo">
-                {contrato.comodatario.nombreCompleto}
+                {/*
+                  R-3.4, amended: the ROW is still not a click target — a
+                  whole-row handler is invisible to the keyboard, announces
+                  nothing and swallows text selection. The name carries the
+                  one link instead. It is what the office is scanning for,
+                  and unlike `numero` it is present on a draft too, so every
+                  row is reachable. One link per row also keeps the tab order
+                  at one stop per row (R-3.7).
+                */}
+                <Link className="tabla-de-contratos__enlace" to={`/contratos/${contrato.id}`}>
+                  {contrato.comodatario.nombreCompleto}
+                </Link>
               </td>
               <td role="cell" data-etiqueta="DNI">
                 {contrato.comodatario.dni}
