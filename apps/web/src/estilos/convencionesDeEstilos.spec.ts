@@ -109,6 +109,64 @@ function tieneReemplazoDeFoco(selector: string, cuerpo: string): boolean {
   );
 }
 
+/**
+ * Every `outline: none`/`outline: 0` in a stylesheet that has no visible
+ * replacement, as `{selector, cuerpo}` pairs.
+ *
+ * Extracted from the scan that used to walk the stylesheets inline, for the
+ * reason its own comment gave and then did not act on: no CSS under `src/`
+ * declares a bare outline removal today, so that loop ran **zero iterations**
+ * and its `expect` never executed. The judgement it delegates to was proven
+ * directly; the slicing that FEEDS the judgement never was, and a scan that
+ * hands the judge the wrong rule body fails silently in the direction that
+ * matters — it reports no violations.
+ *
+ * Two bugs the extraction made visible and testable:
+ *
+ * 1. `indexOf("}", indice)` took the first brace after the match, which for
+ *    a removal inside a nested block is the INNER rule's brace — fine — but
+ *    combined with `lastIndexOf("}", inicioLlave)` for the selector it could
+ *    hand the judge a selector containing a whole `@media` prelude.
+ * 2. The replacement was only ever looked for inside the SAME rule. The
+ *    standard, correct pattern puts it in a sibling — `.x { outline: none }`
+ *    with `.x:focus-visible { outline: 3px solid … }` — which this would
+ *    have reported as a violation while a genuinely bare removal in a file
+ *    with any other focus rule anywhere could slip through.
+ *
+ * So the replacement is now looked for where CSS actually allows it: in the
+ * same rule, or in a rule whose selector targets the same base with a focus
+ * state.
+ */
+export function removalesSinReemplazo(
+  contenido: string,
+): ReadonlyArray<{ readonly selector: string; readonly cuerpo: string }> {
+  const reglas = [...contenido.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((coincidencia) => ({
+    selector: (coincidencia[1] ?? "").trim(),
+    cuerpo: coincidencia[2] ?? "",
+  }));
+
+  return reglas.filter((regla) => {
+    if (!new RegExp(PATRON_OUTLINE_REMOVIDO.source, "i").test(regla.cuerpo)) {
+      return false;
+    }
+    if (tieneReemplazoDeFoco(regla.selector, regla.cuerpo)) {
+      return false;
+    }
+    // A sibling rule may carry the replacement — `.x { outline: none }` next
+    // to `.x:focus-visible { outline: … }` is the correct pattern, not a
+    // violation.
+    const base = regla.selector.replace(/:[a-z-]+(\([^)]*\))?/gi, "").trim();
+    return !reglas.some(
+      (otra) =>
+        otra !== regla &&
+        base !== "" &&
+        otra.selector.replace(/:[a-z-]+(\([^)]*\))?/gi, "").trim() === base &&
+        /:focus(-visible)?/i.test(otra.selector) &&
+        tieneReemplazoDeFoco(otra.selector, otra.cuerpo),
+    );
+  });
+}
+
 describe("stylesheets never clip a scrollable surface", () => {
   it("finds the shipped CSS files, so a passing suite is not an empty one", () => {
     expect(archivosCss(DIRECTORIO_SRC).length).toBeGreaterThan(0);
@@ -399,30 +457,64 @@ describe("PR2: rows never present a clickable cursor, controls declare hover and
   });
 
   it("never removes a focus indicator without declaring a replacement", () => {
-    // No CSS file under `src/` declares a bare `outline: none`/`outline: 0`
-    // today, so this scan runs zero iterations and its `expect` never
-    // executes. That IS the correct passing state for an invariant stated
-    // over every future declaration of an outline removal — but it also
-    // means the rule being applied could be wrong for years and no run
-    // would reveal it. So the rule itself lives in `tieneReemplazoDeFoco`
-    // and is proven directly by the test below this one; this scan only
-    // walks the real stylesheets and delegates the judgement.
     for (const { ruta, contenido } of archivosCss(DIRECTORIO_SRC)) {
-      for (const coincidencia of contenido.matchAll(PATRON_OUTLINE_REMOVIDO)) {
-        const indice = coincidencia.index ?? 0;
-        const inicioLlave = contenido.lastIndexOf("{", indice);
-        const cuerpo = contenido.slice(inicioLlave + 1, contenido.indexOf("}", indice));
-        const selector = contenido.slice(
-          contenido.lastIndexOf("}", inicioLlave) + 1,
-          inicioLlave,
-        );
-
-        expect(
-          tieneReemplazoDeFoco(selector, cuerpo),
-          `${ruta} removes the focus outline with no visible replacement in the same rule`,
-        ).toBe(true);
-      }
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      expect(
+        removalesSinReemplazo(contenido).map((regla) => regla.selector),
+        `${rutaRelativa} removes the focus outline with no visible replacement`,
+      ).toEqual([]);
     }
+  });
+
+  /**
+   * The scan itself, proven against synthetic CSS — not just the judgement it
+   * delegates to. The real stylesheets contain zero outline removals, so the
+   * loop above executes no assertion at all; without these cases the slicing
+   * that feeds the judge could be wrong for years and every run stay green.
+   */
+  describe("removalesSinReemplazo", () => {
+    it("reports a bare removal", () => {
+      expect(removalesSinReemplazo(".a { outline: none; }").map((r) => r.selector)).toEqual([".a"]);
+    });
+
+    it("accepts a removal that declares a real outline in the same rule", () => {
+      expect(
+        removalesSinReemplazo(".a { outline: none; outline: 3px solid red; }"),
+      ).toEqual([]);
+    });
+
+    it("accepts a removal scoped away from keyboard focus", () => {
+      expect(removalesSinReemplazo(".a:not(:focus-visible) { outline: none; }")).toEqual([]);
+    });
+
+    /** The standard correct pattern: remove, then restore on focus-visible. */
+    it("accepts a removal whose replacement lives in a sibling focus rule", () => {
+      const css = ".a { outline: none; } .a:focus-visible { outline: 3px solid red; }";
+
+      expect(removalesSinReemplazo(css)).toEqual([]);
+    });
+
+    it("still reports it when the sibling focus rule also removes the outline", () => {
+      const css = ".a { outline: none; } .a:focus-visible { outline: 0; }";
+
+      expect(removalesSinReemplazo(css).map((r) => r.selector)).toEqual([".a", ".a:focus-visible"]);
+    });
+
+    it("does not let another element's focus rule cover a bare removal", () => {
+      const css = ".a { outline: none; } .b:focus-visible { outline: 3px solid red; }";
+
+      expect(removalesSinReemplazo(css).map((r) => r.selector)).toEqual([".a"]);
+    });
+
+    it("finds a removal nested inside a media query, with its own selector", () => {
+      const css = "@media (min-width: 640px) { .x { color: red; } .y { outline: none; } }";
+
+      expect(removalesSinReemplazo(css).map((r) => r.selector)).toEqual([".y"]);
+    });
+
+    it("reports nothing for a stylesheet that removes no outline", () => {
+      expect(removalesSinReemplazo(".a { outline: 3px solid red; }")).toEqual([]);
+    });
   });
 
   /**
@@ -583,6 +675,47 @@ function contraste(a: string, b: string): number {
 function fondoDeclarado(cuerpo: string): string | undefined {
   return /background(?:-color)?\s*:\s*([^;}]+)/.exec(cuerpo)?.[1]?.trim();
 }
+
+describe("the tablet's stylesheets never shrink type below the device floor", () => {
+  /**
+   * `tokens.css` states the constraint the whole tablet palette is built
+   * around: a técnico reads this "held at arm's length, not up close", "in
+   * direct Santiago del Estero sunlight", and taps it "sometimes with a
+   * gloved thumb". `--fuente-base` is 18px for that reason, and the neutrals
+   * are flat maximum contrast rather than tints.
+   *
+   * `panel.css` is deliberately exempt: the office reads a monitor indoors at
+   * 50cm, and it rebinds `--fuente-base` to 16px on its own subtree for
+   * exactly that reason (DESIGN.md D13). Every OTHER stylesheet is shared
+   * with the tablet, so panel-sized type landing there is a regression a
+   * screenshot on a desk will never reveal — it only shows up outdoors, in
+   * front of a customer.
+   *
+   * Caught its first violation immediately: the session header added with
+   * the office logout used `0.875rem` (15.75px at this base) and lives in
+   * the SHARED sheet, so it shipped panel type onto the sunlit tablet.
+   */
+  const MINIMO_REM = 1;
+  const PATRON_FUENTE_REM = /font-size\s*:\s*(\d+(?:\.\d+)?)rem/gi;
+
+  it(`declares no font-size below ${MINIMO_REM}rem outside estilos/panel.css`, () => {
+    for (const { ruta, contenido } of archivosCss(DIRECTORIO_SRC)) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      if (rutaRelativa.endsWith("panel.css")) {
+        continue;
+      }
+
+      const chicas = [...contenido.matchAll(PATRON_FUENTE_REM)]
+        .map((coincidencia) => Number(coincidencia[1]))
+        .filter((valor) => valor < MINIMO_REM);
+
+      expect(
+        chicas,
+        `${rutaRelativa} declares ${chicas.join("rem, ")}rem — this sheet is shared with the técnico's tablet, which is read at arm's length in direct sunlight (tokens.css). Panel-sized type belongs in panel.css, which rebinds its own base for an indoor monitor.`,
+      ).toEqual([]);
+    }
+  });
+});
 
 describe("valorDeColor resolves what renders, not what is written", () => {
   /**

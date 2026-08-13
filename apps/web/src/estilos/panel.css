@@ -142,6 +142,15 @@
 
 /* --- cabecera y jerarquía del panel --------------------------------------- */
 
+/* The office reads a monitor at 50cm, so the shared session header may be
+   quieter HERE than it is on the tablet — scoped to this subtree, never in
+   the shared sheet, where it would land on a screen read at arm's length in
+   direct sunlight (`convencionesDeEstilos.spec.ts` enforces that split). */
+.layout-panel .cabecera-sesion__usuario,
+.layout-panel .cabecera-sesion .boton {
+  font-size: 0.875rem;
+}
+
 /**
  * Before this, the title, the field label and the result count all carried
  * roughly the same weight, so the eye had nowhere to land first. Scoped to
