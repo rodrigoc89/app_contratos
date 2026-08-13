@@ -1,6 +1,11 @@
 import type { Prisma, PrismaClient } from "../../../generated/prisma/client";
 import { ConflictoDeConcurrencia } from "../../shared/domain/ConflictoDeConcurrencia";
-import type { ContratoRepository } from "../application/ports/ContratoRepository";
+import { fechaCalendarioDesdeColumnaOrNull } from "../../shared/infrastructure/persistence/columnaFecha";
+import type {
+  ContratoRepository,
+  CriteriosDeBusqueda,
+  ResultadoDeBusqueda,
+} from "../application/ports/ContratoRepository";
 import type { Reloj } from "../application/ports/Reloj";
 import type { Contrato } from "../domain/Contrato";
 import { VERSION_SIN_PERSISTIR } from "../domain/Contrato";
@@ -209,5 +214,80 @@ export class PrismaContratoRepository implements ContratoRepository {
     }
 
     return Number(fila.nextval);
+  }
+
+  /**
+   * The office list and search (DESIGN.md D4). A `select`, not an
+   * `include`: this reads exactly the columns the read model needs, never
+   * the signatures, documents or events an aggregate would drag along.
+   */
+  async buscar(criterios: CriteriosDeBusqueda): Promise<ResultadoDeBusqueda> {
+    const where = this.dondeDesdeCriterios(criterios);
+
+    const [filas, total] = await Promise.all([
+      this.prisma.contrato.findMany({
+        where,
+        // R-2.2: newest first, id DESC as the mandatory tiebreaker — offset
+        // pagination over a non-total order can repeat or skip a row across
+        // a page boundary.
+        orderBy: [{ creadoEn: "desc" }, { id: "desc" }],
+        skip: (criterios.pagina - 1) * criterios.tamanoPagina,
+        take: criterios.tamanoPagina,
+        select: {
+          id: true,
+          numero: true,
+          estado: true,
+          comodatarioNombreCompleto: true,
+          comodatarioDni: true,
+          fechaFirma: true,
+          creadoEn: true,
+        },
+      }),
+      this.prisma.contrato.count({ where }),
+    ]);
+
+    return {
+      resumenes: filas.map((fila) => ({
+        id: fila.id,
+        numero: fila.numero,
+        estado: fila.estado,
+        comodatarioNombreCompleto: fila.comodatarioNombreCompleto,
+        comodatarioDni: fila.comodatarioDni,
+        fechaFirma: fechaCalendarioDesdeColumnaOrNull(fila.fechaFirma),
+        creadoEn: fila.creadoEn,
+      })),
+      total,
+    };
+  }
+
+  private dondeDesdeCriterios(
+    criterios: CriteriosDeBusqueda,
+  ): Prisma.ContratoWhereInput {
+    const where: Prisma.ContratoWhereInput = {};
+
+    if (criterios.estados.length > 0) {
+      where.estado = { in: [...criterios.estados] };
+    }
+
+    if (criterios.termino === null) {
+      return where;
+    }
+
+    if (criterios.termino.tipo === "dni") {
+      // A prefix match on the stored, bare-digits DNI (R-2.5): typing the
+      // first digits off a form narrows the list.
+      where.comodatarioDni = { startsWith: criterios.termino.digitos };
+    } else {
+      // A substring match against the persisted, ALREADY-normalised column
+      // — never against comodatarioNombreCompleto, which still carries case
+      // and accents (R-2.4). `%`/`_`/`\` were already stripped by
+      // `interpretarTerminoDeBusqueda` (DESIGN.md D5), so `contains` cannot
+      // be handed a live LIKE wildcard here.
+      where.comodatarioNombreBusqueda = {
+        contains: criterios.termino.normalizado,
+      };
+    }
+
+    return where;
   }
 }
