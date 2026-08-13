@@ -46,6 +46,19 @@ export interface EventoContrato {
   readonly tipo: TipoEventoContrato;
   readonly fecha: FechaCalendario | null;
   readonly detalle: string | null;
+  /**
+   * Who performed the transition, when the transition has an author.
+   *
+   * DESIGN.md §3 promises that ending a contract records "a reason and an
+   * actor": these are operations with legal weight on someone else's
+   * agreement, and the record has to be able to answer who.
+   *
+   * Null on `creado` and `firmado`, and that null is meaningful rather than
+   * missing data. A draft precedes anything with legal weight, and signing
+   * records its técnico in `ContextoDeFirma` alongside the device, the IP and
+   * the coordinates — a far richer record than one id here would be.
+   */
+  readonly usuarioId: string | null;
 }
 
 /**
@@ -114,15 +127,21 @@ export interface DatosFirma {
 export interface DatosBaja {
   motivo: string;
   fecha: FechaCalendario;
+  /** Taken from the verified token, never from the request body. */
+  usuarioId: string;
 }
 
 export interface DatosAnulacion {
   motivo: string;
   fecha: FechaCalendario;
+  /** Taken from the verified token, never from the request body. */
+  usuarioId: string;
 }
 
 export interface DatosRestitucion {
   fecha: FechaCalendario;
+  /** Taken from the verified token, never from the request body. */
+  usuarioId: string;
 }
 
 /**
@@ -482,7 +501,7 @@ export class Contrato {
     this._fechaBaja = datos.fecha;
     this._estado = "dado_de_baja";
 
-    this.registrar("dado_de_baja", datos.fecha, this._motivoBaja);
+    this.registrar("dado_de_baja", datos.fecha, this._motivoBaja, datos.usuarioId);
   }
 
   anular(datos: DatosAnulacion): void {
@@ -498,7 +517,7 @@ export class Contrato {
     this._fechaAnulacion = datos.fecha;
     this._estado = "anulado";
 
-    this.registrar("anulado", datos.fecha, this._motivoAnulacion);
+    this.registrar("anulado", datos.fecha, this._motivoAnulacion, datos.usuarioId);
   }
 
   /**
@@ -528,7 +547,7 @@ export class Contrato {
     }
 
     this._fechaRestitucion = datos.fecha;
-    this.registrar("equipos_restituidos", datos.fecha, null);
+    this.registrar("equipos_restituidos", datos.fecha, null, datos.usuarioId);
   }
 
   private exigirNoAnteriorALaFirma(fecha: FechaCalendario, que: string): void {
@@ -633,7 +652,8 @@ export class Contrato {
     tipo: TipoEventoContrato,
     fecha: FechaCalendario | null,
     detalle: string | null,
+    usuarioId: string | null = null,
   ): void {
-    this._eventos.push({ tipo, fecha, detalle });
+    this._eventos.push({ tipo, fecha, detalle, usuarioId });
   }
 }

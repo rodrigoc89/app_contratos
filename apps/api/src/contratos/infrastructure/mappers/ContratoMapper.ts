@@ -145,6 +145,13 @@ export interface FilaEvento {
   tipo: TipoEventoContrato;
   fecha: Date | null;
   detalle: string | null;
+  /**
+   * Who performed the transition (DESIGN.md §3). Nullable because `creado`
+   * and `firmado` genuinely never had one, and because every event written
+   * before this column existed has no answer — not as a compatibility hatch
+   * to be tightened later.
+   */
+  usuarioId: string | null;
   registradoEn: Date;
 }
 
@@ -343,6 +350,7 @@ export function filaEventoDesde(
     tipo: evento.tipo,
     fecha: columnaFechaDesdeOrNull(evento.fecha),
     detalle: evento.detalle,
+    usuarioId: evento.usuarioId,
     registradoEn,
   };
 }
@@ -352,5 +360,6 @@ export function eventoDesdeFila(fila: FilaEventoLeida): EventoContrato {
     tipo: fila.tipo,
     fecha: fechaCalendarioDesdeColumnaOrNull(fila.fecha),
     detalle: fila.detalle,
+    usuarioId: fila.usuarioId,
   };
 }

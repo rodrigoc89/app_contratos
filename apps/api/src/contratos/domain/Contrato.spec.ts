@@ -411,8 +411,7 @@ describe("Contrato", () => {
       const contrato = firmado();
       contrato.darDeBaja({
         motivo: "Baja solicitada por el abonado",
-        fecha: FechaCalendario.desdeIso("2027-03-10"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-03-10"), usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.estado).toBe("dado_de_baja");
       expect(contrato.motivoBaja).toBe("Baja solicitada por el abonado");
@@ -421,14 +420,64 @@ describe("Contrato", () => {
 
     it("records the termination", () => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
       expect(tipos(contrato)).toEqual(["creado", "firmado", "dado_de_baja"]);
     });
 
+    /**
+     * DESIGN.md §3 promises that ending a contract records "a reason and an
+     * actor". The reason was here from the start; the actor was not recorded
+     * anywhere — not on the aggregate, not in the event log — so nobody could
+     * answer who terminated or annulled a contract. These are operations with
+     * legal weight on someone else's agreement, and "the system did it" is
+     * not an acceptable answer.
+     *
+     * The actor rides on the EVENT rather than as another column beside
+     * `motivoBaja`: the event log is already the per-transition record, and a
+     * contract can only be terminated once, so a second set of columns would
+     * duplicate what the log already says.
+     */
+    it("records who terminated the contract, not just why", () => {
+      const contrato = firmado();
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-1" });
+
+      const baja = contrato.eventos.at(-1);
+      expect(baja?.tipo).toBe("dado_de_baja");
+      expect(baja?.usuarioId).toBe("usuario-oficina-1");
+    });
+
+    it("records who annulled the contract", () => {
+      const contrato = firmado();
+      contrato.anular({ motivo: "DNI mal cargado", fecha: FIRMA, usuarioId: "usuario-oficina-1" });
+
+      expect(contrato.eventos.at(-1)?.usuarioId).toBe("usuario-oficina-1");
+    });
+
+    it("records who registered the equipment coming back", () => {
+      const contrato = firmado();
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-1" });
+      contrato.registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-2" });
+
+      expect(contrato.eventos.at(-1)?.usuarioId).toBe("usuario-oficina-2");
+    });
+
+    /**
+     * `creado` and `firmado` keep a null actor deliberately. Signing already
+     * records its técnico in `ContextoDeFirma`, together with the device, the
+     * IP and the coordinates — a far richer record than one id on an event —
+     * and a draft is created before anything has legal weight. Null here
+     * means "this event never carried an actor", not "we lost it".
+     */
+    it("leaves the actor null on events that never had one", () => {
+      const contrato = firmado();
+
+      expect(contrato.eventos.map((evento) => evento.usuarioId)).toEqual([null, null]);
+    });
+
     it("leaves the signed data untouched", () => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.numero).toBe(1042);
       expect(contrato.comodatario.dni.formateado).toBe("30.123.456");
@@ -437,15 +486,15 @@ describe("Contrato", () => {
 
     it("refuses to terminate a draft, which was never in force", () => {
       expect(() =>
-        borrador().darDeBaja({ motivo: "Deuda", fecha: FIRMA }),
+        borrador().darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" }),
       ).toThrow(DomainError);
     });
 
     it("refuses to terminate twice", () => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
-      expect(() => contrato.darDeBaja({ motivo: "Otra", fecha: FIRMA })).toThrow(
+      expect(() => contrato.darDeBaja({ motivo: "Otra", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         DomainError,
       );
     });
@@ -453,7 +502,7 @@ describe("Contrato", () => {
     it("requires a reason", () => {
       const contrato = firmado();
 
-      expect(() => contrato.darDeBaja({ motivo: "  ", fecha: FIRMA })).toThrow(
+      expect(() => contrato.darDeBaja({ motivo: "  ", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         DomainError,
       );
     });
@@ -464,8 +513,7 @@ describe("Contrato", () => {
       expect(() =>
         contrato.darDeBaja({
           motivo: "Deuda",
-          fecha: FechaCalendario.desdeIso("2026-08-03"),
-        }),
+          fecha: FechaCalendario.desdeIso("2026-08-03"), usuarioId: "usuario-oficina-prueba" }),
       ).toThrow(DomainError);
     });
   });
@@ -475,8 +523,7 @@ describe("Contrato", () => {
       const contrato = firmado();
       contrato.anular({
         motivo: "DNI cargado incorrectamente",
-        fecha: FechaCalendario.desdeIso("2026-08-05"),
-      });
+        fecha: FechaCalendario.desdeIso("2026-08-05"), usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.estado).toBe("anulado");
       expect(contrato.motivoAnulacion).toBe("DNI cargado incorrectamente");
@@ -485,22 +532,22 @@ describe("Contrato", () => {
 
     it("records the annulment", () => {
       const contrato = firmado();
-      contrato.anular({ motivo: "MAC equivocada", fecha: FIRMA });
+      contrato.anular({ motivo: "MAC equivocada", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
       expect(tipos(contrato)).toEqual(["creado", "firmado", "anulado"]);
     });
 
     it("refuses to annul a draft, which can simply be discarded", () => {
-      expect(() => borrador().anular({ motivo: "Error", fecha: FIRMA })).toThrow(
+      expect(() => borrador().anular({ motivo: "Error", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         DomainError,
       );
     });
 
     it("refuses to annul a contract already out of force", () => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
-      expect(() => contrato.anular({ motivo: "Error", fecha: FIRMA })).toThrow(
+      expect(() => contrato.anular({ motivo: "Error", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         DomainError,
       );
     });
@@ -508,7 +555,7 @@ describe("Contrato", () => {
     it("requires a reason", () => {
       const contrato = firmado();
 
-      expect(() => contrato.anular({ motivo: "", fecha: FIRMA })).toThrow(
+      expect(() => contrato.anular({ motivo: "", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         DomainError,
       );
     });
@@ -519,8 +566,7 @@ describe("Contrato", () => {
       expect(() =>
         contrato.anular({
           motivo: "DNI equivocado",
-          fecha: FechaCalendario.desdeIso("2026-08-03"),
-        }),
+          fecha: FechaCalendario.desdeIso("2026-08-03"), usuarioId: "usuario-oficina-prueba" }),
       ).toThrow(DomainError);
     });
   });
@@ -528,10 +574,9 @@ describe("Contrato", () => {
   describe("equipment restitution", () => {
     it("records the return of the equipment", () => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
       contrato.registrarRestitucion({
-        fecha: FechaCalendario.desdeIso("2027-04-01"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-04-01"), usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.fechaRestitucion?.iso).toBe("2027-04-01");
       expect(tipos(contrato)).toContain("equipos_restituidos");
@@ -539,31 +584,31 @@ describe("Contrato", () => {
 
     it("refuses to record a return for a draft, since nothing was handed over", () => {
       expect(() =>
-        borrador().registrarRestitucion({ fecha: FIRMA }),
+        borrador().registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" }),
       ).toThrow(DomainError);
     });
 
     it("refuses to record a return twice", () => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
-      contrato.registrarRestitucion({ fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
+      contrato.registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
-      expect(() => contrato.registrarRestitucion({ fecha: FIRMA })).toThrow(
+      expect(() => contrato.registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         DomainError,
       );
     });
 
     it("refuses a return while the contract is still in force, where the equipment belongs", () => {
-      expect(() => firmado().registrarRestitucion({ fecha: FIRMA })).toThrow(
+      expect(() => firmado().registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         DomainError,
       );
     });
 
     it("refuses a return on an annulled contract, whose replacement covers the equipment", () => {
       const contrato = firmado();
-      contrato.anular({ motivo: "DNI equivocado", fecha: FIRMA });
+      contrato.anular({ motivo: "DNI equivocado", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
-      expect(() => contrato.registrarRestitucion({ fecha: FIRMA })).toThrow(
+      expect(() => contrato.registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         DomainError,
       );
     });
@@ -572,13 +617,11 @@ describe("Contrato", () => {
       const contrato = firmado();
       contrato.darDeBaja({
         motivo: "Deuda",
-        fecha: FechaCalendario.desdeIso("2027-03-10"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-03-10"), usuarioId: "usuario-oficina-prueba" });
 
       expect(() =>
         contrato.registrarRestitucion({
-          fecha: FechaCalendario.desdeIso("2027-03-09"),
-        }),
+          fecha: FechaCalendario.desdeIso("2027-03-09"), usuarioId: "usuario-oficina-prueba" }),
       ).toThrow(DomainError);
     });
   });
@@ -590,22 +633,22 @@ describe("Contrato", () => {
 
     it("is outstanding once terminated with nothing returned", () => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.equiposPendientesDeRestitucion).toBe(true);
     });
 
     it("is settled once the equipment comes back", () => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
-      contrato.registrarRestitucion({ fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
+      contrato.registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.equiposPendientesDeRestitucion).toBe(false);
     });
 
     it("is not outstanding for an annulled contract, because a replacement covers the same equipment", () => {
       const contrato = firmado();
-      contrato.anular({ motivo: "DNI equivocado", fecha: FIRMA });
+      contrato.anular({ motivo: "DNI equivocado", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.equiposPendientesDeRestitucion).toBe(false);
     });
@@ -663,7 +706,7 @@ describe("Contrato", () => {
 
     const dadoDeBaja = (): Contrato => {
       const contrato = firmado();
-      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA });
+      contrato.darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
       return contrato;
     };
 
@@ -699,27 +742,27 @@ describe("Contrato", () => {
 
     it("terminating a contract that is not in force", () => {
       expect(() =>
-        borrador().darDeBaja({ motivo: "Deuda", fecha: FIRMA }),
+        borrador().darDeBaja({ motivo: "Deuda", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" }),
       ).toThrow(ConflictoDeEstado);
     });
 
     it("annulling a contract that is not in force", () => {
       expect(() =>
-        dadoDeBaja().anular({ motivo: "Error", fecha: FIRMA }),
+        dadoDeBaja().anular({ motivo: "Error", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" }),
       ).toThrow(ConflictoDeEstado);
     });
 
     it("recording a return for a contract that was never terminated", () => {
-      expect(() => firmado().registrarRestitucion({ fecha: FIRMA })).toThrow(
+      expect(() => firmado().registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         ConflictoDeEstado,
       );
     });
 
     it("recording the return of the equipment twice", () => {
       const contrato = dadoDeBaja();
-      contrato.registrarRestitucion({ fecha: FIRMA });
+      contrato.registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" });
 
-      expect(() => contrato.registrarRestitucion({ fecha: FIRMA })).toThrow(
+      expect(() => contrato.registrarRestitucion({ fecha: FIRMA, usuarioId: "usuario-oficina-prueba" })).toThrow(
         ConflictoDeEstado,
       );
     });
@@ -767,7 +810,7 @@ describe("Contrato", () => {
       });
 
       it("a termination with no reason", () => {
-        noEsConflicto(() => firmado().darDeBaja({ motivo: "  ", fecha: FIRMA }));
+        noEsConflicto(() => firmado().darDeBaja({ motivo: "  ", fecha: FIRMA, usuarioId: "usuario-oficina-prueba" }));
       });
 
       /**
@@ -780,8 +823,7 @@ describe("Contrato", () => {
         noEsConflicto(() =>
           firmado().darDeBaja({
             motivo: "Deuda",
-            fecha: FechaCalendario.desdeIso("2026-08-03"),
-          }),
+            fecha: FechaCalendario.desdeIso("2026-08-03"), usuarioId: "usuario-oficina-prueba" }),
         );
       });
 
@@ -790,11 +832,9 @@ describe("Contrato", () => {
           const contrato = firmado();
           contrato.darDeBaja({
             motivo: "Deuda",
-            fecha: FechaCalendario.desdeIso("2027-03-10"),
-          });
+            fecha: FechaCalendario.desdeIso("2027-03-10"), usuarioId: "usuario-oficina-prueba" });
           contrato.registrarRestitucion({
-            fecha: FechaCalendario.desdeIso("2027-03-09"),
-          });
+            fecha: FechaCalendario.desdeIso("2027-03-09"), usuarioId: "usuario-oficina-prueba" });
         });
       });
     });

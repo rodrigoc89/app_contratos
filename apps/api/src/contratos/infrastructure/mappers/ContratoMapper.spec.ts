@@ -130,6 +130,7 @@ const relacionesLeidasDesde = (contrato: Contrato): RelacionesContrato => ({
     return { documento: escrita.documento, ruta: escrita.ruta, sha256: escrita.sha256 };
   }),
   eventos: contrato.eventos.map((evento) => ({
+    usuarioId: evento.usuarioId,
     tipo: evento.tipo,
     fecha: evento.fecha === null ? null : columnaFechaDesde(evento.fecha),
     detalle: evento.detalle,
@@ -271,7 +272,7 @@ describe("filaFirmaDesde / firmaDesdeFila", () => {
 describe("filaEventoDesde", () => {
   it("uses the registradoEn instant it is given, never a derived one", () => {
     const anclaje = new Date("2026-08-04T12:00:00.007Z");
-    const fila = filaEventoDesde(ID, { tipo: "creado", fecha: null, detalle: null }, anclaje);
+    const fila = filaEventoDesde(ID, { tipo: "creado", fecha: null, detalle: null, usuarioId: null }, anclaje);
 
     expect(fila.registradoEn).toBe(anclaje);
   });
@@ -279,7 +280,7 @@ describe("filaEventoDesde", () => {
   it("maps a null business date through as null", () => {
     const fila = filaEventoDesde(
       ID,
-      { tipo: "creado", fecha: null, detalle: null },
+      { tipo: "creado", fecha: null, detalle: null, usuarioId: null },
       new Date(),
     );
 
@@ -334,8 +335,7 @@ describe("contratoDesdeFila", () => {
     const original = unFirmado();
     original.darDeBaja({
       motivo: "Deuda",
-      fecha: FechaCalendario.desdeIso("2027-03-10"),
-    });
+      fecha: FechaCalendario.desdeIso("2027-03-10"), usuarioId: "usuario-oficina-prueba" });
 
     const rehidratado = contratoDesdeFila(
       filaLeidaDesde(original),
@@ -384,6 +384,7 @@ describe("documentoDesdeFila", () => {
 describe("eventoDesdeFila", () => {
   it("maps a business date column back to a FechaCalendario", () => {
     const evento = eventoDesdeFila({
+      usuarioId: null,
       tipo: "firmado",
       fecha: columnaFechaDesde(FIRMA),
       detalle: "Nº 1042",
