@@ -187,6 +187,67 @@ describe("filaContratoDesde", () => {
     expect(fila.comodatarioWhatsapp).toBe("+5493854123456");
     expect(fila.equipoAntenaMac).toBe("AC:8B:A9:12:34:56");
   });
+
+  /**
+   * DESIGN.md D2: the search column is a required property of the row
+   * type, computed inside `filaContratoDesde` — the only function that
+   * builds a `contratos` row — so forgetting it is a compile error, not a
+   * runtime gap. Must be the SAME `normalizarTexto` the search path runs,
+   * or the write path and the search path would disagree on the same name.
+   */
+  describe("comodatarioNombreBusqueda (D2)", () => {
+    it("is normalizarTexto(comodatario.nombreCompleto)", () => {
+      const conAcentos = Contrato.crearBorrador({
+        id: ID,
+        comodatario: Comodatario.crear({
+          nombreCompleto: "Juan Carlos Pérez",
+          dni: "30.123.456",
+          domicilioCalle: "Av. Belgrano 1250",
+          ciudad: "La Banda",
+          whatsapp: "3854123456",
+        }),
+        equipos: equipos(),
+      });
+
+      expect(filaContratoDesde(conAcentos).comodatarioNombreBusqueda).toBe(
+        "juan carlos perez",
+      );
+    });
+
+    /** The case the whole feature exists to protect: ñ survives, á does not. */
+    it("preserves ñ while folding every other accent", () => {
+      const conNy = Contrato.crearBorrador({
+        id: ID,
+        comodatario: Comodatario.crear({
+          nombreCompleto: "Peña",
+          dni: "30.123.456",
+          domicilioCalle: "Av. Belgrano 1250",
+          ciudad: "La Banda",
+          whatsapp: "3854123456",
+        }),
+        equipos: equipos(),
+      });
+
+      expect(filaContratoDesde(conNy).comodatarioNombreBusqueda).toBe("peña");
+    });
+
+    it("recomputes from whatever the aggregate currently holds, not a stale value", () => {
+      const contrato = unBorrador();
+      contrato.actualizarComodatario(
+        Comodatario.crear({
+          nombreCompleto: "Núñez",
+          dni: "30.123.456",
+          domicilioCalle: "Av. Belgrano 1250",
+          ciudad: "La Banda",
+          whatsapp: "3854123456",
+        }),
+      );
+
+      expect(filaContratoDesde(contrato).comodatarioNombreBusqueda).toBe(
+        "nuñez",
+      );
+    });
+  });
 });
 
 describe("filaFirmaDesde / firmaDesdeFila", () => {

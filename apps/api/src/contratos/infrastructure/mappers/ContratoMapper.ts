@@ -4,6 +4,7 @@ import {
   fechaCalendarioDesdeColumna,
   fechaCalendarioDesdeColumnaOrNull,
 } from "../../../shared/infrastructure/persistence/columnaFecha";
+import { normalizarTexto } from "../../../shared/domain/normalizarTexto";
 import { Comodatario } from "../../domain/Comodatario";
 import { ContextoDeFirma } from "../../domain/ContextoDeFirma";
 import type {
@@ -48,6 +49,13 @@ export interface FilaContrato {
   numero: number | null;
   estado: EstadoContrato;
   comodatarioNombreCompleto: string;
+  /**
+   * `normalizarTexto(comodatarioNombreCompleto)` — DESIGN.md D2. Required,
+   * on purpose: `filaContratoDesde` is the only function that builds this
+   * row, so TypeScript refuses any construction that omits it. Never read
+   * back into the aggregate; it exists only for `PrismaContratoRepository.buscar`.
+   */
+  comodatarioNombreBusqueda: string;
   comodatarioDni: string;
   comodatarioDomicilioCalle: string;
   comodatarioCiudad: string;
@@ -80,16 +88,25 @@ export interface FilaContrato {
 /**
  * The same row, as Prisma hands it back on a read.
  *
- * It carries two columns the write shape above does not. `equipoCanoMetros`
- * comes back as a `Decimal` instance rather than a number. `version` is the
- * row's optimistic-locking counter: on the way *in* the repository decides
- * what to write (the loaded version plus one, under a matching `where`), so
- * putting it on `FilaContrato` would invite writing back the stale number that
- * is exactly what the guard is comparing against.
+ * It carries columns the write shape above does not, or types them
+ * differently. `equipoCanoMetros` comes back as a `Decimal` instance rather
+ * than a number. `version` is the row's optimistic-locking counter: on the
+ * way *in* the repository decides what to write (the loaded version plus
+ * one, under a matching `where`), so putting it on `FilaContrato` would
+ * invite writing back the stale number that is exactly what the guard is
+ * comparing against. `comodatarioNombreBusqueda` widens back to nullable: a
+ * row written before Migration A's backfill ran may still hold NULL there
+ * (DESIGN.md D7) — the aggregate never reads this column either way, so
+ * `contratoDesdeFila` has nothing to do with the null case except tolerate
+ * its type.
  */
 export interface FilaContratoLeida
-  extends Omit<FilaContrato, "equipoCanoMetros"> {
+  extends Omit<
+    FilaContrato,
+    "equipoCanoMetros" | "comodatarioNombreBusqueda"
+  > {
   equipoCanoMetros: DecimalLegible;
+  comodatarioNombreBusqueda: string | null;
   version: number;
 }
 
@@ -148,6 +165,7 @@ export function filaContratoDesde(contrato: Contrato): FilaContrato {
     numero: contrato.numero,
     estado: contrato.estado,
     comodatarioNombreCompleto: comodatario.nombreCompleto,
+    comodatarioNombreBusqueda: normalizarTexto(comodatario.nombreCompleto),
     comodatarioDni: comodatario.dni.valor,
     comodatarioDomicilioCalle: comodatario.domicilioCalle,
     comodatarioCiudad: comodatario.ciudad,

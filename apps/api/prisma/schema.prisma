@@ -131,6 +131,14 @@ model Contrato {
 
   // ---- comodatario (Comodatario.ts) — present from the draft onward -------
   comodatarioNombreCompleto String @map("comodatario_nombre_completo")
+  /// `normalizarTexto(comodatarioNombreCompleto)` (ContratoMapper.ts D2):
+  /// lowercase, diacritics folded, `ñ` preserved. Nullable so Migration A
+  /// can add it with no rewrite and no backfill window blocking the
+  /// deploy — the office panel's search column, populated by every insert
+  /// and update from this release onward and backfilled for older rows
+  /// (see `prisma/backfill/nombreDeBusqueda.ts`). A later, separate
+  /// migration sets `NOT NULL` once the backfill confirms zero nulls.
+  comodatarioNombreBusqueda String? @map("comodatario_nombre_busqueda")
   /// Normalised digits only (Dni.ts). Indexed: the office panel's primary
   /// customer lookup.
   comodatarioDni            String @map("comodatario_dni")
@@ -218,6 +226,14 @@ model Contrato {
   eventos    EventoContrato[]
 
   @@index([comodatarioDni], map: "idx_contratos_comodatario_dni")
+  /// The office list's name search (R-2.4): a substring `LIKE` on this
+  /// column. A plain btree index cannot serve a leading-wildcard `LIKE`, but
+  /// it still lets the *DNI-prefix* branch of the same screen's search reuse
+  /// this column's twin index above at no extra cost, and keeps the column
+  /// visible to `prisma migrate diff`/introspection like every other index
+  /// here — see `idx_contratos_estado_restitucion`'s comment for the same
+  /// convention.
+  @@index([comodatarioNombreBusqueda], map: "idx_contratos_comodatario_nombre_busqueda")
   @@index([estado], map: "idx_contratos_estado")
   /// Covers the outstanding-equipment report (estado = dado_de_baja AND
   /// fecha_restitucion IS NULL). A true partial index restricted to exactly
