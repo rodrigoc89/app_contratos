@@ -48,7 +48,8 @@ function renderizarConCliente(cliente: QueryClient) {
 }
 
 /**
- * R-3.3 (four distinct outcomes), R-3.4 (rows read-only, no navigation),
+ * R-3.3 (four distinct outcomes), R-3.4 as amended (the ROW is not a
+ * click target; the name inside it is a link to the detail),
  * R-3.7/tab order (DOM order only, no positive tabIndex), and the D15 live
  * region.
  */
@@ -116,7 +117,7 @@ describe("PaginaListaContratos", () => {
     expect(buscarContratosSimulado).toHaveBeenCalledTimes(2);
   });
 
-  it("renders no link or button role inside any row, and a click does not navigate", async () => {
+  it("does not navigate when the row itself is clicked — only its link navigates", async () => {
     buscarContratosSimulado.mockResolvedValue(listaConUnContrato());
 
     const enrutador = renderizarConCliente(clientePrueba());
@@ -137,11 +138,9 @@ describe("PaginaListaContratos", () => {
       tamanoPagina: 20,
     });
 
-    const { container } = render(
-      <QueryClientProvider client={clientePrueba()}>
-        <PaginaListaContratos />
-      </QueryClientProvider>,
-    );
+    // Goes through the shared helper like every other case here: rows now
+    // carry a link to the contract detail, so this tree needs a router.
+    renderizarConCliente(clientePrueba());
     await screen.findByRole("table");
 
     const buscar = screen.getByRole("searchbox");
@@ -155,7 +154,7 @@ describe("PaginaListaContratos", () => {
     expect(grupoEstados.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(region.compareDocumentPosition(anterior) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    for (const elemento of container.querySelectorAll("[tabindex]")) {
+    for (const elemento of document.body.querySelectorAll("[tabindex]")) {
       const valor = Number(elemento.getAttribute("tabindex"));
       expect(valor).toBeLessThanOrEqual(0);
     }

@@ -1,28 +1,21 @@
-import type { DatosContratoDetalle, DatosDocumentoDisponible } from "@contratos/esquemas";
+import type { DatosContratoDetalle } from "@contratos/esquemas";
 
-import { clienteHttpBlob } from "../../../datos/clienteHttp";
+import { descargarPdf, guardarArchivo } from "../../../datos/descargaDeArchivo";
 
 /**
  * DESIGN.md D11 — delivery. Fetches both sealed PDFs through the same
- * authenticated seam as everything else (`clienteHttpBlob`), then prefers
- * `navigator.share`, feature-detected via `navigator.canShare` and never
- * assumed. `AbortError` (the technician closing the OS share sheet) is a
- * person changing their mind, not a failure, so it never falls through to a
- * forced download — every other share failure does.
+ * authenticated seam as everything else, then prefers `navigator.share`,
+ * feature-detected via `navigator.canShare` and never assumed. `AbortError`
+ * (the technician closing the OS share sheet) is a person changing their
+ * mind, not a failure, so it never falls through to a forced download —
+ * every other share failure does.
  *
- * The threat-matrix N/A carried forward as a design requirement lives here:
- * every `URL.createObjectURL` in the download fallback is paired with a
- * `revokeObjectURL`, via a `try`/`finally` so the pairing holds even if
- * writing the download itself throws. Proven in `entregaDeDocumentos.spec.ts`.
+ * The fetch-and-save half now lives in `datos/descargaDeArchivo.ts`, shared
+ * with the office panel's contract detail. The threat-matrix N/A carried
+ * forward as a design requirement — every `URL.createObjectURL` paired with
+ * a `revokeObjectURL` through a `try`/`finally` — moved with it, and is
+ * still proven by this module's spec through `guardarArchivo`.
  */
-
-const NOMBRE_ARCHIVO: Record<DatosDocumentoDisponible["documento"], string> = {
-  condiciones_generales: "condiciones-generales.pdf",
-  comodato: "comodato.pdf",
-};
-
-/** `Accept` is the only header this endpoint needs beyond the Bearer one `clienteHttpBlob` already attaches. */
-const OPCIONES_PDF = { encabezados: { Accept: "application/pdf" } };
 
 export type ResultadoEntrega =
   | { readonly via: "compartido" }
@@ -45,15 +38,11 @@ export async function entregarDocumentos(contrato: DatosContratoDetalle): Promis
   }
 
   for (const archivo of archivos) {
-    descargarArchivo(archivo);
+    guardarArchivo(archivo);
   }
   return { via: "descarga" };
 }
 
-async function descargarPdf(documento: DatosDocumentoDisponible): Promise<File> {
-  const blob = await clienteHttpBlob(documento.enlace, OPCIONES_PDF);
-  return new File([blob], NOMBRE_ARCHIVO[documento.documento], { type: "application/pdf" });
-}
 
 /**
  * Tries sharing every document in one call first. Web Share does not
@@ -89,16 +78,3 @@ function esCancelacion(motivo: unknown): boolean {
   return motivo instanceof DOMException && motivo.name === "AbortError";
 }
 
-function descargarArchivo(archivo: File): void {
-  const url = URL.createObjectURL(archivo);
-  try {
-    const enlace = document.createElement("a");
-    enlace.href = url;
-    enlace.download = archivo.name;
-    document.body.appendChild(enlace);
-    enlace.click();
-    enlace.remove();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}

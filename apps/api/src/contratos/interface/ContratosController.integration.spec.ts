@@ -299,16 +299,35 @@ describe("contract endpoints (integration)", () => {
     });
 
     /**
-     * `admin` manages users, templates and the signatory (DESIGN.md §9). It is
-     * deliberately not a role that reads customers' DNIs.
+     * `admin` used to be refused here, on the grounds that it manages users,
+     * templates and the signatory and is "deliberately not a role that reads
+     * customers' DNIs" (DESIGN.md §9).
+     *
+     * That stopped being true the moment `GET /contratos` shipped with
+     * `@Roles("oficina", "admin")`: the list emits `comodatario.nombreCompleto`
+     * and `comodatario.dni` on every row, so an administrator was already
+     * reading every customer's DNI ten at a time, through a search box, while
+     * being refused the detail on the grounds that it must not. The refusal
+     * protected nothing and only made the boundary incoherent.
+     *
+     * Resolved by the maintainer on 2026-08-13 in favour of full access —
+     * `admin` is the owner of a ~1000-customer WISP and does office work too.
+     * DESIGN.md §9 was rewritten to say so, rather than left contradicting
+     * the code. See the note there for the Ley 25.326 consequence.
      */
-    it("answers 403 for an administrator reading a contract", async () => {
+    it("lets an administrator read a contract and its documents", async () => {
       const id = await crearBorrador();
+      await firmar(id).then((r) => expect(r.status).toBe(200));
 
       await api()
         .get(`/contratos/${id}`)
         .set("Authorization", `Bearer ${sesion.admin}`)
-        .expect(403);
+        .expect(200);
+
+      await api()
+        .get(`/contratos/${id}/documentos/comodato`)
+        .set("Authorization", `Bearer ${sesion.admin}`)
+        .expect(200);
     });
 
     it("lets the office read a contract and its documents", async () => {

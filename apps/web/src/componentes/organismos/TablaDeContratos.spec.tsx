@@ -1,9 +1,16 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import type { DatosContratoResumen } from "@contratos/esquemas";
 
 import { TablaDeContratos } from "./TablaDeContratos";
+
+/** Rows link to `/contratos/:id`, so every render needs a router around it. */
+function enRuta({ children }: { readonly children: ReactNode }) {
+  return <MemoryRouter>{children}</MemoryRouter>;
+}
 
 function contrato(sobrescrituras: Partial<DatosContratoResumen> = {}): DatosContratoResumen {
   return {
@@ -24,20 +31,20 @@ function contrato(sobrescrituras: Partial<DatosContratoResumen> = {}): DatosCont
  */
 describe("TablaDeContratos", () => {
   it("exposes real table semantics with one columnheader per displayed field", () => {
-    render(<TablaDeContratos contratos={[contrato()]} />);
+    render(<TablaDeContratos contratos={[contrato()]} />, { wrapper: enRuta });
 
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.getAllByRole("columnheader")).toHaveLength(5);
   });
 
   it("renders one row role per contract plus the header row", () => {
-    render(<TablaDeContratos contratos={[contrato({ id: "c1" }), contrato({ id: "c2" })]} />);
+    render(<TablaDeContratos contratos={[contrato({ id: "c1" }), contrato({ id: "c2" })]} />, { wrapper: enRuta });
 
     expect(screen.getAllByRole("row")).toHaveLength(3);
   });
 
   it("carries a data-etiqueta on every cell equal to its column header", () => {
-    const { container } = render(<TablaDeContratos contratos={[contrato()]} />);
+    const { container } = render(<TablaDeContratos contratos={[contrato()]} />, { wrapper: enRuta });
 
     const encabezados = screen.getAllByRole("columnheader").map((nodo) => nodo.textContent);
     const celdas = container.querySelectorAll('[role="cell"]');
@@ -49,7 +56,7 @@ describe("TablaDeContratos", () => {
   });
 
   it("shows every row field: numero, estado, name, DNI and fechaFirma", () => {
-    render(<TablaDeContratos contratos={[contrato()]} />);
+    render(<TablaDeContratos contratos={[contrato()]} />, { wrapper: enRuta });
 
     const fila = screen.getAllByRole("row")[1] as HTMLElement;
     expect(within(fila).getByText("42")).toBeInTheDocument();
@@ -73,7 +80,7 @@ describe("TablaDeContratos", () => {
     ["dado_de_baja", "Dado de baja"],
     ["anulado", "Anulado"],
   ] as const)("renders estado %s as its Spanish label, never the storage enum", (estado, etiqueta) => {
-    render(<TablaDeContratos contratos={[contrato({ estado })]} />);
+    render(<TablaDeContratos contratos={[contrato({ estado })]} />, { wrapper: enRuta });
 
     const fila = screen.getAllByRole("row")[1] as HTMLElement;
     expect(within(fila).getByText(etiqueta)).toBeInTheDocument();
@@ -97,7 +104,7 @@ describe("TablaDeContratos", () => {
     ["dado_de_baja", "Dado de baja"],
     ["anulado", "Anulado"],
   ] as const)("marks estado %s with a data-estado hook while keeping its label as text", (estado, etiqueta) => {
-    render(<TablaDeContratos contratos={[contrato({ estado })]} />);
+    render(<TablaDeContratos contratos={[contrato({ estado })]} />, { wrapper: enRuta });
 
     const fila = screen.getAllByRole("row")[1] as HTMLElement;
     const insignia = within(fila).getByText(etiqueta);
@@ -107,30 +114,62 @@ describe("TablaDeContratos", () => {
   });
 
   it("shows a draft's null numero and null fechaFirma as an honest placeholder, never a blank cell or a crash", () => {
-    render(<TablaDeContratos contratos={[contrato({ estado: "borrador", numero: null, fechaFirma: null })]} />);
+    render(<TablaDeContratos contratos={[contrato({ estado: "borrador", numero: null, fechaFirma: null })]} />, { wrapper: enRuta });
 
     const fila = screen.getAllByRole("row")[1] as HTMLElement;
     expect(within(fila).getAllByText("—").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("exposes no link or button role inside any row — rows are read-only", () => {
-    render(<TablaDeContratos contratos={[contrato()]} />);
+  /**
+   * R-3.4, amended once the office detail screen existed.
+   *
+   * The original requirement was "rows expose no interactive element", and
+   * its reason was written down: no detail screen existed to land on, so a
+   * row that looked clickable would have promised something that never
+   * happened. That reason expired — `/contratos/:id` is now a real screen,
+   * and reaching a contract's PDFs from the list is the office's actual job.
+   *
+   * What survives is the part that was never about navigation: **the row
+   * itself is not a click target.** A whole-row handler is invisible to the
+   * keyboard, announces nothing, and swallows text selection. Instead each
+   * row exposes exactly ONE link — the customer's name, which is what the
+   * office is scanning for and is present even on a draft with no numero.
+   * One link per row also keeps the tab order to one stop per row (R-3.7).
+   */
+  it("exposes exactly one link per row — the name — and no buttons", () => {
+    render(
+      <TablaDeContratos contratos={[contrato({ id: "c1" }), contrato({ id: "c2" })]} />,
+      { wrapper: enRuta },
+    );
 
-    for (const fila of screen.getAllByRole("row")) {
-      expect(within(fila).queryByRole("link")).not.toBeInTheDocument();
+    const filas = screen.getAllByRole("row").slice(1);
+    expect(filas).toHaveLength(2);
+
+    for (const fila of filas) {
+      expect(within(fila).getAllByRole("link")).toHaveLength(1);
       expect(within(fila).queryByRole("button")).not.toBeInTheDocument();
     }
   });
 
-  it("does nothing observable when a row is clicked", () => {
-    render(<TablaDeContratos contratos={[contrato()]} />);
+  it("points each row's link at that contract's detail", () => {
+    render(<TablaDeContratos contratos={[contrato({ id: "abc-123" })]} />, { wrapper: enRuta });
+
+    const fila = screen.getAllByRole("row")[1] as HTMLElement;
+    const enlace = within(fila).getByRole("link", { name: "Ana López" });
+
+    expect(enlace).toHaveAttribute("href", "/contratos/abc-123");
+  });
+
+  it("still exposes no click handler on the row itself", () => {
+    render(<TablaDeContratos contratos={[contrato()]} />, { wrapper: enRuta });
     const fila = screen.getAllByRole("row")[1] as HTMLElement;
 
     expect(() => fireEvent.click(fila)).not.toThrow();
+    expect(fila).not.toHaveAttribute("onclick");
   });
 
   it("wraps the table in a focusable, labeled scroll region (the mid-range safety net)", () => {
-    render(<TablaDeContratos contratos={[contrato()]} />);
+    render(<TablaDeContratos contratos={[contrato()]} />, { wrapper: enRuta });
 
     const region = screen.getByRole("region");
     expect(region).toHaveAccessibleName();

@@ -457,10 +457,47 @@ bans the number. That number is IES.NET's customer service line.
 |---|---|
 | `tecnico` | Create drafts, capture signatures, deliver copies. Sees only their own contracts. |
 | `oficina` | Search all contracts, view PDFs, terminate contracts, record equipment restitution, resend copies. |
-| `admin` | Manage users, publish template versions, manage the comodante signatory. |
+| `admin` | Manage users, publish template versions, manage the comodante signatory. **Also reads contracts: the list, the detail and the sealed PDFs — see below.** |
 
 No role can edit or delete a signed contract. That is enforced in the domain
 layer, not just in the UI.
+
+### `admin` reads customer data — decided 2026-08-13
+
+This table used to stop at "manage users, templates and the signatory", and an
+integration test enforced that by refusing an administrator the contract
+detail, with the reason written next to it: `admin` "is deliberately not a
+role that reads customers' DNIs".
+
+**That protection had already stopped existing.** `GET /contratos` shipped
+with `@Roles("oficina", "admin")`, and every row of that list carries
+`comodatario.nombreCompleto` and `comodatario.dni` (R-2.9). An administrator
+was reading every customer's name and DNI, ten at a time, through a search
+box — while being refused the detail on the grounds that it must not read
+DNIs. The refusal protected nothing; it only made the boundary incoherent,
+and it hid the widening rather than recording it.
+
+Resolved in favour of full read access. `admin` now reaches the list, the
+detail and the sealed PDFs. The reason is factual rather than architectural:
+in a ~1000-customer WISP the administrator is the owner, who also does office
+work, and a role that cannot open the contracts it can already search is a
+role that will be worked around with a shared `oficina` password — which is
+strictly worse for accountability than granting the access openly.
+
+**Ley 25.326 consequence, recorded deliberately.** This widens the set of
+accounts that can read personal data from one role to two. Data minimisation
+argues the other way, and the honest counter-argument is that the minimisation
+was already lost at the list endpoint. What follows from this decision:
+
+- `admin` accounts are now personal-data accounts. They are covered by
+  whatever access policy governs `oficina` — no shared logins, and a
+  departure means the account is disabled, not handed over.
+- The narrowing is still real where it costs nothing: `admin` remains unable
+  to **create, edit or sign** a contract, and no role can edit or delete a
+  signed one. Read access is not write access.
+- If the office ever grows past the owner-does-everything stage, this is the
+  first decision to revisit: the clean shape is `admin` managing the system
+  and never reading customers, which is what this section originally said.
 
 ---
 

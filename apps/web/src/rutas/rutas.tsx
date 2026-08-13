@@ -5,6 +5,7 @@ import { GuardiaDeRolTecnico, GuardiaDeRoles, GuardiaDeSesion } from "../funcion
 import { InicioTecnico } from "../funcionalidades/auth/contenedores/InicioTecnico";
 import { PaginaLogin } from "../funcionalidades/auth/contenedores/PaginaLogin";
 import { PanelNoDisponible } from "../funcionalidades/auth/contenedores/PanelNoDisponible";
+import { PaginaDetalleContrato } from "../funcionalidades/contratos/contenedores/PaginaDetalleContrato";
 import { PaginaListaContratos } from "../funcionalidades/contratos/contenedores/PaginaListaContratos";
 
 /**
@@ -37,6 +38,21 @@ export const rutas: RouteObject[] = [
             element: (
               <LayoutPanel>
                 <PaginaListaContratos />
+              </LayoutPanel>
+            ),
+          },
+          {
+            /*
+              Declared after `/contratos` and never as its child: the detail
+              replaces the list rather than nesting inside it, so the office
+              reads one screen at a time. Inside the same role guard, so it
+              inherits the `oficina`/`admin` gate with no second rule to keep
+              in sync.
+            */
+            path: "/contratos/:id",
+            element: (
+              <LayoutPanel>
+                <PaginaDetalleContrato />
               </LayoutPanel>
             ),
           },
