@@ -377,3 +377,48 @@ describe("LienzoDeFirma — destructive action (PR25)", () => {
     expect(borrar).toHaveClass("boton");
   });
 });
+
+/**
+ * The canvas used to be sized by an inline `height: 100%` against a wrapper
+ * pinned to `40vh`, so it consumed the wrapper whole and `__acciones`
+ * (Deshacer/Borrar) was laid out past the bottom of its own parent. Normal
+ * flow reserves no space for overflow, so the NEXT document's iframe was
+ * placed over them. Measured with `elementFromPoint` at each button's centre,
+ * against the running app:
+ *
+ *   ✗ Deshacer  tapado por <iframe class="visor-documento__iframe">
+ *   ✗ Borrar    tapado por <iframe class="visor-documento__iframe">
+ *
+ * On the phone AND on the tablet — it was never phone-specific.
+ *
+ * An inline height is what makes this unfixable from the stylesheet: inline
+ * wins over any rule, so the bound has to live in CSS for the sheet to be
+ * able to state it.
+ */
+describe("LienzoDeFirma — la superficie se acota desde la hoja, no en línea", () => {
+  it("sets no inline height, so the stylesheet's bound is the one that applies", () => {
+    render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficieFalsa().superficie} />);
+
+    const lienzo = screen.getByRole("img", { name: "Firma" });
+    expect(lienzo.style.height).toBe("");
+    expect(lienzo.style.width).toBe("");
+  });
+
+  it("still disables native touch gestures inline — that one has to win", () => {
+    render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficieFalsa().superficie} />);
+
+    expect(screen.getByRole("img", { name: "Firma" }).style.touchAction).toBe("none");
+  });
+
+  /** The buttons are inside the wrapper; nothing may push them out of it. */
+  it("keeps the actions inside the same element as the canvas", () => {
+    render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficieFalsa().superficie} />);
+
+    const lienzo = screen.getByRole("img", { name: "Firma" });
+    const envoltorio = lienzo.parentElement;
+    const acciones = screen.getByRole("button", { name: "Deshacer" }).parentElement;
+
+    expect(envoltorio?.className).toContain("lienzo-de-firma");
+    expect(envoltorio?.contains(acciones ?? null)).toBe(true);
+  });
+});
