@@ -456,11 +456,24 @@ bans the number. That number is IES.NET's customer service line.
 | Role | Capabilities |
 |---|---|
 | `tecnico` | Create drafts, capture signatures, deliver copies. Sees only their own contracts. |
-| `oficina` | Search all contracts, view PDFs, terminate contracts, record equipment restitution, resend copies. |
+| `oficina` | Search all contracts, view PDFs, **annul contracts**, terminate contracts, record equipment restitution, resend copies. |
 | `admin` | Manage users, publish template versions, manage the comodante signatory. **Also reads contracts: the list, the detail and the sealed PDFs — see below.** |
 
 No role can edit or delete a signed contract. That is enforced in the domain
 layer, not just in the UI.
+
+Annulment was previously assigned to nobody, which left the correction flow
+in §3 — annul and re-sign — without an owner. It belongs to `oficina`, which
+already holds the rest of the contract lifecycle. The técnico still creates
+the replacement contract from the tablet, with the customer present and
+signing again: that is an ordinary new contract, not a side effect of the
+annulment, and the API deliberately does not chain the two.
+
+**Reading and writing are separate questions.** `admin` reads contracts (see
+the dated note below) and performs none of the three post-signature
+transitions. The read boundary moved because the list had already moved it;
+that argument says nothing about ending someone's agreement, so it does not
+carry over.
 
 ### `admin` reads customer data — decided 2026-08-13
 

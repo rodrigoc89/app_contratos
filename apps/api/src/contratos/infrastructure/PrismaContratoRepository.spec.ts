@@ -117,7 +117,7 @@ const borradorCargado = (version: number): Contrato => {
     motivoAnulacion: null,
     fechaAnulacion: null,
     fechaRestitucion: null,
-    eventos: [{ tipo: "creado", fecha: null, detalle: null }],
+    eventos: [{ tipo: "creado", fecha: null, detalle: null, usuarioId: null }],
   };
 
   return Contrato.rehidratar(estado);

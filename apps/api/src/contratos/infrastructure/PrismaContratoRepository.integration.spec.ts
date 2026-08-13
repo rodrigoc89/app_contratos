@@ -239,8 +239,7 @@ describe("PrismaContratoRepository (integration)", () => {
 
     contrato.darDeBaja({
       motivo: "Deuda",
-      fecha: FechaCalendario.desdeIso("2027-03-10"),
-    });
+      fecha: FechaCalendario.desdeIso("2027-03-10"), usuarioId: "usuario-oficina-prueba" });
     await repo.guardar(contrato);
 
     const leido = await repo.porId(contrato.id);
@@ -253,6 +252,22 @@ describe("PrismaContratoRepository (integration)", () => {
       "creado",
       "firmado",
       "dado_de_baja",
+    ]);
+
+    /**
+     * DESIGN.md §3 — "a reason and an actor". The reason survived the round
+     * trip from the first version of this feature; the actor is new, and the
+     * whole point of recording it is that it is still there weeks later when
+     * someone asks who ended this contract. Asserting it in memory would
+     * prove nothing about the column.
+     *
+     * The nulls are asserted too: they are the honest answer for `creado`
+     * and `firmado`, not data lost on the way through Postgres.
+     */
+    expect(leido?.eventos.map((e) => e.usuarioId)).toEqual([
+      null,
+      null,
+      "usuario-oficina-prueba",
     ]);
   });
 
@@ -345,8 +360,7 @@ describe("PrismaContratoRepository (integration)", () => {
 
     contrato.darDeBaja({
       motivo: "Baja solicitada",
-      fecha: FechaCalendario.desdeIso("2027-01-15"),
-    });
+      fecha: FechaCalendario.desdeIso("2027-01-15"), usuarioId: "usuario-oficina-prueba" });
     await repo.guardar(contrato);
 
     const filasFinales = await prisma.eventoContrato.findMany({
@@ -402,8 +416,7 @@ describe("PrismaContratoRepository (integration)", () => {
 
     contrato.darDeBaja({
       motivo: "Baja solicitada",
-      fecha: FechaCalendario.desdeIso("2027-01-15"),
-    });
+      fecha: FechaCalendario.desdeIso("2027-01-15"), usuarioId: "usuario-oficina-prueba" });
     await repo.guardar(contrato); // +1: dado_de_baja
 
     const leido = await repo.porId(contrato.id);
@@ -736,12 +749,10 @@ describe("PrismaContratoRepository (integration)", () => {
 
       oficina.darDeBaja({
         motivo: "Deuda",
-        fecha: FechaCalendario.desdeIso("2027-01-10"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-01-10"), usuarioId: "usuario-oficina-prueba" });
       tecnico.anular({
         motivo: "DNI equivocado",
-        fecha: FechaCalendario.desdeIso("2027-01-10"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-01-10"), usuarioId: "usuario-oficina-prueba" });
 
       await repo.guardar(oficina);
       await expect(repo.guardar(tecnico)).rejects.toThrow(
@@ -800,18 +811,15 @@ describe("PrismaContratoRepository (integration)", () => {
       const pendiente = await firmarYGuardar("88888888-8888-4888-8888-888888888881");
       pendiente.darDeBaja({
         motivo: "Baja",
-        fecha: FechaCalendario.desdeIso("2027-01-10"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-01-10"), usuarioId: "usuario-oficina-prueba" });
       await repo.guardar(pendiente);
 
       const restituido = await firmarYGuardar("88888888-8888-4888-8888-888888888882");
       restituido.darDeBaja({
         motivo: "Baja",
-        fecha: FechaCalendario.desdeIso("2027-01-10"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-01-10"), usuarioId: "usuario-oficina-prueba" });
       restituido.registrarRestitucion({
-        fecha: FechaCalendario.desdeIso("2027-01-20"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-01-20"), usuarioId: "usuario-oficina-prueba" });
       await repo.guardar(restituido);
 
       await firmarYGuardar("88888888-8888-4888-8888-888888888883"); // still vigente

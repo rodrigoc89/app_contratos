@@ -1,9 +1,15 @@
 import {
   EsquemaActualizarContrato,
+  EsquemaAnular,
+  EsquemaDarDeBaja,
+  EsquemaRegistrarRestitucion,
   EsquemaConsultaDeContratos,
   EsquemaCrearContrato,
   EsquemaFirmarContrato,
   type DatosActualizarContrato,
+  type DatosAnular,
+  type DatosDarDeBaja,
+  type DatosRegistrarRestitucion,
   type DatosConsultaDeContratos,
   type DatosContratoCreado,
   type DatosContratoDetalle,
@@ -33,7 +39,10 @@ import { Roles } from "../../identidad/interface/decorators/Roles";
 import { UsuarioActual } from "../../identidad/interface/decorators/UsuarioActual";
 import type { UsuarioAutenticado } from "../../identidad/interface/decorators/UsuarioActual";
 import type { ActualizarBorrador } from "../application/ActualizarBorrador";
+import type { AnularContrato } from "../application/AnularContrato";
 import type { BuscarContratos } from "../application/BuscarContratos";
+import type { DarDeBajaContrato } from "../application/DarDeBajaContrato";
+import type { RegistrarRestitucion } from "../application/RegistrarRestitucion";
 import type { ConsultarContrato } from "../application/ConsultarContrato";
 import type { CrearBorrador } from "../application/CrearBorrador";
 import type { DescargarDocumento } from "../application/DescargarDocumento";
@@ -42,7 +51,10 @@ import type { Reloj } from "../application/ports/Reloj";
 import type { PrevisualizarContrato } from "../application/PrevisualizarContrato";
 import {
   ACTUALIZAR_BORRADOR,
+  ANULAR_CONTRATO,
   BUSCAR_CONTRATOS,
+  DAR_DE_BAJA_CONTRATO,
+  REGISTRAR_RESTITUCION,
   CONSULTAR_CONTRATO,
   CREAR_BORRADOR,
   DESCARGAR_DOCUMENTO,
@@ -82,11 +94,12 @@ import {
  * come from the body, because there is nowhere else they could come from.
  *
  * **Roles are stated per route, deliberately** (DESIGN.md §9). The technician
- * owns the signing flow; the office reads contracts and their PDFs. `admin`
- * manages users, templates and the signatory, so it appears on none of these
- * — an administrator who needs a contract asks for the `oficina` role, rather
- * than the role that manages accounts quietly also being the role that reads
- * every customer's DNI.
+ * owns the signing flow. The office reads contracts and their PDFs, and owns
+ * the three post-signature transitions. `admin` READS — the list, the detail
+ * and the PDFs — because the list had already granted that and refusing the
+ * detail protected nothing (see §9's dated note); it writes none of them.
+ * Ending someone's agreement is a different question from reading it, and
+ * nothing about the read decision carries over to it.
  *
  * **The status codes come from the domain, not from here.** A signed contract
  * refusing an edit, or a retried signature, raises `ConflictoDeEstado` and
@@ -108,6 +121,11 @@ export class ContratosController {
     private readonly descargarDocumento: DescargarDocumento,
     @Inject(RELOJ_CONTRATOS) private readonly reloj: Reloj,
     @Inject(BUSCAR_CONTRATOS) private readonly buscarContratos: BuscarContratos,
+    @Inject(DAR_DE_BAJA_CONTRATO)
+    private readonly darDeBajaContrato: DarDeBajaContrato,
+    @Inject(ANULAR_CONTRATO) private readonly anularContrato: AnularContrato,
+    @Inject(REGISTRAR_RESTITUCION)
+    private readonly registrarRestitucionDeEquipos: RegistrarRestitucion,
   ) {}
 
   /**
@@ -255,6 +273,84 @@ export class ContratosController {
     @Param("id", new ZodValidationPipe(EsquemaIdDeContrato)) id: string,
   ): Promise<DatosContratoDetalle> {
     return vistaDeContrato(await this.consultarContrato.ejecutar(id));
+  }
+
+  /**
+   * The three post-signature transitions (DESIGN.md §3), all `oficina` only.
+   *
+   * `admin` is excluded on purpose. It reads contracts — the list, the detail
+   * and the PDFs — and writes none: the read boundary moved because the list
+   * had already moved it, and none of that argument applies to ending
+   * someone's agreement. `tecnico` is excluded too; the tablet's job is
+   * creating and signing, and the replacement for an annulled contract is
+   * created there as an ordinary new contract.
+   *
+   * **The actor never comes from the body.** It is read from the verified
+   * token through `@UsuarioActual()`, exactly as the signing técnico is, and
+   * the request schemas refuse a `usuarioId` field outright — a caller able
+   * to name its own author would make the audit trail worth nothing.
+   *
+   * Each answers the updated contract, so the office screen renders the new
+   * state from the response instead of re-reading it and racing itself.
+   *
+   * Status codes come from the domain and are not re-derived here: a
+   * transition the state forbids is `ConflictoDeEstado` → 409, and a date the
+   * state permits but the rule rejects is `DomainError` → 400. That
+   * distinction is deliberate — 400 means a different value works, 409 means
+   * no value ever will.
+   */
+  @Roles("oficina")
+  @Post(":id/baja")
+  @HttpCode(200)
+  async darDeBaja(
+    @Param("id", new ZodValidationPipe(EsquemaIdDeContrato)) id: string,
+    @Body(new ZodValidationPipe(EsquemaDarDeBaja)) datos: DatosDarDeBaja,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<DatosContratoDetalle> {
+    return vistaDeContrato(
+      await this.darDeBajaContrato.ejecutar({
+        contratoId: id,
+        motivo: datos.motivo,
+        fecha: datos.fecha,
+        usuarioId: usuario.usuarioId,
+      }),
+    );
+  }
+
+  @Roles("oficina")
+  @Post(":id/anulacion")
+  @HttpCode(200)
+  async anular(
+    @Param("id", new ZodValidationPipe(EsquemaIdDeContrato)) id: string,
+    @Body(new ZodValidationPipe(EsquemaAnular)) datos: DatosAnular,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<DatosContratoDetalle> {
+    return vistaDeContrato(
+      await this.anularContrato.ejecutar({
+        contratoId: id,
+        motivo: datos.motivo,
+        fecha: datos.fecha,
+        usuarioId: usuario.usuarioId,
+      }),
+    );
+  }
+
+  @Roles("oficina")
+  @Post(":id/restitucion")
+  @HttpCode(200)
+  async registrarRestitucion(
+    @Param("id", new ZodValidationPipe(EsquemaIdDeContrato)) id: string,
+    @Body(new ZodValidationPipe(EsquemaRegistrarRestitucion))
+    datos: DatosRegistrarRestitucion,
+    @UsuarioActual() usuario: UsuarioAutenticado,
+  ): Promise<DatosContratoDetalle> {
+    return vistaDeContrato(
+      await this.registrarRestitucionDeEquipos.ejecutar({
+        contratoId: id,
+        fecha: datos.fecha,
+        usuarioId: usuario.usuarioId,
+      }),
+    );
   }
 
   /**

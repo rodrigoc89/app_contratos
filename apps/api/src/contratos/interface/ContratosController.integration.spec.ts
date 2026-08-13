@@ -917,3 +917,188 @@ describe("contract endpoints (integration)", () => {
     });
   });
 });
+
+/**
+ * The three post-signature transitions (DESIGN.md §3), end to end against
+ * real Postgres — because what they must get right is exactly what a unit
+ * test cannot see: the role gate, the status code the domain chose, and the
+ * actor arriving from the token rather than the body.
+ */
+describe("post-signature transitions", () => {
+  async function contratoVigente(): Promise<string> {
+    const id = await crearBorrador();
+    await firmar(id).then((r) => expect(r.status).toBe(200));
+    return id;
+  }
+
+  it("lets the office terminate a contract, recording reason, date and actor", async () => {
+    const id = await contratoVigente();
+
+    const respuesta = await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "Baja solicitada por el abonado", fecha: "2027-03-10" })
+      .expect(200);
+
+    expect(respuesta.body.estado).toBe("dado_de_baja");
+    expect(respuesta.body.equiposPendientesDeRestitucion).toBe(true);
+  });
+
+  it("lets the office annul a contract, which leaves no equipment pending", async () => {
+    const id = await contratoVigente();
+
+    const respuesta = await api()
+      .post(`/contratos/${id}/anulacion`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "DNI mal cargado", fecha: "2026-08-20" })
+      .expect(200);
+
+    expect(respuesta.body.estado).toBe("anulado");
+    expect(respuesta.body.equiposPendientesDeRestitucion).toBe(false);
+  });
+
+  it("lets the office close the outstanding-equipment report", async () => {
+    const id = await contratoVigente();
+    await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .expect(200);
+
+    const respuesta = await api()
+      .post(`/contratos/${id}/restitucion`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ fecha: "2027-04-01" })
+      .expect(200);
+
+    expect(respuesta.body.equiposPendientesDeRestitucion).toBe(false);
+  });
+
+  /**
+   * `admin` reads every contract and writes none. The read boundary moved
+   * because the list had already moved it; ending someone's agreement is a
+   * different question, and none of that argument carries over.
+   */
+  it.each(["baja", "anulacion", "restitucion"] as const)(
+    "refuses %s to an administrator, who reads contracts but never changes them",
+    async (transicion) => {
+      const id = await contratoVigente();
+
+      await api()
+        .post(`/contratos/${id}/${transicion}`)
+        .set("Authorization", `Bearer ${sesion.admin}`)
+        .send({ motivo: "Da igual", fecha: "2027-03-10" })
+        .expect(403);
+    },
+  );
+
+  it.each(["baja", "anulacion", "restitucion"] as const)(
+    "refuses %s to a técnico, whose job is creating and signing",
+    async (transicion) => {
+      const id = await contratoVigente();
+
+      await api()
+        .post(`/contratos/${id}/${transicion}`)
+        .set("Authorization", `Bearer ${sesion.tecnico}`)
+        .send({ motivo: "Da igual", fecha: "2027-03-10" })
+        .expect(403);
+    },
+  );
+
+  /**
+   * The actor comes from the verified token. A body that names its own author
+   * is refused outright rather than ignored: silently dropping the field
+   * would let a caller believe it had been recorded.
+   */
+  it("refuses a request that tries to name its own author", async () => {
+    const id = await contratoVigente();
+
+    const respuesta = await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "Deuda", fecha: "2027-03-10", usuarioId: "otro-usuario" })
+      .expect(400);
+
+    expect(respuesta.body.error.codigo).toBe("validacion");
+  });
+
+  /**
+   * The point of the whole actor change (DESIGN.md §3). Read from the
+   * database rather than the response, because the response does not carry
+   * the actor yet and because the question this answers — "who ended this
+   * contract?" — is asked of the record, months later, not of an HTTP reply.
+   *
+   * `usuario-oficina1` is the id the session's token was minted from, which
+   * is what proves the actor came from the verified token and not from
+   * anything the caller sent.
+   */
+  it("stamps the event with the id from the caller's token", async () => {
+    const id = await contratoVigente();
+
+    await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .expect(200);
+
+    const eventos = await prisma.eventoContrato.findMany({
+      where: { contratoId: id },
+      orderBy: { registradoEn: "asc" },
+      select: { tipo: true, usuarioId: true },
+    });
+
+    expect(eventos.map((evento) => evento.tipo)).toEqual([
+      "creado",
+      "firmado",
+      "dado_de_baja",
+    ]);
+    expect(eventos.at(-1)?.usuarioId).toBe("usuario-oficina1");
+    // The two that never had an author keep a null, not a placeholder.
+    expect(eventos.slice(0, 2).map((evento) => evento.usuarioId)).toEqual([null, null]);
+  });
+
+  it("refuses a termination with no reason, naming the field", async () => {
+    const id = await contratoVigente();
+
+    const respuesta = await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "   ", fecha: "2027-03-10" })
+      .expect(400);
+
+    expect(Object.keys(respuesta.body.error.campos)).toContain("motivo");
+  });
+
+  /** A draft was never in force, so there is nothing to end: 409, not 400. */
+  it("answers 409 when the contract is not in a state that allows the transition", async () => {
+    const id = await crearBorrador();
+
+    const respuesta = await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .expect(409);
+
+    expect(respuesta.body.error.codigo).toBe("conflicto_de_estado");
+  });
+
+  /**
+   * The distinction the domain drew on purpose: the contract is in exactly
+   * the right state to take a restitution, one FIELD is simply wrong, and a
+   * different date works — so 400, never 409.
+   */
+  it("answers 400, not 409, for a restitution dated before the termination", async () => {
+    const id = await contratoVigente();
+    await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .expect(200);
+
+    await api()
+      .post(`/contratos/${id}/restitucion`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ fecha: "2027-03-09" })
+      .expect(400);
+  });
+});

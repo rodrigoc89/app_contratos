@@ -364,13 +364,11 @@ export function contratoDesdeSemilla(semilla: SemillaDeBusqueda): Contrato {
   if (semilla.estado === "dado_de_baja") {
     contrato.darDeBaja({
       motivo: "Prueba de escenario",
-      fecha: FECHA_POSTERIOR_A_TODAS_LAS_FIRMAS,
-    });
+      fecha: FECHA_POSTERIOR_A_TODAS_LAS_FIRMAS, usuarioId: "usuario-oficina-prueba" });
   } else if (semilla.estado === "anulado") {
     contrato.anular({
       motivo: "Prueba de escenario",
-      fecha: FECHA_POSTERIOR_A_TODAS_LAS_FIRMAS,
-    });
+      fecha: FECHA_POSTERIOR_A_TODAS_LAS_FIRMAS, usuarioId: "usuario-oficina-prueba" });
   }
 
   return contrato;

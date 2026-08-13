@@ -10,7 +10,10 @@ import { PRISMA } from "../persistencia/PrismaModule";
 import { PrismaPlantillaRepository } from "../plantillas/infrastructure/PrismaPlantillaRepository";
 import { ActualizarBorrador } from "./application/ActualizarBorrador";
 import { BuscarContratos } from "./application/BuscarContratos";
+import { AnularContrato } from "./application/AnularContrato";
 import { ConsultarContrato } from "./application/ConsultarContrato";
+import { DarDeBajaContrato } from "./application/DarDeBajaContrato";
+import { RegistrarRestitucion } from "./application/RegistrarRestitucion";
 import { CrearBorrador } from "./application/CrearBorrador";
 import { DescargarDocumento } from "./application/DescargarDocumento";
 import { FirmarContrato } from "./application/FirmarContrato";
@@ -25,11 +28,14 @@ import {
   ACTUALIZAR_BORRADOR,
   ALMACEN_DE_DOCUMENTOS,
   BUSCAR_CONTRATOS,
+  ANULAR_CONTRATO,
   CONSULTAR_CONTRATO,
   CONTRATO_REPOSITORY,
+  DAR_DE_BAJA_CONTRATO,
   CREAR_BORRADOR,
   DESCARGAR_DOCUMENTO,
   FIRMANTE_REPOSITORY,
+  REGISTRAR_RESTITUCION,
   FIRMAR_CONTRATO,
   GENERADOR_DE_DOCUMENTOS,
   IDENTIFICADOR_DE_CONTRATO,
@@ -160,6 +166,21 @@ class CierreDelGeneradorDeDocumentos implements OnApplicationShutdown {
       inject: [CONTRATO_REPOSITORY],
       useFactory: (contratos: ContratoRepository) =>
         new ConsultarContrato(contratos),
+    },
+    {
+      provide: DAR_DE_BAJA_CONTRATO,
+      inject: [CONTRATO_REPOSITORY],
+      useFactory: (contratos: ContratoRepository) => new DarDeBajaContrato(contratos),
+    },
+    {
+      provide: ANULAR_CONTRATO,
+      inject: [CONTRATO_REPOSITORY],
+      useFactory: (contratos: ContratoRepository) => new AnularContrato(contratos),
+    },
+    {
+      provide: REGISTRAR_RESTITUCION,
+      inject: [CONTRATO_REPOSITORY],
+      useFactory: (contratos: ContratoRepository) => new RegistrarRestitucion(contratos),
     },
     {
       provide: PREVISUALIZAR_CONTRATO,

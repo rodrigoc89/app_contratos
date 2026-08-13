@@ -161,3 +161,60 @@ export const EsquemaConsultaDeContratos = z.strictObject({
 }, "Hay un parámetro de búsqueda que no es válido.");
 
 export type DatosConsultaDeContratos = z.infer<typeof EsquemaConsultaDeContratos>;
+
+// ------------------------------------------- transiciones post-firma (§3)
+
+/**
+ * A calendar date as the wire carries it. Matches the response side's
+ * `FECHA_ISO`, and `FechaCalendario.desdeIso` re-validates it in the domain —
+ * this schema decides the SHAPE, the domain decides whether the date exists.
+ */
+const FECHA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+const EsquemaFechaCalendario = z
+  .string("La fecha tiene que venir como AAAA-MM-DD.")
+  .regex(FECHA_ISO, "La fecha tiene que venir como AAAA-MM-DD.");
+
+/**
+ * A reason someone will read years from now, in a dispute about whether a
+ * contract was ended correctly. Trimmed and required: a blank reason is the
+ * same as no reason, and the whole point of DESIGN.md §3 is that ending a
+ * contract records one.
+ */
+const EsquemaMotivo = z
+  .string("El motivo es obligatorio.")
+  .trim()
+  .min(1, "El motivo es obligatorio.")
+  .max(500, "El motivo no puede superar los 500 caracteres.");
+
+/**
+ * The three post-signature transitions. Every one is `strictObject` for the
+ * reason R-2.12 exists: a near-miss key that parses as "field absent" is how
+ * `?estado=` once returned every contract silently. Here it would be worse —
+ * a dropped `motivo` ends a contract with no recorded reason.
+ *
+ * None of them accepts `usuarioId`. The actor is taken from the verified
+ * token, never from the body: a request that could name its own author would
+ * make the audit trail worth nothing, and accepting the field "just in case"
+ * is how that starts.
+ */
+export const EsquemaDarDeBaja = z.strictObject({
+  motivo: EsquemaMotivo,
+  fecha: EsquemaFechaCalendario,
+});
+
+export type DatosDarDeBaja = z.infer<typeof EsquemaDarDeBaja>;
+
+export const EsquemaAnular = z.strictObject({
+  motivo: EsquemaMotivo,
+  fecha: EsquemaFechaCalendario,
+});
+
+export type DatosAnular = z.infer<typeof EsquemaAnular>;
+
+/** Equipment coming back is a fact, not a decision — it carries no reason. */
+export const EsquemaRegistrarRestitucion = z.strictObject({
+  fecha: EsquemaFechaCalendario,
+});
+
+export type DatosRegistrarRestitucion = z.infer<typeof EsquemaRegistrarRestitucion>;

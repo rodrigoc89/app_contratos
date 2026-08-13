@@ -385,6 +385,19 @@ model EventoContrato {
   /// row was inserted — null for events with no associated date.
   fecha        DateTime?          @db.Date
   detalle      String?
+  /// Who performed the transition (DESIGN.md §3: ending a contract records
+  /// "a reason and an actor"). Taken from the verified token, never from a
+  /// request body.
+  ///
+  /// Nullable, and the null is meaningful rather than a compatibility hatch:
+  /// `creado` precedes anything with legal weight, `firmado` records its
+  /// técnico far more richly in the signing context, and every event written
+  /// before this column existed genuinely has no answer. No later migration
+  /// will make this `NOT NULL`.
+  ///
+  /// Deliberately NOT a foreign key to `usuarios`: deleting a user must never
+  /// cascade into, or be blocked by, the audit trail of a signed contract.
+  usuarioId    String?            @map("usuario_id")
   /// When this row was appended — a real instant, unlike `fecha` above.
   registradoEn DateTime           @default(now()) @map("registrado_en") @db.Timestamptz
 

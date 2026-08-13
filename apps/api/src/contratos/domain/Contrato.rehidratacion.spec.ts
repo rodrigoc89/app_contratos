@@ -80,7 +80,7 @@ const borradorPersistido = (): EstadoPersistido => ({
   motivoAnulacion: null,
   fechaAnulacion: null,
   fechaRestitucion: null,
-  eventos: [{ tipo: "creado", fecha: null, detalle: null }],
+  eventos: [{ tipo: "creado", fecha: null, detalle: null, usuarioId: null }],
 });
 
 const vigentePersistido = (): EstadoPersistido => ({
@@ -95,8 +95,8 @@ const vigentePersistido = (): EstadoPersistido => ({
   contexto: contexto(),
   documentos: DOCUMENTOS,
   eventos: [
-    { tipo: "creado", fecha: null, detalle: null },
-    { tipo: "firmado", fecha: FIRMA, detalle: "Nº 1042" },
+    { tipo: "creado", fecha: null, detalle: null, usuarioId: null },
+    { tipo: "firmado", fecha: FIRMA, detalle: "Nº 1042", usuarioId: null },
   ],
 });
 
@@ -334,8 +334,7 @@ describe("Contrato.rehidratar", () => {
       const contrato = Contrato.rehidratar(vigentePersistido());
       contrato.darDeBaja({
         motivo: "Baja solicitada",
-        fecha: FechaCalendario.desdeIso("2027-01-15"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-01-15"), usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.estado).toBe("dado_de_baja");
       expect(contrato.eventos.map((e) => e.tipo)).toEqual([
@@ -407,11 +406,9 @@ describe("Contrato.rehidratar", () => {
       contrato.registrarDocumentos(DOCUMENTOS);
       contrato.darDeBaja({
         motivo: "Baja solicitada",
-        fecha: FechaCalendario.desdeIso("2027-01-15"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-01-15"), usuarioId: "usuario-oficina-prueba" });
       contrato.registrarRestitucion({
-        fecha: FechaCalendario.desdeIso("2027-01-20"),
-      });
+        fecha: FechaCalendario.desdeIso("2027-01-20"), usuarioId: "usuario-oficina-prueba" });
 
       expect(contrato.versionAlmacenada).toBe(3);
     });

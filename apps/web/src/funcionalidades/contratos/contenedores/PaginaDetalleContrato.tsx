@@ -4,11 +4,13 @@ import { Link, useParams } from "react-router-dom";
 
 import { Boton } from "../../../componentes/atomos/Boton";
 import { Spinner } from "../../../componentes/atomos/Spinner";
+import { AccionesDeContrato } from "../../../componentes/organismos/AccionesDeContrato";
 import { DetalleDeContrato } from "../../../componentes/organismos/DetalleDeContrato";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { descargarDocumento } from "../../../datos/descargaDeArchivo";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
 import { usarContrato } from "../usarContrato";
+import { usarTransicionDeContrato } from "../usarTransicionDeContrato";
 
 /**
  * The office contract detail. Owns the query and the download, and hands
@@ -28,6 +30,7 @@ export function PaginaDetalleContrato() {
   const [descargando, establecerDescargando] =
     useState<DatosDocumentoDisponible["documento"] | undefined>(undefined);
   const [errorDeDescarga, establecerErrorDeDescarga] = useState<string | null>(null);
+  const transicion = usarTransicionDeContrato(id);
 
   async function manejarDescarga(documento: DatosDocumentoDisponible): Promise<void> {
     establecerDescargando(documento.documento);
@@ -78,12 +81,37 @@ export function PaginaDetalleContrato() {
 
       {errorDeDescarga !== null && <p role="alert">{errorDeDescarga}</p>}
 
+      {/*
+        A failed transition is reported here rather than inside the actions,
+        and never as "the contract might not be in the state you think" — the
+        server's own message is shown, because a 409 already says exactly
+        which state it refused and why.
+      */}
+      {transicion.isError && (
+        <p role="alert">
+          {transicion.error instanceof ErrorDeApi
+            ? mensajeDeError(transicion.error).mensaje
+            : "No se pudo registrar el cambio. Podés intentar de nuevo."}
+        </p>
+      )}
+
       {!isLoading && !isError && data !== undefined && (
-        <DetalleDeContrato
-          contrato={data}
-          onDescargar={(documento) => void manejarDescarga(documento)}
-          descargando={descargando}
-        />
+        <>
+          <DetalleDeContrato
+            contrato={data}
+            onDescargar={(documento) => void manejarDescarga(documento)}
+            descargando={descargando}
+          />
+          <AccionesDeContrato
+            contrato={data}
+            enCurso={transicion.isPending}
+            onDarDeBaja={(datos) => transicion.mutate({ tipo: "baja", ...datos })}
+            onAnular={(datos) => transicion.mutate({ tipo: "anulacion", ...datos })}
+            onRegistrarRestitucion={(datos) =>
+              transicion.mutate({ tipo: "restitucion", ...datos })
+            }
+          />
+        </>
       )}
     </div>
   );
