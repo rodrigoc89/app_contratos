@@ -118,6 +118,20 @@ export function EnvioDeFirma({
     const mensaje = `${numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"} correctamente.`;
     return (
       <div className="envio-firma__resultado">
+        {/*
+          The toast dismisses itself after five seconds, and for a while that
+          was the ONLY statement that the contract had been signed. Past that
+          window the whole screen read "tecnico / Cerrar sesión / Compartir
+          documentos" — no number, no state, nothing about the one moment in
+          this flow with legal weight, with the customer standing there.
+
+          The toast is still right for the instant it lands. This is what
+          stays behind it, and it is also this screen's `h1`, which it never
+          had.
+        */}
+        <h1 className="envio-firma__titulo">
+          {numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"}
+        </h1>
         {avisoFirmaVisible && (
           <Toast mensaje={mensaje} onDescartar={() => establecerAvisoFirmaVisible(false)} />
         )}

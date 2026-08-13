@@ -437,3 +437,60 @@ describe("EnvioDeFirma", () => {
     expect(segundaLlamada[1]).toEqual(primeraLlamada[1]);
   });
 });
+
+/**
+ * The confirmation that the contract was signed was a `Toast`, and `Toast`
+ * dismisses itself after 5 seconds. Measured on the running app, past that
+ * window, the whole screen read:
+ *
+ *   tecnico
+ *   Cerrar sesión
+ *   Compartir documentos
+ *
+ * No number, no state, nothing saying the thing that just happened actually
+ * happened — at the one moment in this flow with legal weight, with the
+ * customer standing there. The toast is still right for the *moment* it
+ * lands; what was missing is anything durable behind it.
+ *
+ * It doubles as this screen's missing `h1` — the one PR #56 fixed for the
+ * draft steps and left open here.
+ */
+describe("EnvioDeFirma — la confirmación sobrevive al toast", () => {
+  afterEach(() => {
+    limpiarBorradorLocal();
+    limpiarTrabajoEnCurso();
+    vi.useRealTimers();
+  });
+
+  async function firmarHasta(contrato: DatosContratoDetalle): Promise<void> {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={vi.fn().mockResolvedValue(contrato)}
+      />,
+    );
+    await esperarPasoListo();
+    await firmarAmbosDocumentos(emitir);
+  }
+
+  it("states the contract number in a heading, not only in a toast that expires", async () => {
+    await firmarHasta(contratoSellado());
+
+    const titulo = await screen.findByRole("heading", { level: 1 });
+    expect(titulo).toHaveTextContent("Contrato Nº 42 firmado");
+  });
+
+  /** A draft that somehow reached here has no number; "Nº null" is the failure to avoid. */
+  it("says so honestly when there is no number", async () => {
+    await firmarHasta({ ...contratoSellado(), numero: null });
+
+    const titulo = await screen.findByRole("heading", { level: 1 });
+    expect(titulo).toHaveTextContent("Contrato firmado");
+    expect(titulo.textContent).not.toContain("null");
+  });
+});
