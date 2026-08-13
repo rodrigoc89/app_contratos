@@ -213,6 +213,29 @@ describe("vistaDeResumen", () => {
     ).toBe(true);
   });
 
+  /**
+   * The missing negative half (W-5/S-1 from the verify report): a schema
+   * asserted only by `success === true` catches a schema that is too
+   * strict, never one that has been widened to leak a forbidden field. This
+   * proves `EsquemaContratoResumen` actually rejects the wire shape it
+   * exists to forbid, on the real `vistaDeResumen` output, not a
+   * hand-written stand-in.
+   */
+  it("REJECTS the real view widened with whatsapp or the street address (R-2.9)", () => {
+    const vista = vistaDeResumen(resumenDePrueba());
+
+    expect(
+      EsquemaContratoResumen.safeParse({ ...vista, whatsapp: "+5493854123456" })
+        .success,
+    ).toBe(false);
+    expect(
+      EsquemaContratoResumen.safeParse({
+        ...vista,
+        domicilioCalle: "Av. Belgrano 1250",
+      }).success,
+    ).toBe(false);
+  });
+
   it("walking every key at every depth yields exactly the six allowed fields", () => {
     const vista = vistaDeResumen(resumenDePrueba());
 

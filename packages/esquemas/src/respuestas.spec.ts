@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   EsquemaContratoDetalle,
+  EsquemaContratoResumen,
+  EsquemaListaContratos,
   EsquemaPrevisualizacion,
 } from "./respuestas";
 
@@ -90,6 +92,130 @@ describe("EsquemaContratoDetalle", () => {
     expect(serializado).not.toContain("trazos");
     expect(serializado).not.toContain("192.0.2.10");
     expect(serializado).not.toContain("-27.78");
+  });
+});
+
+/**
+ * R-2.9: the office list row is a Ley 25.326 privacy boundary, not a size
+ * cut. `safeParse(...).success === true` alone only ever catches a schema
+ * that is too STRICT; it is blind to one that is too PERMISSIVE, which is
+ * the direction that actually matters here — a widened schema would still
+ * report success while letting a forbidden field ride along. `.strict()`
+ * (via `z.strictObject`) closes that missing half: an unrecognized key must
+ * FAIL parsing, never be silently stripped.
+ */
+describe("EsquemaContratoResumen", () => {
+  const resumen = () => ({
+    id: "22222222-2222-4222-8222-222222222222",
+    numero: 1042,
+    estado: "vigente",
+    comodatario: {
+      nombreCompleto: "Juan Carlos Pérez",
+      dni: "30.123.456",
+    },
+    fechaFirma: "2026-08-04",
+  });
+
+  it("accepts exactly the six allowed fields of a signed contract's row", () => {
+    expect(EsquemaContratoResumen.safeParse(resumen()).success).toBe(true);
+  });
+
+  it("accepts a draft, with a null numero and a null fechaFirma", () => {
+    expect(
+      EsquemaContratoResumen.safeParse({
+        ...resumen(),
+        estado: "borrador",
+        numero: null,
+        fechaFirma: null,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("REJECTS a payload widened with whatsapp — the missing negative half", () => {
+    expect(
+      EsquemaContratoResumen.safeParse({ ...resumen(), whatsapp: "+5493854123456" })
+        .success,
+    ).toBe(false);
+  });
+
+  it("REJECTS a payload widened with the comodatario's street address", () => {
+    expect(
+      EsquemaContratoResumen.safeParse({
+        ...resumen(),
+        domicilioCalle: "Av. Belgrano 1250",
+      }).success,
+    ).toBe(false);
+  });
+
+  /**
+   * `creadoEn` is the read model's ordering key (DESIGN.md D4), not a field
+   * any screen asked for — it exists to sort `buscar`'s results server-side
+   * and must never reach the wire.
+   */
+  it("REJECTS a payload carrying creadoEn, the internal ordering key", () => {
+    expect(
+      EsquemaContratoResumen.safeParse({
+        ...resumen(),
+        creadoEn: "2026-08-04T15:00:00.000Z",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("REJECTS widening at the nested comodatario level too, not just the top level", () => {
+    expect(
+      EsquemaContratoResumen.safeParse({
+        ...resumen(),
+        comodatario: { ...resumen().comodatario, whatsapp: "+5493854123456" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("EsquemaListaContratos", () => {
+  const fila = () => ({
+    id: "22222222-2222-4222-8222-222222222222",
+    numero: 1042,
+    estado: "vigente" as const,
+    comodatario: { nombreCompleto: "Juan Carlos Pérez", dni: "30.123.456" },
+    fechaFirma: "2026-08-04",
+  });
+
+  const lista = () => ({
+    elementos: [fila()],
+    total: 1,
+    pagina: 1,
+    tamanoPagina: 20,
+  });
+
+  it("accepts the envelope shape R-2.7/R-2.9 describe", () => {
+    expect(EsquemaListaContratos.safeParse(lista()).success).toBe(true);
+  });
+
+  it("accepts an honest empty result", () => {
+    expect(
+      EsquemaListaContratos.safeParse({ elementos: [], total: 0, pagina: 1, tamanoPagina: 20 })
+        .success,
+    ).toBe(true);
+  });
+
+  /**
+   * The envelope is exactly `{ elementos, total, pagina, tamanoPagina }`
+   * (R-2.9's own wording) — the same missing-negative-half gap applies at
+   * this level too, so it gets the same fix.
+   */
+  it("REJECTS an envelope widened with an unexpected top-level field", () => {
+    expect(
+      EsquemaListaContratos.safeParse({ ...lista(), mensaje: "ok" }).success,
+    ).toBe(false);
+  });
+
+  it("REJECTS an envelope whose element is widened, by composition", () => {
+    expect(
+      EsquemaListaContratos.safeParse({
+        ...lista(),
+        elementos: [{ ...fila(), whatsapp: "+5493854123456" }],
+      }).success,
+    ).toBe(false);
   });
 });
 

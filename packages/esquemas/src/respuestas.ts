@@ -192,16 +192,23 @@ export type DatosPrevisualizacion = z.infer<typeof EsquemaPrevisualizacion>;
  * boundary, not a size cut. It MUST NOT be widened to reuse
  * `EsquemaContratoDetalle`'s shape: no signature, no stroke data, no signing
  * context (technician, device, IP, user agent, GPS), no address, no
- * equipment, no documents. Name and DNI leave the server because
- * identifying the customer *is* the feature (Ley 25.326) — nothing above
- * that does.
+ * equipment, no documents, no `creadoEn` (the read model's internal
+ * ordering key). Name and DNI leave the server because identifying the
+ * customer *is* the feature (Ley 25.326) — nothing above that does.
+ *
+ * `strictObject`, not `object`, at both this level and the nested
+ * `comodatario` (R-2.9): a plain `z.object` silently strips an unrecognized
+ * key instead of rejecting it, so `safeParse(...).success === true` alone
+ * only ever proves this schema is not too STRICT — it is blind to the
+ * opposite mistake, a widened response that leaks a forbidden field, which
+ * is exactly the direction this boundary exists to guard.
  */
-export const EsquemaContratoResumen = z.object({
+export const EsquemaContratoResumen = z.strictObject({
   id: z.string(),
   /** Allocated at signing; null for a `borrador`. */
   numero: z.number().int().positive().nullable(),
   estado: EsquemaEstadoContrato,
-  comodatario: z.object({
+  comodatario: z.strictObject({
     nombreCompleto: z.string(),
     /** Dotted display form, e.g. "30.123.456" — reuses `Dni.formateado`. */
     dni: z.string(),
@@ -211,8 +218,13 @@ export const EsquemaContratoResumen = z.object({
 
 export type DatosContratoResumen = z.infer<typeof EsquemaContratoResumen>;
 
-/** `GET /contratos` — an honest empty result is still a 200 (R-2.7). */
-export const EsquemaListaContratos = z.object({
+/**
+ * `GET /contratos` — an honest empty result is still a 200 (R-2.7). The
+ * envelope itself is exactly `{ elementos, total, pagina, tamanoPagina }`
+ * (R-2.9), so it gets the same `strictObject` treatment as its rows: an
+ * unexpected top-level field must fail parsing, not be silently absorbed.
+ */
+export const EsquemaListaContratos = z.strictObject({
   elementos: z.array(EsquemaContratoResumen),
   /** Untruncated match count, before paging — never just `elementos.length`. */
   total: z.number().int().nonnegative(),
