@@ -83,13 +83,43 @@
  * so a future change that moves the chips off `Boton` is caught by the
  * guard instead of silently losing coverage.
  */
+/**
+ * Off is an outline, on is a fill.
+ *
+ * The first version tried to say the same thing with two greens — `#0b634a`
+ * unselected against `#094f3b` selected. Measured in a browser that is
+ * **1.32:1**, so every chip read as a big filled button whether or not it
+ * was on, and the office could not see which filters were active. The hover
+ * made it worse by painting an unselected chip in the exact colour of a
+ * selected one. `aria-pressed` was correct the whole time, which inverted
+ * the usual failure: a screen reader knew the state and a sighted user did
+ * not.
+ *
+ * White-to-brand is 7.25:1, and `convencionesDeEstilos.spec.ts` now resolves
+ * these tokens and fails below 3:1 — the rule is the ratio, not the spelling,
+ * because "the two selectors differ" is what the broken version already did.
+ *
+ * Every override here is scoped to this container, never to `.boton`: that
+ * atom is shared with the técnico's tablet flow, which is signed off and
+ * running on real devices.
+ */
 .barra-de-busqueda__estados .boton {
   min-height: var(--tamano-toque-minimo);
   min-width: var(--tamano-toque-minimo);
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-4);
+  background-color: var(--color-fondo);
+  border-color: var(--color-borde-suave);
+  color: var(--color-primario);
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
+/* A tint, deliberately nowhere near the selected fill — hovering must not
+   claim a filter is on. */
 .barra-de-busqueda__estados .boton:hover:not(:disabled) {
-  background-color: var(--color-primario-oscuro);
+  background-color: color-mix(in srgb, var(--color-primario) 8%, var(--color-fondo));
+  border-color: var(--color-primario);
 }
 
 .barra-de-busqueda__estados .boton:focus-visible {
@@ -97,9 +127,43 @@
   outline-offset: 2px;
 }
 
-.boton--filtro-activo {
+/* Same specificity as the inactive rule above, so source order decides and
+   the fill wins. */
+.barra-de-busqueda__estados .boton--filtro-activo {
+  background-color: var(--color-primario);
+  border-color: var(--color-primario);
+  color: var(--color-fondo);
+}
+
+.barra-de-busqueda__estados .boton--filtro-activo:hover:not(:disabled) {
   background-color: var(--color-primario-oscuro);
   border-color: var(--color-primario-oscuro);
+}
+
+/* --- cabecera y jerarquía del panel --------------------------------------- */
+
+/**
+ * Before this, the title, the field label and the result count all carried
+ * roughly the same weight, so the eye had nowhere to land first. Scoped to
+ * the list page rather than set on `h1` globally — the técnico's screens
+ * have their own rhythm and are not touched.
+ */
+.pagina-lista-contratos > h1 {
+  margin: 0 0 var(--espacio-2);
+  padding-bottom: var(--espacio-3);
+  border-bottom: 2px solid var(--color-primario);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* The result count is context, not content — it steps back so the table
+   reads first, while staying a live region for screen readers. */
+.pagina-lista-contratos > p[role="status"] {
+  margin: 0 0 var(--espacio-3);
+  color: var(--color-texto-suave);
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 /* --- TablaDeContratos (R-3.4, R-3.5, R-3.6, R-3.8, D12) ------------------ */
@@ -234,8 +298,36 @@
   .tabla-de-contratos th,
   .tabla-de-contratos td {
     display: table-cell;
-    padding: var(--espacio-2) var(--espacio-3);
+    padding: var(--espacio-3);
     text-align: left;
+  }
+
+  /* Column headers are labels, not data — smaller and quieter than the rows
+     they describe, with a rule under them so the eye can tell where the data
+     starts. Row height is untouched: R-3.5's 48px floor is a touch-target
+     minimum and rows are not targets. */
+  .tabla-de-contratos th {
+    background-color: color-mix(in srgb, var(--color-borde-suave) 18%, var(--color-fondo));
+    border-bottom: 2px solid var(--color-borde-suave);
+    color: var(--color-texto-suave);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  /* The two identifying columns lead; a number reads better tabular. */
+  .tabla-de-contratos td:first-child {
+    color: var(--color-texto-suave);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tabla-de-contratos td:nth-child(3) {
+    font-weight: 600;
+  }
+
+  .tabla-de-contratos td:nth-child(4) {
+    font-variant-numeric: tabular-nums;
   }
 
   .tabla-de-contratos td::before {
@@ -253,6 +345,54 @@
   .tabla-de-contratos tbody tr:nth-child(even) {
     background-color: color-mix(in srgb, var(--color-borde-suave) 30%, var(--color-fondo));
   }
+}
+
+/* --- insignia de estado ---------------------------------------------------- */
+
+/**
+ * The estado is the question this screen exists to answer, and it used to be
+ * the least visible thing on it — plain text in the third column, weighing
+ * exactly the same as a DNI.
+ *
+ * Painted from `data-estado` rather than a class per state, so adding an
+ * estado to the domain is one rule here and no component change.
+ *
+ * Colour is the SECOND channel, never the only one. The four tints differ in
+ * hue and barely in luminance (1.02–1.08:1 between them), so they are close
+ * to useless to a colour-blind reader on their own — the Spanish label
+ * always renders inside the badge, and `TablaDeContratos.spec.tsx` fails if
+ * it ever stops. Each tint carries its own darker foreground and border at
+ * 7.3:1 or better, so the badge is legible even where the hue is not.
+ */
+.insignia-estado {
+  display: inline-block;
+  padding: 1px var(--espacio-2);
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+.insignia-estado[data-estado="vigente"] {
+  background-color: var(--color-estado-vigente-fondo);
+  color: var(--color-estado-vigente-texto);
+}
+
+.insignia-estado[data-estado="borrador"] {
+  background-color: var(--color-estado-borrador-fondo);
+  color: var(--color-estado-borrador-texto);
+}
+
+.insignia-estado[data-estado="dado_de_baja"] {
+  background-color: var(--color-estado-baja-fondo);
+  color: var(--color-estado-baja-texto);
+}
+
+.insignia-estado[data-estado="anulado"] {
+  background-color: var(--color-estado-anulado-fondo);
+  color: var(--color-estado-anulado-texto);
 }
 
 /* --- Paginador (R-3.9, D16) ------------------------------------------------ */
@@ -293,18 +433,45 @@
   border-top: 1px solid var(--color-borde-suave);
 }
 
+/**
+ * Same language as the estado chips: navigation is an outline, the page you
+ * are on is the fill. Four solid brand-green buttons made the paginator the
+ * loudest thing on a screen whose job is reading a list, and the current
+ * page was marked only by swapping `border-color` on that fill — "you are
+ * here" was nearly invisible, the identical defect the chips had.
+ *
+ * Scoped to `.paginador`, never to `.boton`: that atom belongs to the
+ * técnico's tablet flow too.
+ */
 .paginador .boton {
   min-height: var(--tamano-toque-minimo);
   min-width: var(--tamano-toque-minimo);
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-4);
+  background-color: var(--color-fondo);
+  border-color: var(--color-borde-suave);
+  color: var(--color-primario);
+  font-size: 0.9375rem;
+  font-weight: 600;
 }
 
 .paginador .boton:hover:not(:disabled) {
-  background-color: var(--color-primario-oscuro);
+  background-color: color-mix(in srgb, var(--color-primario) 8%, var(--color-fondo));
+  border-color: var(--color-primario);
 }
 
 .paginador .boton:focus-visible {
   outline: 3px solid var(--color-foco);
   outline-offset: 2px;
+}
+
+/* A disabled control must not offer a hover affordance (R-3.8), and must
+   still read as unavailable rather than merely quiet. */
+.paginador .boton:disabled {
+  background-color: var(--color-fondo);
+  border-color: var(--color-borde-suave);
+  color: var(--color-texto-suave);
+  opacity: 0.55;
 }
 
 /**
@@ -327,8 +494,22 @@
   }
 }
 
-.boton--pagina-actual {
-  border-color: var(--color-texto);
+/**
+ * The fill IS the "you are here". `aria-current="page"` carries it for a
+ * screen reader (`Paginador.tsx`); this is the sighted half, and it has to
+ * clear the same 3:1 the estado chips do — measured white-to-brand at
+ * 7.25:1. Declared after the base rule at equal specificity, so source order
+ * lets it win.
+ */
+.paginador .boton--pagina-actual {
+  background-color: var(--color-primario);
+  border-color: var(--color-primario);
+  color: var(--color-fondo);
+}
+
+.paginador .boton--pagina-actual:hover:not(:disabled) {
+  background-color: var(--color-primario-oscuro);
+  border-color: var(--color-primario-oscuro);
 }
 
 /* --- comfort width (BREAKPOINT_ESCRITORIO, D13) --------------------------- */

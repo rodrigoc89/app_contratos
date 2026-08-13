@@ -73,7 +73,21 @@ export function TablaDeContratos({ contratos }: PropiedadesTablaDeContratos) {
                 {textoDeNumero(contrato.numero)}
               </td>
               <td role="cell" data-etiqueta="Estado">
-                {ETIQUETA_ESTADO[contrato.estado]}
+                {/*
+                  The estado is what the office opens this screen to read, so
+                  it carries a colour as well as its word. `data-estado` is
+                  the hook `panel.css` paints from — an attribute rather than
+                  a class per state, so adding an estado to the domain is one
+                  CSS rule and no component change.
+
+                  The label stays as real text, never replaced by the colour:
+                  the four tints differ in hue and barely in luminance, so for
+                  a colour-blind reader — or a greyscale printout — the
+                  Spanish word is the whole meaning.
+                */}
+                <span className="insignia-estado" data-estado={contrato.estado}>
+                  {ETIQUETA_ESTADO[contrato.estado]}
+                </span>
               </td>
               <td role="cell" data-etiqueta="Nombre completo">
                 {contrato.comodatario.nombreCompleto}
