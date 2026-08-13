@@ -4,9 +4,11 @@ import { Boton } from "../../../componentes/atomos/Boton";
 import { cerrarSesion } from "../../../datos/sesion/sesion";
 
 /**
- * DESIGN.md D10: `oficina`/`admin` land here after a successful login. The
- * `oficina` route tree is an explicit non-goal of this change — this
- * screen exists so a working login never reads as a broken one.
+ * R-3.2 (DESIGN.md D10) — `oficina`/`admin` no longer land here: PR2 gives
+ * them `/contratos` directly. This screen survives as `rutaInicialPara`'s
+ * unknown-role fallback only, so its copy stopped naming the office —
+ * naming it now would be false the moment any recognized role has its own
+ * home. It exists so an unrecognized role never reads as a broken login.
  */
 export function PanelNoDisponible() {
   const navegar = useNavigate();
@@ -21,7 +23,7 @@ export function PanelNoDisponible() {
 
   return (
     <div className="panel-no-disponible">
-      <p>El panel de oficina no está disponible todavía.</p>
+      <p>Todavía no hay un panel disponible para su rol.</p>
       <Boton onClick={manejarCerrarSesion}>Cerrar sesión</Boton>
     </div>
   );

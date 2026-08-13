@@ -1,22 +1,31 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DatosSesion } from "@contratos/esquemas";
 
+import { buscarContratos } from "../datos/consultas/buscarContratos";
 import { borrarTokenDeRefrescoGuardado, guardarTokenDeRefresco, obtenerTokenDeRefrescoGuardado } from "../datos/sesion/almacenSesion";
 import { establecerSesion, limpiarSesion } from "../datos/sesion/estadoSesion";
 import { rutas } from "./rutas";
 
+vi.mock("../datos/consultas/buscarContratos", () => ({
+  buscarContratos: vi.fn(),
+}));
+
+const buscarContratosSimulado = vi.mocked(buscarContratos);
+
 /**
- * Scenario 15 (spec `web-app-shell` — Roles; DESIGN.md D10): an `oficina`
- * or `admin` user who authenticates successfully is not bounced to login
- * and not shown a permission error — they land on a plain "not available
- * yet" screen. Anything else reads as a broken login to the person it
- * happens to.
+ * R-3.1 / DESIGN.md D9 (revision: role gating resolves a home, not a dead
+ * end) — `tecnico` reaches `/`, `oficina`/`admin` reach `/contratos`, and
+ * any role none of the guards recognize lands on the role-agnostic
+ * fallback. Previously every non-`tecnico` role was hard-redirected to
+ * `/panel-no-disponible`, so a successful `oficina` login read as a broken
+ * app — this file is what proves that is no longer true.
  */
 
-function sesionFalsa(rol: DatosSesion["usuario"]["rol"]): DatosSesion {
+function sesionFalsa(rol: string): DatosSesion {
   return {
     tokenDeAcceso: "acceso",
     expiraEnSegundos: 900,
@@ -26,7 +35,7 @@ function sesionFalsa(rol: DatosSesion["usuario"]["rol"]): DatosSesion {
       id: "usuario-1",
       nombreUsuario: "usuario1",
       nombreCompleto: "Usuario de Prueba",
-      rol,
+      rol: rol as DatosSesion["usuario"]["rol"],
       activo: true,
     },
   };
@@ -40,8 +49,14 @@ function respuestaSesion(sesion: DatosSesion): Response {
 }
 
 function renderizarEn(ruta: string) {
+  const clienteDePrueba = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const enrutadorDePrueba = createMemoryRouter(rutas, { initialEntries: [ruta] });
-  render(<RouterProvider router={enrutadorDePrueba} />);
+  render(
+    <QueryClientProvider client={clienteDePrueba}>
+      <RouterProvider router={enrutadorDePrueba} />
+    </QueryClientProvider>,
+  );
+  return enrutadorDePrueba;
 }
 
 describe("route guards", () => {
@@ -65,22 +80,50 @@ describe("route guards", () => {
     expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
   });
 
-  it("shows 'no disponible todavía' instead of an error for an oficina session", () => {
+  it("sends an oficina session straight to the contract list, not the old fallback screen", async () => {
+    buscarContratosSimulado.mockResolvedValue({ elementos: [], total: 0, pagina: 1, tamanoPagina: 20 });
     establecerSesion(sesionFalsa("oficina"));
 
     renderizarEn("/");
 
-    expect(screen.getByText(/no está disponible todavía/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Contratos" })).toBeInTheDocument();
+    expect(screen.queryByText(/no está disponible todavía/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/error/i)).not.toBeInTheDocument();
   });
 
-  it("shows the same screen to an admin session, not the técnico home", () => {
+  it("sends an admin session to the same contract list, not the técnico home", async () => {
+    buscarContratosSimulado.mockResolvedValue({ elementos: [], total: 0, pagina: 1, tamanoPagina: 20 });
     establecerSesion(sesionFalsa("admin"));
 
     renderizarEn("/");
 
-    expect(screen.getByText(/no está disponible todavía/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Contratos" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Datos del cliente" })).not.toBeInTheDocument();
+  });
+
+  it("reaches /contratos directly as oficina", async () => {
+    buscarContratosSimulado.mockResolvedValue({ elementos: [], total: 0, pagina: 1, tamanoPagina: 20 });
+    establecerSesion(sesionFalsa("oficina"));
+
+    renderizarEn("/contratos");
+
+    expect(await screen.findByRole("heading", { name: "Contratos" })).toBeInTheDocument();
+  });
+
+  it("sends a técnico who tries /contratos back home, not to an error", () => {
+    establecerSesion(sesionFalsa("tecnico"));
+
+    renderizarEn("/contratos");
+
+    expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
+  });
+
+  it("still lands an unrecognized role on the role-agnostic fallback, never a dead end", () => {
+    establecerSesion(sesionFalsa("rol-desconocido"));
+
+    renderizarEn("/");
+
+    expect(screen.getByText(/no hay un panel disponible para su rol/i)).toBeInTheDocument();
   });
 
   /**

@@ -12,6 +12,22 @@ describe("PanelNoDisponible", () => {
     vi.unstubAllGlobals();
   });
 
+  /**
+   * R-3.2 — this screen stopped being oficina/admin's destination (they now
+   * reach `/contratos`), so its copy must stop naming the office. Kept as
+   * `rutaInicialPara`'s unknown-role fallback only.
+   */
+  it("shows role-agnostic copy, no longer promising an office panel", () => {
+    render(
+      <MemoryRouter initialEntries={["/panel-no-disponible"]}>
+        <PanelNoDisponible />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Todavía no hay un panel disponible para su rol.")).toBeInTheDocument();
+    expect(screen.queryByText(/panel de oficina/i)).not.toBeInTheDocument();
+  });
+
   it("logs out and clears the session when the technician taps 'Cerrar sesión'", async () => {
     establecerSesion({
       tokenDeAcceso: "acceso",

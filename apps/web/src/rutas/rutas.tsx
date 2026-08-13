@@ -1,14 +1,23 @@
 import type { RouteObject } from "react-router-dom";
 
-import { GuardiaDeRolTecnico, GuardiaDeSesion } from "../funcionalidades/auth/contenedores/GuardiasDeRuta";
+import { LayoutPanel } from "../componentes/plantillas/LayoutPanel";
+import { GuardiaDeRolTecnico, GuardiaDeRoles, GuardiaDeSesion } from "../funcionalidades/auth/contenedores/GuardiasDeRuta";
 import { InicioTecnico } from "../funcionalidades/auth/contenedores/InicioTecnico";
 import { PaginaLogin } from "../funcionalidades/auth/contenedores/PaginaLogin";
 import { PanelNoDisponible } from "../funcionalidades/auth/contenedores/PanelNoDisponible";
+import { PaginaListaContratos } from "../funcionalidades/contratos/contenedores/PaginaListaContratos";
 
 /**
- * The real route tree (DESIGN.md D4, D10), replacing PR2's placeholder.
- * Exported separately from `enrutador.tsx` so tests can mount it with
- * `createMemoryRouter` instead of the real browser history.
+ * The real route tree (DESIGN.md D4, D9, D10, D13), replacing PR2's
+ * placeholder. Exported separately from `enrutador.tsx` so tests can mount
+ * it with `createMemoryRouter` instead of the real browser history.
+ *
+ * `GuardiaDeRolTecnico` (→ `/`, `LayoutTablet` untouched) and
+ * `GuardiaDeRoles permitidos={["oficina", "admin"]}` (→ `/contratos`,
+ * `LayoutPanel`) are siblings directly under `GuardiaDeSesion`, the same as
+ * `/panel-no-disponible` — that sibling placement is what lets a role
+ * mismatch on either branch redirect to the OTHER role's actual home
+ * instead of a shared dead end.
  */
 export const rutas: RouteObject[] = [
   { path: "/login", element: <PaginaLogin /> },
@@ -19,6 +28,19 @@ export const rutas: RouteObject[] = [
       {
         element: <GuardiaDeRolTecnico />,
         children: [{ path: "/", element: <InicioTecnico /> }],
+      },
+      {
+        element: <GuardiaDeRoles permitidos={["oficina", "admin"]} />,
+        children: [
+          {
+            path: "/contratos",
+            element: (
+              <LayoutPanel>
+                <PaginaListaContratos />
+              </LayoutPanel>
+            ),
+          },
+        ],
       },
     ],
   },
