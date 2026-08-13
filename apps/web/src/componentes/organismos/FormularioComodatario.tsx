@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Boton } from "../atomos/Boton";
 import { CampoTexto } from "../atomos/CampoTexto";
 import { Etiqueta } from "../atomos/Etiqueta";
+import { IndicadorDePaso, PASOS_DEL_BORRADOR } from "../moleculas/IndicadorDePaso";
 
 /**
  * Step 1 of the `borrador` form — `EsquemaComodatario`'s five fields
@@ -50,7 +51,8 @@ export function FormularioComodatario({
 
   return (
     <form onSubmit={manejarEnvio} className="formulario">
-      <h2>Datos del cliente</h2>
+      <IndicadorDePaso pasos={PASOS_DEL_BORRADOR} actual={1} />
+      <h1>Nuevo contrato</h1>
       {CAMPOS.map(({ campo, etiqueta }) => (
         <div key={campo} className="formulario__campo">
           <Etiqueta htmlFor={campo}>{etiqueta}</Etiqueta>

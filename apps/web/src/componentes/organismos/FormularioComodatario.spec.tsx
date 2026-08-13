@@ -85,3 +85,43 @@ describe("FormularioComodatario", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The técnico's screens had no `h1` anywhere — not here, not on the equipos
+ * step, not on the login before it. Every one of them opened with an `h2`
+ * under nothing, which is both an accessibility defect and the reason the
+ * screen felt anchorless: there was no title to land on.
+ */
+describe("FormularioComodatario — encabezado y progreso", () => {
+  const propiedades = {
+    valores: {
+      nombreCompleto: "",
+      dni: "",
+      domicilioCalle: "",
+      ciudad: "",
+      whatsapp: "",
+    },
+    onCambiar: vi.fn(),
+    onContinuar: vi.fn(),
+    error: null,
+    deshabilitado: false,
+  };
+
+  it("titles the screen with an h1, not an orphaned h2", () => {
+    render(<FormularioComodatario {...propiedades} />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Nuevo contrato");
+    // El nombre del paso lo dice el indicador, una sola vez.
+    expect(screen.getByRole("heading", { level: 1 })).not.toHaveTextContent("Datos del cliente");
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
+  });
+
+  it("says which step this is, so the customer's question has an answer", () => {
+    render(<FormularioComodatario {...propiedades} />);
+
+    expect(screen.getByText("Paso 1 de 2")).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Progreso del contrato" }),
+    ).toBeInTheDocument();
+  });
+});

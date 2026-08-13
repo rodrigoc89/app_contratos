@@ -16,3 +16,29 @@ describe("Etiqueta", () => {
     expect(screen.getByText("DNI")).toHaveClass("etiqueta");
   });
 });
+
+/**
+ * The same defect `Boton` already carries a comment about: a fixed
+ * `className` after `{...resto}` protects the base class and, in doing so,
+ * makes the atom unable to accept a modifier at all. The prop was dropped in
+ * silence — a caller styling an option row got nothing back, and no error.
+ */
+describe("Etiqueta — className", () => {
+  it("keeps its base class when no modifier is asked for", () => {
+    render(<Etiqueta htmlFor="x">Nombre</Etiqueta>);
+
+    expect(screen.getByText("Nombre").className).toBe("etiqueta");
+  });
+
+  it("merges a caller's modifier instead of dropping it", () => {
+    render(
+      <Etiqueta htmlFor="x" className="etiqueta--opcion">
+        Nombre
+      </Etiqueta>,
+    );
+
+    const etiqueta = screen.getByText("Nombre");
+    expect(etiqueta.className).toContain("etiqueta");
+    expect(etiqueta.className).toContain("etiqueta--opcion");
+  });
+});

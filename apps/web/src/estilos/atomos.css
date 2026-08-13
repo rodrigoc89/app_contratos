@@ -38,6 +38,33 @@
   opacity: 0.55;
 }
 
+/**
+ * The step's secondary action — going back, never committing.
+ *
+ * It loses the fill rather than the primary gaining one, which is the way
+ * round `organismos.css`'s técnico note argues for: an outlined button has
+ * less presence than a filled one on a tablet held at arm's length in direct
+ * sun, and less presence is exactly what a secondary action wants.
+ *
+ * Text stays `--color-primario` on `--color-fondo`, the same pair the office
+ * panel's outline controls use and the one the contrast guard measures.
+ */
+.boton--secundario {
+  border-color: var(--color-primario);
+  background-color: var(--color-fondo);
+  color: var(--color-primario);
+}
+
+/* The base `.boton:hover` fills with the brand green, which would erase the
+   distinction on hover — the one place a técnico is least likely to be, and
+   still not a state worth contradicting itself in. */
+.boton--secundario:hover:not(:disabled) {
+  border-color: var(--color-primario-oscuro);
+  background-color: var(--color-fondo);
+  color: var(--color-primario-oscuro);
+}
+
+
 .campo-texto {
   display: block;
   width: 100%;
@@ -63,6 +90,26 @@
   color: var(--color-texto);
   font-size: var(--fuente-base);
   font-weight: 600;
+}
+
+/**
+ * A radio or checkbox beside its own text.
+ *
+ * The base `.etiqueta` is `display: block`, so the control and the words sat
+ * on one line box: the 48px control bottom-aligned to the baseline, leaving
+ * the text 17px below the control's centre — measured on a 1280×800 tablet.
+ * It read as unfinished, and it was.
+ *
+ * The whole row is the label, so the touch target is the row and not just
+ * the circle — which is what a técnico actually aims at.
+ */
+.etiqueta--opcion {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-3);
+  min-height: var(--tamano-toque-minimo);
+  margin-bottom: 0;
+  cursor: pointer;
 }
 
 .spinner {

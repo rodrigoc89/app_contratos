@@ -1051,3 +1051,53 @@ describe("the document viewer stays bounded to a fraction of the viewport, never
     ).toBe(true);
   });
 });
+
+/**
+ * A modifier that only overrides its base by source order is one careless
+ * paste away from doing nothing at all.
+ *
+ * This is not hypothetical. `.etiqueta--opcion` was first written above
+ * `.etiqueta`, so the base's `display: block` won and the radio labels stayed
+ * exactly as broken as before the fix: text 17px below the centre of its own
+ * 48px control, measured in a real browser. Every unit test passed — the
+ * class WAS on the element, and jsdom performs no layout, so nothing in the
+ * suite could see it.
+ *
+ * The rule holds for the pattern rather than for this one selector: any
+ * `X--modificador` sharing a stylesheet with its bare `X` must come after it.
+ */
+describe("a BEM modifier is never declared above the base it overrides", () => {
+  function posicion(contenido: string, selector: string): number {
+    const escapado = selector.replace(/[-[\]{}()*+?.\\^$|]/g, "\\$&");
+    return contenido.search(new RegExp(`^${escapado}\\s*(,|\\{)`, "m"));
+  }
+
+  const hojas = archivosCss(DIRECTORIO_SRC);
+
+  it("finds the stylesheets to check", () => {
+    expect(hojas.length).toBeGreaterThan(0);
+  });
+
+  it.each(["etiqueta", "boton"])(
+    "declares every `.%s--*` modifier after the bare `.%s`",
+    (base) => {
+      for (const hoja of hojas) {
+        const posicionBase = posicion(hoja.contenido, `.${base}`);
+        if (posicionBase === -1) {
+          continue;
+        }
+        const modificadores = [
+          ...hoja.contenido.matchAll(
+            new RegExp(`^\\.${base}--[a-z-]+`, "gm"),
+          ),
+        ];
+        for (const modificador of modificadores) {
+          expect(
+            modificador.index,
+            `${hoja.ruta}: ${modificador[0]} está declarado antes de .${base}, así que la base gana por orden`,
+          ).toBeGreaterThan(posicionBase);
+        }
+      }
+    },
+  );
+});

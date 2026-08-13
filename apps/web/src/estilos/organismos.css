@@ -99,8 +99,17 @@
 
 /* --- shared form shell: comodatario / equipos / login ------------------- */
 
+/*
+  480px on a 1280px tablet used 38% of the screen and read as a phone form
+  stretched onto a bigger device — measured, not guessed.
+
+  Widened, but NOT split into two columns. The técnico fills this standing in
+  someone's house, scanning straight down; a second column is where a field
+  gets skipped, and this one ends in a signed legal document. The space is
+  better spent on margin than on a layout that risks an empty DNI.
+*/
 .formulario {
-  max-width: 480px;
+  max-width: 640px;
   margin: 0 auto;
   padding: var(--espacio-5);
 }
@@ -128,6 +137,7 @@
  * carried the same weight, so the eye had nowhere to land. That is what
  * these rules add, and nothing else.
  */
+.formulario > h1,
 .formulario > h2 {
   margin: 0 0 var(--espacio-4);
   padding-bottom: var(--espacio-2);
@@ -135,6 +145,97 @@
   font-size: var(--fuente-grande);
   font-weight: 700;
   letter-spacing: -0.01em;
+}
+
+/* --- progress: IndicadorDePaso ------------------------------------------- */
+
+/*
+  Sits above the title, so the first thing read is where the técnico is and
+  the second is what this screen wants. Reversing them means the answer to
+  "how much longer" arrives after the work has already started.
+*/
+.indicador-de-paso {
+  margin-bottom: var(--espacio-4);
+}
+
+.indicador-de-paso__resumen {
+  margin: 0 0 var(--espacio-2);
+  color: var(--color-texto-suave);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.indicador-de-paso__lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+  Each step is a chip. Two chips is not a lot of navigation, and that is the
+  point: it takes one glance rather than a reading.
+*/
+.indicador-de-paso__paso {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-2);
+  padding: var(--espacio-2) var(--espacio-3);
+  border: 2px solid var(--color-borde-suave);
+  border-radius: var(--radio-borde);
+  color: var(--color-texto-suave);
+}
+
+/*
+  The live step is filled, not tinted. On a screen read in direct sun a tint
+  is the first thing to disappear, and this is the one piece of state here
+  worth being unmistakable. Colour never carries it alone anyway — the
+  numeric "Paso 1 de 2" above and `aria-current` both say the same thing.
+*/
+.indicador-de-paso__paso--actual {
+  border-color: var(--color-primario);
+  background-color: var(--color-primario);
+  color: var(--color-fondo);
+  font-weight: 700;
+}
+
+/*
+  A step already left keeps the brand outline: done is not the same as not
+  yet reached, and the difference is what says the earlier data is safe.
+*/
+.indicador-de-paso__paso--cumplido {
+  border-color: var(--color-primario);
+  color: var(--color-primario);
+}
+
+/*
+  Every pairing below states its own foreground AND background rather than
+  inheriting one of them. A circle that took only one of the two from its
+  chip is how a digit ends up painted on its own colour and vanishes.
+*/
+.indicador-de-paso__numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  background-color: var(--color-borde-suave);
+  color: var(--color-texto-suave);
+  font-weight: 700;
+}
+
+.indicador-de-paso__paso--actual .indicador-de-paso__numero {
+  background-color: var(--color-fondo);
+  color: var(--color-primario);
+}
+
+.indicador-de-paso__paso--cumplido .indicador-de-paso__numero {
+  background-color: var(--color-primario);
+  color: var(--color-fondo);
 }
 
 /* Fields were 8px apart, which read as one undifferentiated block on a

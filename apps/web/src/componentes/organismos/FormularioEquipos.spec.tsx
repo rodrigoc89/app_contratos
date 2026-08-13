@@ -218,3 +218,71 @@ describe("FormularioEquipos", () => {
     expect(screen.getByLabelText("Dirección MAC de la antena")).toBeInTheDocument();
   });
 });
+
+/**
+ * Three defects measured on a 1280×800 tablet before this suite existed:
+ * no `h1` on the screen at all, "Volver" and the submit rendered pixel for
+ * pixel identical, and each radio's own text sitting 17px below the centre of
+ * its 48px control.
+ */
+describe("FormularioEquipos — encabezado, jerarquía y radios", () => {
+  const propiedades = {
+    valores: { antenaModelo: "", antenaMac: "", poe: undefined, canoMetros: "" },
+    onCambiar: vi.fn(),
+    onCambiarPoe: vi.fn(),
+    onVolver: vi.fn(),
+    onEnviar: vi.fn(),
+    etiquetaEnvio: "Crear borrador",
+    error: null,
+    deshabilitado: false,
+  };
+
+  it("titles the screen with an h1, not an orphaned h2", () => {
+    render(<FormularioEquipos {...propiedades} />);
+
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Nuevo contrato");
+    // El nombre del paso lo dice el indicador, una sola vez.
+    expect(screen.getByRole("heading", { level: 1 })).not.toHaveTextContent("Equipos entregados");
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
+  });
+
+  it("says which step this is", () => {
+    render(<FormularioEquipos {...propiedades} />);
+
+    expect(screen.getByText("Paso 2 de 2")).toBeInTheDocument();
+  });
+
+  /**
+   * One of these goes back a screen; the other creates a draft with legal
+   * weight. They were the same solid green, so the difference lived nowhere
+   * but the word on the button. The secondary action is the one that loses
+   * the fill — deliberately the way round the PR #53 note argues, since a
+   * filled button has more presence in direct sun than an outlined one.
+   */
+  it("does not dress going back the same as committing", () => {
+    render(<FormularioEquipos {...propiedades} />);
+
+    const volver = screen.getByRole("button", { name: "Volver" });
+    const enviar = screen.getByRole("button", { name: "Crear borrador" });
+
+    expect(volver.className).toContain("boton--secundario");
+    expect(enviar.className).not.toContain("boton--secundario");
+  });
+
+  /**
+   * jsdom performs no layout, so this cannot measure the 17px offset that
+   * started it. What it CAN hold is the structural precondition the fix
+   * rests on: the label is the flex row that centres the control against its
+   * own text. Take that class away and the browser regression returns.
+   */
+  it("lays each radio out as a row that can centre its own text", () => {
+    render(<FormularioEquipos {...propiedades} />);
+
+    const radios = screen.getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    for (const radio of radios) {
+      const etiqueta = radio.closest("label");
+      expect(etiqueta?.className).toContain("etiqueta--opcion");
+    }
+  });
+});
