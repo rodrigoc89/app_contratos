@@ -116,6 +116,56 @@
   border-radius: var(--radio-borde);
 }
 
+/**
+ * Structure only, deliberately. The office panel's redesign is NOT ported
+ * here: its 16px base, 12px section headers, 13px badges and outline buttons
+ * were all chosen for an indoor monitor at 50cm with a mouse. On a tablet
+ * held at arm's length in direct sun, an outline button has far less
+ * presence than a filled one and small type is simply unreadable — so the
+ * tokens, the fills and the 48px targets stay exactly as they are.
+ *
+ * What was actually missing was hierarchy: every heading, label and value
+ * carried the same weight, so the eye had nowhere to land. That is what
+ * these rules add, and nothing else.
+ */
+.formulario > h2 {
+  margin: 0 0 var(--espacio-4);
+  padding-bottom: var(--espacio-2);
+  border-bottom: 2px solid var(--color-primario);
+  font-size: var(--fuente-grande);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Fields were 8px apart, which read as one undifferentiated block on a
+   screen someone fills in standing up. */
+.formulario__campo {
+  margin-bottom: var(--espacio-4);
+}
+
+.formulario__campo label {
+  display: block;
+  margin-bottom: var(--espacio-1);
+  color: var(--color-texto-suave);
+  font-weight: 700;
+}
+
+/* The grouping boxes read as the section titles they are. */
+.formulario__fieldset > legend {
+  padding: 0 var(--espacio-2);
+  color: var(--color-texto-suave);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The step's primary action gets air above it, so a thumb travelling down
+   the form cannot reach it while still reading the last field. */
+.formulario > .boton,
+.formulario__acciones {
+  margin-top: var(--espacio-5);
+}
+
 /* --- app shell: LayoutTablet --------------------------------------------- */
 
 .layout-tablet {
@@ -225,9 +275,10 @@
   border-bottom: 1px solid var(--color-borde-suave);
 }
 
+/* Base size, not panel size: this header is shared with the tablet, read at
+   arm's length in sunlight. `panel.css` may shrink it on its own subtree. */
 .cabecera-sesion__usuario {
   color: var(--color-texto-suave);
-  font-size: 0.875rem;
   font-weight: 600;
 }
 
@@ -239,7 +290,6 @@
   background-color: var(--color-fondo);
   border-color: var(--color-borde-suave);
   color: var(--color-primario);
-  font-size: 0.875rem;
   font-weight: 600;
 }
 

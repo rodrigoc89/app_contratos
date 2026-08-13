@@ -584,6 +584,47 @@ function fondoDeclarado(cuerpo: string): string | undefined {
   return /background(?:-color)?\s*:\s*([^;}]+)/.exec(cuerpo)?.[1]?.trim();
 }
 
+describe("the tablet's stylesheets never shrink type below the device floor", () => {
+  /**
+   * `tokens.css` states the constraint the whole tablet palette is built
+   * around: a técnico reads this "held at arm's length, not up close", "in
+   * direct Santiago del Estero sunlight", and taps it "sometimes with a
+   * gloved thumb". `--fuente-base` is 18px for that reason, and the neutrals
+   * are flat maximum contrast rather than tints.
+   *
+   * `panel.css` is deliberately exempt: the office reads a monitor indoors at
+   * 50cm, and it rebinds `--fuente-base` to 16px on its own subtree for
+   * exactly that reason (DESIGN.md D13). Every OTHER stylesheet is shared
+   * with the tablet, so panel-sized type landing there is a regression a
+   * screenshot on a desk will never reveal — it only shows up outdoors, in
+   * front of a customer.
+   *
+   * Caught its first violation immediately: the session header added with
+   * the office logout used `0.875rem` (15.75px at this base) and lives in
+   * the SHARED sheet, so it shipped panel type onto the sunlit tablet.
+   */
+  const MINIMO_REM = 1;
+  const PATRON_FUENTE_REM = /font-size\s*:\s*(\d+(?:\.\d+)?)rem/gi;
+
+  it(`declares no font-size below ${MINIMO_REM}rem outside estilos/panel.css`, () => {
+    for (const { ruta, contenido } of archivosCss(DIRECTORIO_SRC)) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      if (rutaRelativa.endsWith("panel.css")) {
+        continue;
+      }
+
+      const chicas = [...contenido.matchAll(PATRON_FUENTE_REM)]
+        .map((coincidencia) => Number(coincidencia[1]))
+        .filter((valor) => valor < MINIMO_REM);
+
+      expect(
+        chicas,
+        `${rutaRelativa} declares ${chicas.join("rem, ")}rem — this sheet is shared with the técnico's tablet, which is read at arm's length in direct sunlight (tokens.css). Panel-sized type belongs in panel.css, which rebinds its own base for an indoor monitor.`,
+      ).toEqual([]);
+    }
+  });
+});
+
 describe("valorDeColor resolves what renders, not what is written", () => {
   /**
    * Proven directly rather than assumed, for the same reason
