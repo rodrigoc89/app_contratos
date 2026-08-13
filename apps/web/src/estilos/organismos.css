@@ -445,3 +445,12 @@
 .paso-firma__pendientes li {
   margin-bottom: var(--espacio-1);
 }
+
+/* The signed contract's number, kept on screen after the toast expires. */
+.envio-firma__titulo {
+  margin: 0 0 var(--espacio-4);
+  padding-bottom: var(--espacio-2);
+  border-bottom: 2px solid var(--color-primario);
+  font-size: var(--fuente-grande);
+  font-weight: 700;
+}

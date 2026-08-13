@@ -147,3 +147,64 @@ describe("EntregaDeDocumentos", () => {
     expect(screen.getByRole("button", { name: "Compartir documentos" })).toBeEnabled();
   });
 });
+
+/**
+ * Reported as "por qué ya no puedo hacerlo". Measured on the running app: the
+ * técnico taps "Compartir documentos" once and the button is gone — for good.
+ *
+ *   antes de tocar → botones: ["Cerrar sesión", "Compartir documentos"]
+ *   después        → botones: ["Cerrar sesión"]
+ *
+ * Both SUCCESS paths ended in a terminal state with no action left; only
+ * failure offered a retry. That is backwards for this screen. DESIGN.md §8:
+ * *"the customer is entitled to their copy"* — and "no me llegó", a wrong
+ * chat, or a WhatsApp that silently dropped the attachment are the most
+ * ordinary things that can happen while the técnico is still standing there.
+ *
+ * Sharing again is free and has no side effect on the contract: it is
+ * already sealed, and delivery only ever reads the PDFs back.
+ */
+describe("EntregaDeDocumentos — se puede volver a enviar", () => {
+  it("keeps the action after a successful share", async () => {
+    const entregar = vi.fn().mockResolvedValue({ via: "compartido" } as ResultadoEntrega);
+    render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
+
+    expect(await screen.findByRole("button", { name: "Compartir de nuevo" })).toBeInTheDocument();
+  });
+
+  it("keeps the action after falling back to a download", async () => {
+    const entregar = vi.fn().mockResolvedValue({ via: "descarga" } as ResultadoEntrega);
+    render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
+
+    expect(await screen.findByRole("button", { name: "Compartir de nuevo" })).toBeInTheDocument();
+    expect(screen.getByText(/Adjuntalos manualmente por WhatsApp/)).toBeInTheDocument();
+  });
+
+  it("actually delivers again when asked again", async () => {
+    const entregar = vi.fn().mockResolvedValue({ via: "descarga" } as ResultadoEntrega);
+    render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Compartir de nuevo" }));
+
+    expect(entregar).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * The download message is the standing instruction for what to do next, so
+   * it must survive a second attempt rather than blinking out and back.
+   */
+  it("still explains the download after sharing again", async () => {
+    const entregar = vi.fn().mockResolvedValue({ via: "descarga" } as ResultadoEntrega);
+    render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Compartir de nuevo" }));
+
+    expect(await screen.findByText(/Adjuntalos manualmente por WhatsApp/)).toBeInTheDocument();
+  });
+});

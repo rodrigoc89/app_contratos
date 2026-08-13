@@ -63,15 +63,38 @@ export function EntregaDeDocumentos({ contrato, entregar }: PropiedadesEntregaDe
   }
 
   if (estado.tipo === "entregado") {
-    if (estado.resultado.via === "compartido") {
-      return avisoEntregaVisible ? (
-        <Toast
-          mensaje="Documentos compartidos correctamente."
-          onDescartar={() => establecerAvisoEntregaVisible(false)}
-        />
-      ) : null;
-    }
-    return <p role="status">Los documentos se descargaron. Adjuntalos manualmente por WhatsApp.</p>;
+    /*
+      Delivering once is not the same as delivering successfully, and this
+      screen used to treat them as the same thing: both success paths ended
+      with no action left, and only FAILURE offered a retry. Backwards.
+
+      DESIGN.md §8 — "the customer is entitled to their copy". A wrong chat, a
+      WhatsApp that dropped the attachment, or a customer saying "no me llegó"
+      are the most ordinary things that can happen while the técnico is still
+      standing in the house. Sending again costs nothing and cannot harm the
+      contract: it is already sealed, and delivery only ever reads the PDFs
+      back.
+    */
+    return (
+      <div className="entrega-documentos">
+        {estado.resultado.via === "compartido" && avisoEntregaVisible && (
+          <Toast
+            mensaje="Documentos compartidos correctamente."
+            onDescartar={() => establecerAvisoEntregaVisible(false)}
+          />
+        )}
+        {estado.resultado.via === "descarga" && (
+          /* The standing instruction for what to do next — it stays put
+             rather than blinking out on a second attempt. */
+          <p role="status">
+            Los documentos se descargaron. Adjuntalos manualmente por WhatsApp.
+          </p>
+        )}
+        <Boton type="button" onClick={() => void manejarCompartir()}>
+          Compartir de nuevo
+        </Boton>
+      </div>
+    );
   }
 
   if (estado.tipo === "error") {
