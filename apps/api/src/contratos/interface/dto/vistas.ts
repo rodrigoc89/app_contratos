@@ -1,13 +1,20 @@
 import type {
   DatosContratoCreado,
   DatosContratoDetalle,
+  DatosContratoResumen,
   DatosFirmarContrato,
+  DatosListaContratos,
   DatosPrevisualizacion,
 } from "@contratos/esquemas";
 
 import type { ContratoPrevisualizado } from "../../application/PrevisualizarContrato";
+import type {
+  ResultadoDeBusqueda,
+  ResumenDeContrato,
+} from "../../application/ports/ContratoRepository";
 import { ContextoDeFirma } from "../../domain/ContextoDeFirma";
 import type { Contrato } from "../../domain/Contrato";
+import { Dni } from "../../domain/value-objects/Dni";
 import { FirmaCapturada } from "../../domain/FirmaCapturada";
 import type { PuntoFirma } from "../../domain/FirmaCapturada";
 
@@ -106,6 +113,50 @@ export function vistaDeContrato(contrato: Contrato): DatosContratoDetalle {
  */
 export function vistaDeContratoCreado(contrato: Contrato): DatosContratoCreado {
   return { id: contrato.id, estado: contrato.estado };
+}
+
+/**
+ * The office list row — R-2.9's privacy boundary, not `DatosContratoDetalle`
+ * cut down. `ResumenDeContrato` never carried a signature, a stroke point or
+ * a signing-context field to begin with, so this function's whole job is
+ * picking exactly the six allowed fields and formatting the two that need
+ * it: the DNI dotted for display (reusing the tested `Dni.formateado`,
+ * never a second dotting rule), and the signing date as its ISO string.
+ *
+ * `creadoEn` deliberately does NOT appear here: it is the ordering key at
+ * the application layer (DESIGN.md D3), not a field any screen has asked
+ * for on the wire.
+ */
+export function vistaDeResumen(resumen: ResumenDeContrato): DatosContratoResumen {
+  return {
+    id: resumen.id,
+    numero: resumen.numero,
+    estado: resumen.estado,
+    comodatario: {
+      nombreCompleto: resumen.comodatarioNombreCompleto,
+      dni: Dni.crear(resumen.comodatarioDni).formateado,
+    },
+    fechaFirma: resumen.fechaFirma?.iso ?? null,
+  };
+}
+
+/**
+ * `pagina`/`tamanoPagina` are echoed from what the caller asked for, not
+ * read off `resultado`: the repository's `ResultadoDeBusqueda` carries only
+ * `resumenes` and the untruncated `total` (DESIGN.md D4), never the paging
+ * parameters that produced them.
+ */
+export function vistaDeListaContratos(
+  resultado: ResultadoDeBusqueda,
+  pagina: number,
+  tamanoPagina: number,
+): DatosListaContratos {
+  return {
+    elementos: resultado.resumenes.map(vistaDeResumen),
+    total: resultado.total,
+    pagina,
+    tamanoPagina,
+  };
 }
 
 export function vistaDePrevisualizacion(

@@ -186,3 +186,38 @@ export const EsquemaPrevisualizacion = z.object({
 });
 
 export type DatosPrevisualizacion = z.infer<typeof EsquemaPrevisualizacion>;
+
+/**
+ * One row of the office list screen (R-2.9) — a deliberate privacy
+ * boundary, not a size cut. It MUST NOT be widened to reuse
+ * `EsquemaContratoDetalle`'s shape: no signature, no stroke data, no signing
+ * context (technician, device, IP, user agent, GPS), no address, no
+ * equipment, no documents. Name and DNI leave the server because
+ * identifying the customer *is* the feature (Ley 25.326) — nothing above
+ * that does.
+ */
+export const EsquemaContratoResumen = z.object({
+  id: z.string(),
+  /** Allocated at signing; null for a `borrador`. */
+  numero: z.number().int().positive().nullable(),
+  estado: EsquemaEstadoContrato,
+  comodatario: z.object({
+    nombreCompleto: z.string(),
+    /** Dotted display form, e.g. "30.123.456" — reuses `Dni.formateado`. */
+    dni: z.string(),
+  }),
+  fechaFirma: z.string().regex(FECHA_ISO).nullable(),
+});
+
+export type DatosContratoResumen = z.infer<typeof EsquemaContratoResumen>;
+
+/** `GET /contratos` — an honest empty result is still a 200 (R-2.7). */
+export const EsquemaListaContratos = z.object({
+  elementos: z.array(EsquemaContratoResumen),
+  /** Untruncated match count, before paging — never just `elementos.length`. */
+  total: z.number().int().nonnegative(),
+  pagina: z.number().int().positive(),
+  tamanoPagina: z.number().int().positive(),
+});
+
+export type DatosListaContratos = z.infer<typeof EsquemaListaContratos>;

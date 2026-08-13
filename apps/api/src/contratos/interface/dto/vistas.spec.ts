@@ -1,6 +1,8 @@
 import {
   EsquemaContratoDetalle,
+  EsquemaContratoResumen,
   EsquemaFirmarContrato,
+  EsquemaListaContratos,
   EsquemaPrevisualizacion,
 } from "@contratos/esquemas";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -19,12 +21,16 @@ import {
 import { FirmarContrato } from "../../application/FirmarContrato";
 import { PrevisualizarContrato } from "../../application/PrevisualizarContrato";
 import type { Contrato } from "../../domain/Contrato";
+import type { ResumenDeContrato } from "../../application/ports/ContratoRepository";
+import { FechaCalendario } from "../../../shared/domain/FechaCalendario";
 import {
   contextoDeFirmaDesde,
   firmasDesde,
   LARGO_MAXIMO_USER_AGENT,
   vistaDeContrato,
   vistaDeContratoCreado,
+  vistaDeListaContratos,
+  vistaDeResumen,
   vistaDePrevisualizacion,
 } from "./vistas";
 
@@ -178,6 +184,146 @@ describe("vistaDeContrato", () => {
 
       expect(vista).toEqual({ id: ID_CONTRATO, estado: "borrador" });
     });
+  });
+});
+
+/**
+ * R-2.9: the list row is a privacy boundary, not a size cut. Every key at
+ * every depth of the emitted object must be exactly the allowed set, and no
+ * forbidden field — address, equipment, documents, events, signing context,
+ * or the internal normalized search column — may appear anywhere.
+ */
+describe("vistaDeResumen", () => {
+  const resumenDePrueba = (
+    overrides: Partial<ResumenDeContrato> = {},
+  ): ResumenDeContrato => ({
+    id: "22222222-2222-4222-8222-222222222222",
+    numero: 1042,
+    estado: "vigente",
+    comodatarioNombreCompleto: "Juan Carlos Pérez",
+    comodatarioDni: "30123456",
+    fechaFirma: FechaCalendario.desdeIso("2026-08-04"),
+    creadoEn: new Date("2026-08-04T15:00:00.000Z"),
+    ...overrides,
+  });
+
+  it("matches the shape the client parses", () => {
+    expect(
+      EsquemaContratoResumen.safeParse(vistaDeResumen(resumenDePrueba())).success,
+    ).toBe(true);
+  });
+
+  it("walking every key at every depth yields exactly the six allowed fields", () => {
+    const vista = vistaDeResumen(resumenDePrueba());
+
+    expect(Object.keys(vista).sort()).toEqual(
+      ["comodatario", "estado", "fechaFirma", "id", "numero"].sort(),
+    );
+    expect(Object.keys(vista.comodatario).sort()).toEqual(["dni", "nombreCompleto"]);
+  });
+
+  it("contains no forbidden field anywhere in the serialized body", () => {
+    const serializado = JSON.stringify(vistaDeResumen(resumenDePrueba()));
+
+    for (const prohibido of [
+      "domicilioCalle",
+      "ciudad",
+      "provincia",
+      "whatsapp",
+      "antenaMac",
+      "antenaModelo",
+      "poe",
+      "canoMetros",
+      "plazo",
+      "plantillaVersionId",
+      "documentos",
+      "sha256",
+      "ruta",
+      "eventos",
+      "firmanteId",
+      "imagenPng",
+      "trazos",
+      "tecnicoId",
+      "dispositivoId",
+      "ip",
+      "userAgent",
+      "latitud",
+      "longitud",
+      "creadoEn",
+      "comodatarioNombreBusqueda",
+      "nombreBusqueda",
+    ]) {
+      expect(serializado).not.toContain(prohibido);
+    }
+  });
+
+  it("a draft reports a null numero and a null fechaFirma", () => {
+    const vista = vistaDeResumen(
+      resumenDePrueba({ estado: "borrador", numero: null, fechaFirma: null }),
+    );
+
+    expect(vista.numero).toBeNull();
+    expect(vista.fechaFirma).toBeNull();
+  });
+
+  it("dots the DNI for display, reusing Dni.formateado", () => {
+    const vista = vistaDeResumen(resumenDePrueba({ comodatarioDni: "30123456" }));
+
+    expect(vista.comodatario.dni).toBe("30.123.456");
+  });
+
+  it("passes the display name through untouched — casing and accents intact", () => {
+    const vista = vistaDeResumen(
+      resumenDePrueba({ comodatarioNombreCompleto: "Peña" }),
+    );
+
+    expect(vista.comodatario.nombreCompleto).toBe("Peña");
+  });
+});
+
+describe("vistaDeListaContratos", () => {
+  const resumen = (id: string): ResumenDeContrato => ({
+    id,
+    numero: 1042,
+    estado: "vigente",
+    comodatarioNombreCompleto: "Juan Carlos Pérez",
+    comodatarioDni: "30123456",
+    fechaFirma: FechaCalendario.desdeIso("2026-08-04"),
+    creadoEn: new Date("2026-08-04T15:00:00.000Z"),
+  });
+
+  it("matches the shape the client parses", () => {
+    const vista = vistaDeListaContratos(
+      { resumenes: [resumen("a"), resumen("b")], total: 7 },
+      2,
+      20,
+    );
+
+    expect(EsquemaListaContratos.safeParse(vista).success).toBe(true);
+  });
+
+  it("carries the untruncated total separately from elementos.length", () => {
+    const vista = vistaDeListaContratos(
+      { resumenes: [resumen("a")], total: 25 },
+      1,
+      20,
+    );
+
+    expect(vista.elementos).toHaveLength(1);
+    expect(vista.total).toBe(25);
+  });
+
+  it("echoes pagina and tamanoPagina, since the repository result does not carry them", () => {
+    const vista = vistaDeListaContratos({ resumenes: [], total: 0 }, 3, 10);
+
+    expect(vista.pagina).toBe(3);
+    expect(vista.tamanoPagina).toBe(10);
+  });
+
+  it("an empty result is still a well-formed list, never omitted fields", () => {
+    const vista = vistaDeListaContratos({ resumenes: [], total: 0 }, 1, 20);
+
+    expect(vista).toEqual({ elementos: [], total: 0, pagina: 1, tamanoPagina: 20 });
   });
 });
 

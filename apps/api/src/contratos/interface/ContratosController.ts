@@ -1,12 +1,15 @@
 import {
   EsquemaActualizarContrato,
+  EsquemaConsultaDeContratos,
   EsquemaCrearContrato,
   EsquemaFirmarContrato,
   type DatosActualizarContrato,
+  type DatosConsultaDeContratos,
   type DatosContratoCreado,
   type DatosContratoDetalle,
   type DatosCrearContrato,
   type DatosFirmarContrato,
+  type DatosListaContratos,
   type DatosPrevisualizacion,
   type TipoDocumentoFirmado,
 } from "@contratos/esquemas";
@@ -21,6 +24,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   StreamableFile,
 } from "@nestjs/common";
 
@@ -29,6 +33,7 @@ import { Roles } from "../../identidad/interface/decorators/Roles";
 import { UsuarioActual } from "../../identidad/interface/decorators/UsuarioActual";
 import type { UsuarioAutenticado } from "../../identidad/interface/decorators/UsuarioActual";
 import type { ActualizarBorrador } from "../application/ActualizarBorrador";
+import type { BuscarContratos } from "../application/BuscarContratos";
 import type { ConsultarContrato } from "../application/ConsultarContrato";
 import type { CrearBorrador } from "../application/CrearBorrador";
 import type { DescargarDocumento } from "../application/DescargarDocumento";
@@ -37,6 +42,7 @@ import type { Reloj } from "../application/ports/Reloj";
 import type { PrevisualizarContrato } from "../application/PrevisualizarContrato";
 import {
   ACTUALIZAR_BORRADOR,
+  BUSCAR_CONTRATOS,
   CONSULTAR_CONTRATO,
   CREAR_BORRADOR,
   DESCARGAR_DOCUMENTO,
@@ -54,6 +60,7 @@ import {
   RUTA_CONTRATOS,
   vistaDeContrato,
   vistaDeContratoCreado,
+  vistaDeListaContratos,
   vistaDePrevisualizacion,
 } from "./dto/vistas";
 
@@ -100,6 +107,7 @@ export class ContratosController {
     @Inject(DESCARGAR_DOCUMENTO)
     private readonly descargarDocumento: DescargarDocumento,
     @Inject(RELOJ_CONTRATOS) private readonly reloj: Reloj,
+    @Inject(BUSCAR_CONTRATOS) private readonly buscarContratos: BuscarContratos,
   ) {}
 
   /**
@@ -202,6 +210,34 @@ export class ContratosController {
     });
 
     return vistaDeContrato(contrato);
+  }
+
+  /**
+   * The office list and search (DESIGN.md D4/D6). `oficina` and `admin` see
+   * every contract, unscoped — `tecnico` is excluded from this endpoint
+   * entirely, so DESIGN.md §9's deferred technician row-scoping stays open
+   * and unaffected. This unscoped decision must not be generalized to
+   * `tecnico` (R-2.8).
+   *
+   * An empty match is still 200 with `elementos: []` (R-2.7) — never 404,
+   * never an error. Query-string shape and bounds are validated once by
+   * `EsquemaConsultaDeContratos`, so `tamanoPagina` above 100 is rejected
+   * outright rather than silently clamped.
+   */
+  @Roles("oficina", "admin")
+  @Get()
+  async listar(
+    @Query(new ZodValidationPipe(EsquemaConsultaDeContratos))
+    consulta: DatosConsultaDeContratos,
+  ): Promise<DatosListaContratos> {
+    const resultado = await this.buscarContratos.ejecutar({
+      ...(consulta.termino === undefined ? {} : { termino: consulta.termino }),
+      estados: consulta.estados,
+      pagina: consulta.pagina,
+      tamanoPagina: consulta.tamanoPagina,
+    });
+
+    return vistaDeListaContratos(resultado, consulta.pagina, consulta.tamanoPagina);
   }
 
   /**
