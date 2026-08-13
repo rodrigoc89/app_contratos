@@ -44,8 +44,8 @@ function contrato(): DatosContratoDetalle {
 function renderizar() {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const enrutador = createMemoryRouter(
-    [{ path: "/contratos/:id", element: <PaginaDetalleContrato /> }],
-    { initialEntries: ["/contratos/c1"] },
+    [{ path: "/panel/contratos/:id", element: <PaginaDetalleContrato /> }],
+    { initialEntries: ["/panel/contratos/c1"] },
   );
   render(
     <QueryClientProvider client={cliente}>
@@ -120,7 +120,7 @@ describe("PaginaDetalleContrato", () => {
 
     expect(screen.getByRole("link", { name: /Volver al listado/ })).toHaveAttribute(
       "href",
-      "/contratos",
+      "/panel",
     );
   });
 });

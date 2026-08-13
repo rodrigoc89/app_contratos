@@ -202,3 +202,53 @@
   font-size: var(--fuente-grande);
   cursor: pointer;
 }
+
+/* --- CabeceraDeSesion ------------------------------------------------------ */
+
+/**
+ * Shared by both shells: the tablet and the office panel. Until this existed
+ * the only way out of the app was the `PanelNoDisponible` fallback screen,
+ * which meant the técnico on a SHARED tablet had none — and `cerrarSesion`
+ * is what revokes the refresh-token family and wipes the local draft, so a
+ * customer's DNI outlived the visit that captured it.
+ *
+ * Deliberately quiet: it is always on screen and must never compete with the
+ * work. The logout is a bordered button rather than a filled one for the
+ * same reason the estado chips are.
+ */
+.cabecera-sesion {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-4);
+  border-bottom: 1px solid var(--color-borde-suave);
+}
+
+.cabecera-sesion__usuario {
+  color: var(--color-texto-suave);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.cabecera-sesion .boton {
+  min-height: var(--tamano-toque-minimo);
+  min-width: var(--tamano-toque-minimo);
+  margin: 0;
+  padding: var(--espacio-2) var(--espacio-4);
+  background-color: var(--color-fondo);
+  border-color: var(--color-borde-suave);
+  color: var(--color-primario);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.cabecera-sesion .boton:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--color-primario) 8%, var(--color-fondo));
+  border-color: var(--color-primario);
+}
+
+.cabecera-sesion .boton:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}

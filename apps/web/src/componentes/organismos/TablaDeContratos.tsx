@@ -95,7 +95,7 @@ export function TablaDeContratos({ contratos }: PropiedadesTablaDeContratos) {
                   row is reachable. One link per row also keeps the tab order
                   at one stop per row (R-3.7).
                 */}
-                <Link className="tabla-de-contratos__enlace" to={`/contratos/${contrato.id}`}>
+                <Link className="tabla-de-contratos__enlace" to={`/panel/contratos/${contrato.id}`}>
                   {contrato.comodatario.nombreCompleto}
                 </Link>
               </td>

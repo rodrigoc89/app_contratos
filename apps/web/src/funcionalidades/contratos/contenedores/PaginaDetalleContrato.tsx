@@ -54,7 +54,7 @@ export function PaginaDetalleContrato() {
   return (
     <div className="pagina-detalle-contrato">
       <p className="pagina-detalle-contrato__volver">
-        <Link to="/contratos">← Volver al listado</Link>
+        <Link to="/panel">← Volver al listado</Link>
       </p>
 
       {isLoading && (

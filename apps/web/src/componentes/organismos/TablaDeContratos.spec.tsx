@@ -157,7 +157,7 @@ describe("TablaDeContratos", () => {
     const fila = screen.getAllByRole("row")[1] as HTMLElement;
     const enlace = within(fila).getByRole("link", { name: "Ana López" });
 
-    expect(enlace).toHaveAttribute("href", "/contratos/abc-123");
+    expect(enlace).toHaveAttribute("href", "/panel/contratos/abc-123");
   });
 
   it("still exposes no click handler on the row itself", () => {

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DatosSesion } from "@contratos/esquemas";
@@ -18,7 +18,7 @@ const buscarContratosSimulado = vi.mocked(buscarContratos);
 
 /**
  * R-3.1 / DESIGN.md D9 (revision: role gating resolves a home, not a dead
- * end) — `tecnico` reaches `/`, `oficina`/`admin` reach `/contratos`, and
+ * end) — `tecnico` reaches `/`, `oficina`/`admin` reach `/panel`, and
  * any role none of the guards recognize lands on the role-agnostic
  * fallback. Previously every non-`tecnico` role was hard-redirected to
  * `/panel-no-disponible`, so a successful `oficina` login read as a broken
@@ -101,19 +101,19 @@ describe("route guards", () => {
     expect(screen.queryByRole("heading", { name: "Datos del cliente" })).not.toBeInTheDocument();
   });
 
-  it("reaches /contratos directly as oficina", async () => {
+  it("reaches /panel directly as oficina", async () => {
     buscarContratosSimulado.mockResolvedValue({ elementos: [], total: 0, pagina: 1, tamanoPagina: 20 });
     establecerSesion(sesionFalsa("oficina"));
 
-    renderizarEn("/contratos");
+    renderizarEn("/panel");
 
     expect(await screen.findByRole("heading", { name: "Contratos" })).toBeInTheDocument();
   });
 
-  it("sends a técnico who tries /contratos back home, not to an error", () => {
+  it("sends a técnico who tries /panel back home, not to an error", () => {
     establecerSesion(sesionFalsa("tecnico"));
 
-    renderizarEn("/contratos");
+    renderizarEn("/panel");
 
     expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
   });
@@ -193,5 +193,48 @@ describe("route guards", () => {
     expect(await screen.findByLabelText("Usuario")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(/expiró/i);
     expect(obtenerTokenDeRefrescoGuardado()).toBeNull();
+  });
+});
+
+/**
+ * The office panel's client routes must not collide with the API's.
+ *
+ * `/contratos` is an API path — nginx routes it to the server with
+ * `location ^~ /contratos`, and the service worker's
+ * `navigateFallbackDenylist` explicitly refuses to answer navigations there
+ * with the app shell. Both are correct, and both were decided while
+ * `/contratos` was API-only.
+ *
+ * When the panel took the same path for its client routes, a client-side
+ * click still worked — React Router never asks the server — but a RELOAD, a
+ * bookmark, a shared link or "open in new tab" sent a real navigation to
+ * `/contratos`, which answered the API's 401 JSON and rendered it as the
+ * page. Measured in a browser: no `#root` at all, just the error body.
+ *
+ * This test exists so the collision cannot come back silently.
+ */
+describe("client routes never collide with API paths", () => {
+  const RUTAS_DE_LA_API = ["/auth", "/contratos", "/salud"];
+
+  function rutasDeclaradas(rutas: readonly RouteObject[], prefijo = ""): string[] {
+    return rutas.flatMap((ruta) => {
+      const propia = ruta.path ?? "";
+      const completa = propia.startsWith("/") ? propia : `${prefijo}${propia}`;
+      return [
+        ...(ruta.path === undefined ? [] : [completa]),
+        ...rutasDeclaradas(ruta.children ?? [], completa),
+      ];
+    });
+  }
+
+  it.each(RUTAS_DE_LA_API)("declares no client route under %s", (rutaApi) => {
+    const colisiones = rutasDeclaradas(rutas).filter(
+      (ruta) => ruta === rutaApi || ruta.startsWith(`${rutaApi}/`),
+    );
+
+    expect(
+      colisiones,
+      `these client routes sit under the API path ${rutaApi}: a reload would be answered by the API, not the app`,
+    ).toEqual([]);
   });
 });

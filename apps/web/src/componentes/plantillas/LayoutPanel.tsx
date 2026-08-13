@@ -2,6 +2,12 @@ import type { ReactNode } from "react";
 
 interface PropiedadesLayoutPanel {
   readonly children: ReactNode;
+  /**
+   * Injected rather than rendered here: the header needs the session, and
+   * `componentes/` may not import `datos/` (`convencionDeCapas.spec.ts`).
+   * The route tree supplies it, so this template stays presentational.
+   */
+  readonly cabecera?: ReactNode;
 }
 
 /**
@@ -14,9 +20,10 @@ interface PropiedadesLayoutPanel {
  * a desktop operator reading for hours wants the browser default, not the
  * 18px `:root` value sized for a tablet held at arm's length.
  */
-export function LayoutPanel({ children }: PropiedadesLayoutPanel) {
+export function LayoutPanel({ children, cabecera }: PropiedadesLayoutPanel) {
   return (
     <div className="layout-panel">
+      {cabecera}
       <main className="layout-panel__contenido">{children}</main>
     </div>
   );

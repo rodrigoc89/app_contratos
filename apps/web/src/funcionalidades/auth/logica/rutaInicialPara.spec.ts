@@ -12,11 +12,11 @@ describe("rutaInicialPara", () => {
   });
 
   it("sends oficina to the contract list", () => {
-    expect(rutaInicialPara("oficina")).toBe("/contratos");
+    expect(rutaInicialPara("oficina")).toBe("/panel");
   });
 
   it("sends admin to the contract list too", () => {
-    expect(rutaInicialPara("admin")).toBe("/contratos");
+    expect(rutaInicialPara("admin")).toBe("/panel");
   });
 
   it("sends an unrecognized role to the fallback screen, never crashing", () => {
