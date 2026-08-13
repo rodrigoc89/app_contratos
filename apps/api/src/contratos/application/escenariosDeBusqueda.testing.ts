@@ -73,6 +73,26 @@ export const SEMILLAS_DE_BUSQUEDA: readonly SemillaDeBusqueda[] = [
     estado: "anulado",
     creadoEn: new Date("2026-01-05T10:00:00.000Z"),
   },
+  /**
+   * R-2.5's required discriminating fixture: a name that CONTAINS the digit
+   * string used as a DNI search term, on a comodatario whose DNI does NOT
+   * start with it. Without this row, a repository that ORs the dni-prefix
+   * and name-substring branches passes every other scenario in this table
+   * undetected — "DNI search is a prefix match on digits" below would keep
+   * returning exactly the two Pérez rows either way, so the exclusivity bug
+   * never surfaces. This row makes it surface: its name contains "30123" as
+   * a literal substring, so an OR'd repository would wrongly include it for
+   * the dni term "30123", while its own DNI ("40999888") never matches that
+   * prefix. Newest `creadoEn` on purpose, so it also touches the ordering
+   * and pagination scenarios below rather than sitting inertly at the tail.
+   */
+  {
+    id: "escenario-30123-servicios",
+    nombreCompleto: "30123 Servicios",
+    dni: "40999888",
+    estado: "vigente",
+    creadoEn: new Date("2026-01-06T10:00:00.000Z"),
+  },
 ];
 
 export interface EscenarioDeBusqueda {
@@ -84,14 +104,29 @@ export interface EscenarioDeBusqueda {
 
 const SIN_TERMINO: CriteriosDeBusqueda["termino"] = null;
 
+/**
+ * Re-baselined for the seventh seed (`escenario-30123-servicios`, R-2.5's
+ * required discriminating fixture). Every scenario below was re-derived by
+ * walking the fixed matching rule — name-substring OR dni-prefix, never
+ * both — against all seven seeds by hand, not by patching only the rows
+ * that looked affected: five of the thirteen pre-existing scenarios
+ * genuinely change (the unfiltered listing and both `estado`/pagination
+ * scenarios that read every row, since the new seed is "vigente" and the
+ * newest of the seven); the other eight are unchanged because their match
+ * depends only on a name/DNI substring the new seed's fixed name
+ * ("30123 Servicios") and DNI ("40999888") never satisfies, so no choice of
+ * its `estado`/`creadoEn` could have altered them.
+ */
 export const ESCENARIOS_DE_BUSQUEDA: readonly EscenarioDeBusqueda[] = [
   {
     nombre: "no filters: newest first by creadoEn, id DESC breaking ties (R-2.2)",
     criterios: { termino: SIN_TERMINO, estados: [], pagina: 1, tamanoPagina: 20 },
     // gomez-baja and gomez-anulado share one creadoEn instant: "escenario-gomez-baja"
     // sorts after "escenario-gomez-anulado" lexicographically ('b' > 'a'), so
-    // it comes FIRST under id DESC.
+    // it comes FIRST under id DESC. escenario-30123-servicios carries the
+    // newest creadoEn of the seven, so it leads.
     idsEsperados: [
+      "escenario-30123-servicios",
       "escenario-gomez-baja",
       "escenario-gomez-anulado",
       "escenario-pena",
@@ -99,7 +134,7 @@ export const ESCENARIOS_DE_BUSQUEDA: readonly EscenarioDeBusqueda[] = [
       "escenario-perez-borrador",
       "escenario-perez-vigente",
     ],
-    totalEsperado: 6,
+    totalEsperado: 7,
   },
   {
     nombre: "accent-insensitive, ñ-sensitive name search: 'perez' finds only Pérez (R-2.4)",
@@ -161,6 +196,26 @@ export const ESCENARIOS_DE_BUSQUEDA: readonly EscenarioDeBusqueda[] = [
     idsEsperados: ["escenario-perez-borrador", "escenario-perez-vigente"],
     totalEsperado: 2,
   },
+  /**
+   * R-2.5's third, previously-absent scenario: a `dni` term MUST NOT also
+   * run a name match. "escenario-30123-servicios" is named so its
+   * normalized name literally contains the digit string used as the term,
+   * but its own DNI does not start with it — the required fixture (see the
+   * comment on SEMILLAS_DE_BUSQUEDA). A repository that ORs the dni-prefix
+   * and name-substring branches would wrongly include it here; the correct,
+   * exclusive implementation excludes it, exactly as it already does above.
+   */
+  {
+    nombre: "a DNI term does not also run a name search — the required fixture is excluded (R-2.5)",
+    criterios: {
+      termino: { tipo: "dni", digitos: "30123" },
+      estados: [],
+      pagina: 1,
+      tamanoPagina: 20,
+    },
+    idsEsperados: ["escenario-perez-borrador", "escenario-perez-vigente"],
+    totalEsperado: 2,
+  },
   {
     nombre: "a non-matching DNI prefix returns nothing (R-2.5)",
     criterios: {
@@ -175,8 +230,14 @@ export const ESCENARIOS_DE_BUSQUEDA: readonly EscenarioDeBusqueda[] = [
   {
     nombre: "estado filter returns only that state (R-2.6)",
     criterios: { termino: SIN_TERMINO, estados: ["vigente"], pagina: 1, tamanoPagina: 20 },
-    idsEsperados: ["escenario-pena", "escenario-nunez", "escenario-perez-vigente"],
-    totalEsperado: 3,
+    // escenario-30123-servicios is also "vigente", newest first.
+    idsEsperados: [
+      "escenario-30123-servicios",
+      "escenario-pena",
+      "escenario-nunez",
+      "escenario-perez-vigente",
+    ],
+    totalEsperado: 4,
   },
   {
     nombre: "term and state combine (R-2.6)",
@@ -192,25 +253,32 @@ export const ESCENARIOS_DE_BUSQUEDA: readonly EscenarioDeBusqueda[] = [
   {
     nombre: "pagination: page 1 of 2, size 4 — total stays untruncated (R-2.3)",
     criterios: { termino: SIN_TERMINO, estados: [], pagina: 1, tamanoPagina: 4 },
+    // Seven rows now, so page 1 of size 4 is the four newest.
     idsEsperados: [
+      "escenario-30123-servicios",
       "escenario-gomez-baja",
       "escenario-gomez-anulado",
       "escenario-pena",
-      "escenario-nunez",
     ],
-    totalEsperado: 6,
+    totalEsperado: 7,
   },
   {
     nombre: "pagination: page 2 of 2, size 4",
     criterios: { termino: SIN_TERMINO, estados: [], pagina: 2, tamanoPagina: 4 },
-    idsEsperados: ["escenario-perez-borrador", "escenario-perez-vigente"],
-    totalEsperado: 6,
+    // The remaining three of seven — page 2 is no longer exactly the last
+    // two rows now that a seventh row exists.
+    idsEsperados: [
+      "escenario-nunez",
+      "escenario-perez-borrador",
+      "escenario-perez-vigente",
+    ],
+    totalEsperado: 7,
   },
   {
     nombre: "a page past the end is empty, not an error (R-2.3)",
     criterios: { termino: SIN_TERMINO, estados: [], pagina: 99, tamanoPagina: 20 },
     idsEsperados: [],
-    totalEsperado: 6,
+    totalEsperado: 7,
   },
   {
     nombre: "a matching term returns an honest empty result (R-2.7)",
