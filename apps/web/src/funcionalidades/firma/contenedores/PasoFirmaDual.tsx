@@ -174,6 +174,28 @@ export function PasoFirmaDual({
   );
   const listoParaFirmar = gatesCompletos && firmasSuficientes;
 
+  /*
+    A disabled button was the entire message. The técnico is standing in a
+    customer's house, and "Firmar" greyed out with nothing beside it is
+    indistinguishable from an app that broke — which is exactly how it was
+    reported. Every fact needed to answer it already existed here; none of it
+    reached the screen.
+
+    Derived from the same two conditions the button reads, never tracked
+    separately: a second source could disagree with the button and tell the
+    técnico to do something that changes nothing.
+  */
+  const pendientes = DOCUMENTOS_DEL_CONTRATO.flatMap((documento) => {
+    const faltas: string[] = [];
+    if (puertas[documento].estado !== "completo") {
+      faltas.push(`Leer ${TITULOS[documento]} hasta el final`);
+    }
+    if ((firmas[documento]?.captura.cantidadPuntos ?? 0) < MINIMO_PUNTOS_FIRMA) {
+      faltas.push(`Falta la firma de ${TITULOS[documento]}`);
+    }
+    return faltas;
+  });
+
   function manejarFirmar(): void {
     const condiciones = firmas.condiciones_generales;
     const comodato = firmas.comodato;
@@ -210,6 +232,21 @@ export function PasoFirmaDual({
           </section>
         );
       })}
+      {/*
+        `role="status"`, not `alert`: nothing has gone wrong, and this text
+        changes as the técnico works through the list. An alert would
+        interrupt a screen reader on every scroll.
+      */}
+      {pendientes.length > 0 && (
+        <div role="status" aria-label="Qué falta para poder firmar" className="paso-firma__pendientes">
+          <p className="paso-firma__pendientes-titulo">Para firmar falta:</p>
+          <ul>
+            {pendientes.map((falta) => (
+              <li key={falta}>{falta}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <Boton type="button" disabled={!listoParaFirmar} onClick={manejarFirmar}>
         Firmar
       </Boton>

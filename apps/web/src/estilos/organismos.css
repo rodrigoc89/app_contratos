@@ -403,3 +403,30 @@
   outline: 3px solid var(--color-foco);
   outline-offset: 2px;
 }
+
+/*
+  What is still missing before `Firmar` can be tapped. It sits directly above
+  the button it explains, because the técnico's eye is already there —
+  wondering why nothing happens.
+*/
+.paso-firma__pendientes {
+  margin: var(--espacio-4) var(--espacio-4) 0;
+  padding: var(--espacio-3) var(--espacio-4);
+  border: 2px solid var(--color-borde-suave);
+  border-radius: var(--radio-borde);
+  color: var(--color-texto);
+}
+
+.paso-firma__pendientes-titulo {
+  margin: 0 0 var(--espacio-2);
+  font-weight: 700;
+}
+
+.paso-firma__pendientes ul {
+  margin: 0;
+  padding-left: var(--espacio-5);
+}
+
+.paso-firma__pendientes li {
+  margin-bottom: var(--espacio-1);
+}
