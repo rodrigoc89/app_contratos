@@ -629,13 +629,39 @@ protects against disk failure, not against an account problem — if the account
 goes, the server and its backups go together. **The independent copy of the
 database and the PDF archive, outside the provider, still has to be built.**
 
-**Confirm before paying: where the datacentre physically is**, in writing, not
-the company's address. The residency argument below is the reason an Argentine
-provider was attractive, and it only holds if the machine is actually in
-Argentina — some Argentine providers host in the United States or Brazil. If it
-is not, the international-transfer consent clause
-(`docs/borrador-clausula-datos-personales.md`) is required exactly as it would
-have been with HostGator.
+**Datacentre location — confirmed (August 2026).** This was the one thing that
+had to be checked before paying, because the residency argument is the reason
+an Argentine provider was attractive and it only holds if the machine is
+actually in Argentina; some Argentine providers host in the United States or
+Brazil.
+
+DonWeb's own Cloud Server page states it plainly: *"Nuestros nodos de Cloud
+Servers están localizados en Argentina, en alguno de nuestros cuatro
+datacenter"*. The company operates from Rosario, Santa Fe. **The data stays in
+the country**, which is what §10's residency reasoning needed.
+
+**One nuance that must not be misread.** The same page also says: *"Las IPs
+asignadas a cada Cloud Server pueden estar geolocalizadas en Argentina o
+Estados Unidos. Esta asignación se realiza automáticamente, y no es posible
+seleccionar una ubicación específica bajo pedido."*
+
+That is **IP geolocation, not data location**. The machine and the stored
+contracts are in Argentina; what may register as American is the address block
+the instance answers on — a routing and registration detail. Ley 25.326 governs
+where personal data is stored and processed, so this does not create an
+international transfer. Recorded here explicitly because "our IP says United
+States" is exactly the kind of line that gets read later as "the data left the
+country" when it did not, and because the reverse mistake — ignoring it when
+some future integration geolocates by IP — is also possible.
+
+**Consequence for the clause.** With the data in Argentina, the art. 12
+international-transfer consent stops being load-bearing:
+`docs/borrador-clausula-datos-personales.md` is no longer *required* to make
+the deployment lawful on residency grounds. It remains worth having — art. 6
+still requires informing the data subject of purpose, responsible party and
+their access/rectification/suppression rights — but it is now good practice
+rather than a dependency. That reduction is itself a reason the provider choice
+was worth revisiting before buying.
 
 ### Provider decision
 
@@ -715,10 +741,12 @@ against DonWeb actually is or is not.
 ### Consequence of a foreign datacentre
 
 Written when HostGator, whose datacentres are in the United States, was the
-decision. It still applies: DonWeb was chosen partly because an Argentine
-provider ought to remove this problem, but **the datacentre's physical location
-has not been confirmed** (see the catalogue check above). Until it is in
-writing, assume this section governs. Two things follow.
+decision. **It no longer governs**: DonWeb's Cloud Server nodes are in
+Argentina, confirmed against the provider's own page (see the catalogue check
+above), so no international transfer takes place. Kept because the reasoning is
+what made an Argentine datacentre worth paying attention to, and because it
+applies again the day any part of this system is hosted abroad. Two things
+followed.
 
 **Latency** is not a problem. Signing is a handful of requests and the office
 panel is low-traffic; a few hundred milliseconds is invisible in this

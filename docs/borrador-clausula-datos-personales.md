@@ -3,6 +3,15 @@
 > **Este documento es un borrador para revisión legal. No está incorporado a
 > ninguna plantilla y no debe publicarse sin esa revisión.** El texto de un
 > contrato que un cliente firma no es una decisión técnica.
+>
+> **Cambió una premisa desde la primera versión.** El alojamiento pasó a ser
+> argentino, así que la cláusula **dejó de ser un requisito** para que el
+> tratamiento sea lícito por residencia de datos, y pasó a ser buena práctica:
+> el artículo 6 de la Ley 25.326 igual exige informar al titular la finalidad,
+> quién es el responsable y sus derechos. **El párrafo sobre transferencia
+> internacional (artículo 12) probablemente sobre** — consentir algo que no
+> ocurre no es neutro. Se deja escrito, marcado, para que lo decida la revisión
+> y no yo.
 
 Escrito en español porque su destinatario es quien haga la revisión legal, y
 porque el contenido es texto contractual.
@@ -27,9 +36,16 @@ La situación de hecho, verificada sobre el repositorio:
   ciudad y número de WhatsApp**, más la **firma manuscrita** — imagen y
   trazos con coordenadas y tiempos — y, cuando el dispositivo la otorga, la
   **ubicación geográfica** del momento de la firma.
-- El alojamiento decidido es un VPS de **HostGator**, fuera de la Argentina.
-  Desde la primera firma real hay transferencia internacional de datos
-  personales de titulares argentinos.
+- El alojamiento decidido es un **Cloud Server de DonWeb, con nodos en la
+  Argentina** (confirmado en agosto de 2026 contra la propia página del
+  proveedor; ver `DESIGN.md` §10). **No hay transferencia internacional de
+  datos.** Una versión anterior de este borrador asumía un VPS de HostGator en
+  Estados Unidos; esa premisa quedó sin efecto al cambiar el proveedor.
+
+  Corresponde advertir un matiz que se presta a confusión: el proveedor aclara
+  que la **IP** asignada puede estar geolocalizada en la Argentina o en Estados
+  Unidos. Eso es un dato de ruteo y registro, no el lugar donde se almacenan
+  los datos, que es lo que la Ley 25.326 considera.
 
 ## Por qué hay que resolverlo antes de la primera firma real
 
@@ -92,9 +108,12 @@ y antes del párrafo de cierre.
 
 No los resuelvo yo, y ninguno es menor:
 
-- **Si el consentimiento del artículo 12 alcanza**, o si conviene además
-  alojar en la Argentina para no depender de él. Un cambio de proveedor es
-  más barato antes de comprar que después.
+- **Si el párrafo de transferencia internacional debe eliminarse.** Esta
+  pregunta era, en la primera versión, si el consentimiento del artículo 12
+  alcanzaba o convenía alojar en la Argentina. Se resolvió alojando acá, antes
+  de comprar. Queda entonces la inversa: **con los datos en el país, incluir un
+  consentimiento a una transferencia que no sucede puede ser peor que
+  omitirlo.** El texto propuesto lo conserva a la espera de esa decisión.
 - **El plazo de conservación concreto**, que arriba quedó descrito y no
   numerado a propósito.
 - **Si la ubicación geográfica** capturada al firmar debe enumerarse
