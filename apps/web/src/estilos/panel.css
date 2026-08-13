@@ -507,6 +507,63 @@
   list-style: none;
 }
 
+/*
+  The history reads top to bottom as a sequence, so it is a rule-joined stack
+  rather than a card grid: the separator between two events is what says "and
+  then". The numbers an <ol> would print are suppressed — the order is carried
+  by position, and "1." beside "Creado" invites reading it as a step in a
+  procedure someone is meant to follow.
+*/
+.detalle-contrato__historial {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detalle-contrato__evento {
+  padding-block: var(--espacio-3);
+  border-top: 1px solid var(--color-borde-suave);
+}
+
+.detalle-contrato__evento:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+/*
+  Wraps rather than truncates. A name is the one part of this line that can be
+  arbitrarily long, and a clipped name in an audit trail is worse than a line
+  that takes two rows.
+*/
+.detalle-contrato__evento-linea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--espacio-2);
+  margin: 0;
+}
+
+.detalle-contrato__evento-hecho {
+  font-weight: 700;
+}
+
+.detalle-contrato__evento-fecha,
+.detalle-contrato__evento-autor {
+  color: var(--color-texto-suave);
+  font-size: 0.8125rem;
+}
+
+/*
+  The reason someone gave, in their words. Indented under the fact it explains
+  and set apart, so it never reads as another fact of its own.
+*/
+.detalle-contrato__evento-detalle {
+  margin: var(--espacio-1) 0 0;
+  padding-left: var(--espacio-3);
+  border-left: 2px solid var(--color-borde-suave);
+  color: var(--color-texto-suave);
+}
+
 @media (min-width: 640px) {
   .detalle-contrato__datos {
     grid-template-columns: repeat(2, minmax(0, 1fr));

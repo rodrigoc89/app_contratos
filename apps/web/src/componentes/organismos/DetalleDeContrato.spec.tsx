@@ -36,6 +36,106 @@ function contrato(sobrescrituras: Partial<DatosContratoDetalle> = {}): DatosCont
   } as DatosContratoDetalle;
 }
 
+const HISTORIA_COMPLETA: DatosContratoDetalle["eventos"] = [
+  { tipo: "creado", fecha: null, detalle: null, usuario: null },
+  { tipo: "firmado", fecha: "2026-01-05", detalle: "N° 42", usuario: null },
+  {
+    tipo: "dado_de_baja",
+    fecha: "2026-06-30",
+    detalle: "El cliente se mudó",
+    usuario: "Marcela Coronel",
+  },
+  {
+    tipo: "equipos_restituidos",
+    fecha: "2026-07-04",
+    detalle: null,
+    usuario: "Marcela Coronel",
+  },
+];
+
+/**
+ * The history is the only part of this screen that answers *what happened*
+ * rather than *what is*. It is also the only part that names an employee, so
+ * what it does with a missing name matters as much as what it does with one.
+ */
+describe("DetalleDeContrato — historial", () => {
+  const historia = () => contrato({ eventos: HISTORIA_COMPLETA });
+
+  function seccionDeHistorial(): HTMLElement {
+    return screen.getByRole("region", { name: "Historial" });
+  }
+
+  it("lists every event in the order it happened, in words rather than codes", () => {
+    render(<DetalleDeContrato contrato={historia()} onDescargar={vi.fn()} />);
+
+    const filas = within(seccionDeHistorial()).getAllByRole("listitem");
+    expect(filas.map((fila) => fila.textContent)).toEqual([
+      expect.stringContaining("Creado"),
+      expect.stringContaining("Firmado"),
+      expect.stringContaining("Dado de baja"),
+      expect.stringContaining("Equipos restituidos"),
+    ]);
+    // The wire's snake_case is an API detail, never something a person reads.
+    expect(seccionDeHistorial().textContent).not.toContain("dado_de_baja");
+    expect(seccionDeHistorial().textContent).not.toContain("equipos_restituidos");
+  });
+
+  it("names who performed each transition that had an author", () => {
+    render(<DetalleDeContrato contrato={historia()} onDescargar={vi.fn()} />);
+
+    const filas = within(seccionDeHistorial()).getAllByRole("listitem");
+    expect(filas[2]?.textContent).toContain("Marcela Coronel");
+    expect(filas[3]?.textContent).toContain("Marcela Coronel");
+  });
+
+  /**
+   * `creado` and `firmado` have no author and never will. Printing "por —"
+   * beside them would invent a missing value where there is nothing missing.
+   */
+  it("says nothing about an author where there was never one", () => {
+    render(<DetalleDeContrato contrato={historia()} onDescargar={vi.fn()} />);
+
+    const filas = within(seccionDeHistorial()).getAllByRole("listitem");
+    expect(filas[0]?.textContent).not.toContain("por");
+    expect(filas[1]?.textContent).not.toContain("por");
+  });
+
+  it("still shows the event when its date is unknown", () => {
+    render(<DetalleDeContrato contrato={historia()} onDescargar={vi.fn()} />);
+
+    const primera = within(seccionDeHistorial()).getAllByRole("listitem")[0];
+    expect(primera?.textContent).toContain("Creado");
+    expect(primera?.textContent).not.toContain("null");
+  });
+
+  it("shows the reason a transition was given, when there is one", () => {
+    render(<DetalleDeContrato contrato={historia()} onDescargar={vi.fn()} />);
+
+    expect(within(seccionDeHistorial()).getByText("El cliente se mudó")).toBeInTheDocument();
+  });
+
+  /**
+   * A contract the API answered before this field existed, or one read from a
+   * cache written then. The screen must render, not crash on `undefined`.
+   */
+  it("survives an event with no usuario field at all", () => {
+    const viejo = contrato({
+      eventos: [{ tipo: "anulado", fecha: "2026-02-01", detalle: "Error de carga" } as never],
+    });
+
+    render(<DetalleDeContrato contrato={viejo} onDescargar={vi.fn()} />);
+
+    expect(within(seccionDeHistorial()).getByText(/Anulado/)).toBeInTheDocument();
+  });
+
+  /** A draft that has only just been created still has one event. */
+  it("is absent entirely when there is nothing to tell", () => {
+    render(<DetalleDeContrato contrato={contrato({ eventos: [] })} onDescargar={vi.fn()} />);
+
+    expect(screen.queryByRole("region", { name: "Historial" })).not.toBeInTheDocument();
+  });
+});
+
 describe("DetalleDeContrato", () => {
   it("heads the screen with the contract number and its estado badge", () => {
     render(<DetalleDeContrato contrato={contrato()} onDescargar={vi.fn()} />);
