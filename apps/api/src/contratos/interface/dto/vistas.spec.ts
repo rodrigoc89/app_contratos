@@ -23,6 +23,7 @@ import { PrevisualizarContrato } from "../../application/PrevisualizarContrato";
 import type { Contrato } from "../../domain/Contrato";
 import type { ResumenDeContrato } from "../../application/ports/ContratoRepository";
 import { FechaCalendario } from "../../../shared/domain/FechaCalendario";
+import type { AutoresDeEventos } from "./vistas";
 import {
   contextoDeFirmaDesde,
   firmasDesde,
@@ -35,6 +36,14 @@ import {
 } from "./vistas";
 
 const PNG = "data:image/png;base64,iVBORw0KGgo=";
+
+/**
+ * Drafts and freshly signed contracts have no actor to resolve: `creado` and
+ * `firmado` carry none. Named rather than inlined so a `new Map()` in these
+ * tests always means "this contract has no authors", never "I forgot to pass
+ * them" — the two look identical at a call site otherwise.
+ */
+const SIN_AUTORES: AutoresDeEventos = new Map();
 
 const trazo = (puntos = 14) =>
   Array.from({ length: puntos }, (_, i) => ({ x: i, y: i % 4, t: i * 16 }));
@@ -79,13 +88,13 @@ describe("vistaDeContrato", () => {
       const contrato = await contratos.porId(ID_CONTRATO);
 
       expect(
-        EsquemaContratoDetalle.safeParse(vistaDeContrato(contrato as Contrato))
+        EsquemaContratoDetalle.safeParse(vistaDeContrato(contrato as Contrato, SIN_AUTORES))
           .success,
       ).toBe(true);
     });
 
     it("presents the customer's data the way the contract prints it", async () => {
-      const vista = vistaDeContrato((await contratos.porId(ID_CONTRATO)) as Contrato);
+      const vista = vistaDeContrato((await contratos.porId(ID_CONTRATO)) as Contrato, SIN_AUTORES);
 
       expect(vista.comodatario.dni).toBe("30.123.456");
       expect(vista.comodatario.whatsapp).toBe("+5493854123456");
@@ -95,7 +104,7 @@ describe("vistaDeContrato", () => {
     });
 
     it("has no number, no term and no documents yet", async () => {
-      const vista = vistaDeContrato((await contratos.porId(ID_CONTRATO)) as Contrato);
+      const vista = vistaDeContrato((await contratos.porId(ID_CONTRATO)) as Contrato, SIN_AUTORES);
 
       expect(vista.numero).toBeNull();
       expect(vista.plazo).toBeNull();
@@ -105,10 +114,10 @@ describe("vistaDeContrato", () => {
     });
 
     it("carries the creation event", async () => {
-      const vista = vistaDeContrato((await contratos.porId(ID_CONTRATO)) as Contrato);
+      const vista = vistaDeContrato((await contratos.porId(ID_CONTRATO)) as Contrato, SIN_AUTORES);
 
       expect(vista.eventos).toEqual([
-        { tipo: "creado", fecha: null, detalle: null },
+        { tipo: "creado", fecha: null, detalle: null, usuario: null },
       ]);
     });
   });
@@ -117,13 +126,13 @@ describe("vistaDeContrato", () => {
     it("matches the shape the client parses", async () => {
       const contrato = await firmarlo();
 
-      expect(EsquemaContratoDetalle.safeParse(vistaDeContrato(contrato)).success).toBe(
+      expect(EsquemaContratoDetalle.safeParse(vistaDeContrato(contrato, SIN_AUTORES)).success).toBe(
         true,
       );
     });
 
     it("carries the number, the signing date and the derived expiry", async () => {
-      const vista = vistaDeContrato(await firmarlo());
+      const vista = vistaDeContrato(await firmarlo(), SIN_AUTORES);
 
       expect(vista.estado).toBe("vigente");
       expect(vista.numero).toBe(1042);
@@ -140,7 +149,7 @@ describe("vistaDeContrato", () => {
      * map of the server, and there is no reason for a browser to have one.
      */
     it("offers a download link and a hash, never a stored path", async () => {
-      const vista = vistaDeContrato(await firmarlo());
+      const vista = vistaDeContrato(await firmarlo(), SIN_AUTORES);
 
       expect(vista.documentos).toHaveLength(2);
       expect(vista.documentos[0]?.enlace).toBe(
@@ -157,7 +166,7 @@ describe("vistaDeContrato", () => {
      * another name.
      */
     it("carries no signature image, no stroke data and no signing context", async () => {
-      const serializado = JSON.stringify(vistaDeContrato(await firmarlo()));
+      const serializado = JSON.stringify(vistaDeContrato(await firmarlo(), SIN_AUTORES));
 
       expect(serializado).not.toContain("imagenPng");
       expect(serializado).not.toContain("trazos");
@@ -167,12 +176,66 @@ describe("vistaDeContrato", () => {
     });
 
     it("lists the events in the order they happened", async () => {
-      const vista = vistaDeContrato(await firmarlo());
+      const vista = vistaDeContrato(await firmarlo(), SIN_AUTORES);
 
       expect(vista.eventos.map((evento) => evento.tipo)).toEqual([
         "creado",
         "firmado",
       ]);
+    });
+  });
+
+  /**
+   * DESIGN.md §3 — ending someone else's agreement records a reason *and* an
+   * actor. The aggregate stores the actor's id; this is where it becomes a
+   * name, because a UUID on screen answers nobody's question.
+   */
+  describe("the actor of a transition", () => {
+    const ID_OFICINA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+
+    const contratoDadoDeBaja = async (): Promise<Contrato> => {
+      const contrato = await firmarlo();
+      contrato.darDeBaja({
+        motivo: "El cliente se mudó de la zona de cobertura",
+        fecha: FechaCalendario.desdeIso("2026-08-12"),
+        usuarioId: ID_OFICINA,
+      });
+
+      return contrato;
+    };
+
+    it("names the actor, resolved from the id the event stores", async () => {
+      const vista = vistaDeContrato(
+        await contratoDadoDeBaja(),
+        new Map([[ID_OFICINA, "oficina"]]),
+      );
+
+      expect(vista.eventos.map((evento) => [evento.tipo, evento.usuario])).toEqual([
+        ["creado", null],
+        ["firmado", null],
+        ["dado_de_baja", "oficina"],
+      ]);
+    });
+
+    /**
+     * The id is the audit record and it stays in the database. What travels
+     * to a browser is the name, so an unresolvable id degrades to "no name",
+     * never to a leaked identifier.
+     */
+    it("emits no name — and no id — when the id resolves to nothing", async () => {
+      const vista = vistaDeContrato(await contratoDadoDeBaja(), new Map());
+
+      expect(vista.eventos.at(-1)?.usuario).toBeNull();
+      expect(JSON.stringify(vista)).not.toContain(ID_OFICINA);
+    });
+
+    it("still matches the shape the client parses", async () => {
+      const vista = vistaDeContrato(
+        await contratoDadoDeBaja(),
+        new Map([[ID_OFICINA, "oficina"]]),
+      );
+
+      expect(EsquemaContratoDetalle.safeParse(vista).success).toBe(true);
     });
   });
 

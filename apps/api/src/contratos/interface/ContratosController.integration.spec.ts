@@ -4,6 +4,7 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { DatosContratoDetalle } from "@contratos/esquemas";
 import type { INestApplication } from "@nestjs/common";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 import { Test } from "@nestjs/testing";
@@ -1024,9 +1025,9 @@ describe("post-signature transitions", () => {
 
   /**
    * The point of the whole actor change (DESIGN.md §3). Read from the
-   * database rather than the response, because the response does not carry
-   * the actor yet and because the question this answers — "who ended this
-   * contract?" — is asked of the record, months later, not of an HTTP reply.
+   * database rather than the response, because the question this answers —
+   * "who ended this contract?" — is asked of the record, months later, not
+   * of an HTTP reply. What the reply carries is checked separately below.
    *
    * `usuario-oficina1` is the id the session's token was minted from, which
    * is what proves the actor came from the verified token and not from
@@ -1055,6 +1056,54 @@ describe("post-signature transitions", () => {
     expect(eventos.at(-1)?.usuarioId).toBe("usuario-oficina1");
     // The two that never had an author keep a null, not a placeholder.
     expect(eventos.slice(0, 2).map((evento) => evento.usuarioId)).toEqual([null, null]);
+  });
+
+  /**
+   * The other half: the id is the record, the name is what a screen can
+   * render. `Prueba oficina1` is `usuario-oficina1`'s `nombreCompleto`, so
+   * this only passes if the id actually round-tripped through `usuarios`.
+   */
+  it("answers the transition with the actor named, never with the raw id", async () => {
+    const id = await contratoVigente();
+
+    const respuesta = await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .expect(200);
+
+    const eventos = (respuesta.body as DatosContratoDetalle).eventos;
+    expect(eventos.map((evento) => [evento.tipo, evento.usuario])).toEqual([
+      ["creado", null],
+      ["firmado", null],
+      ["dado_de_baja", "Prueba oficina1"],
+    ]);
+    expect(JSON.stringify(respuesta.body)).not.toContain("usuario-oficina1");
+  });
+
+  /**
+   * The one that can actually be wrong. Resolving the name from the *caller's*
+   * own token would satisfy the test above and still be a lie: it would show
+   * whoever is looking at the screen as the author of everything. So this
+   * reads the contract back as `admin`, who terminated nothing, and demands
+   * the history still name `oficina1`.
+   */
+  it("names the actor from the record, not from whoever is reading it", async () => {
+    const id = await contratoVigente();
+    await api()
+      .post(`/contratos/${id}/baja`)
+      .set("Authorization", `Bearer ${sesion.oficina}`)
+      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .expect(200);
+
+    const respuesta = await api()
+      .get(`/contratos/${id}`)
+      .set("Authorization", `Bearer ${sesion.admin}`)
+      .expect(200);
+
+    const eventos = (respuesta.body as DatosContratoDetalle).eventos;
+    expect(eventos.at(-1)?.usuario).toBe("Prueba oficina1");
+    expect(JSON.stringify(respuesta.body)).not.toContain("Prueba jefe");
   });
 
   it("refuses a termination with no reason, naming the field", async () => {

@@ -36,7 +36,9 @@ function contratoSellado(): DatosContratoDetalle {
       { documento: "condiciones_generales", sha256: "a".repeat(64), enlace: "/contratos/c1/documentos/condiciones_generales" },
       { documento: "comodato", sha256: "b".repeat(64), enlace: "/contratos/c1/documentos/comodato" },
     ],
-    eventos: [{ tipo: "firmado", fecha: "2026-08-05", detalle: "Nº 42" }],
+    eventos: [
+      { tipo: "firmado", fecha: "2026-08-05", detalle: "Nº 42", usuario: null },
+    ],
     equiposPendientesDeRestitucion: false,
   };
 }

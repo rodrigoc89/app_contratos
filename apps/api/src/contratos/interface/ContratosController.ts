@@ -47,8 +47,10 @@ import type { ConsultarContrato } from "../application/ConsultarContrato";
 import type { CrearBorrador } from "../application/CrearBorrador";
 import type { DescargarDocumento } from "../application/DescargarDocumento";
 import type { FirmarContrato } from "../application/FirmarContrato";
+import type { DirectorioDeAutores } from "../application/ports/DirectorioDeAutores";
 import type { Reloj } from "../application/ports/Reloj";
 import type { PrevisualizarContrato } from "../application/PrevisualizarContrato";
+import type { Contrato } from "../domain/Contrato";
 import {
   ACTUALIZAR_BORRADOR,
   ANULAR_CONTRATO,
@@ -58,6 +60,7 @@ import {
   CONSULTAR_CONTRATO,
   CREAR_BORRADOR,
   DESCARGAR_DOCUMENTO,
+  DIRECTORIO_DE_AUTORES,
   FIRMAR_CONTRATO,
   PREVISUALIZAR_CONTRATO,
   RELOJ_CONTRATOS,
@@ -126,7 +129,29 @@ export class ContratosController {
     @Inject(ANULAR_CONTRATO) private readonly anularContrato: AnularContrato,
     @Inject(REGISTRAR_RESTITUCION)
     private readonly registrarRestitucionDeEquipos: RegistrarRestitucion,
+    @Inject(DIRECTORIO_DE_AUTORES)
+    private readonly autores: DirectorioDeAutores,
   ) {}
+
+  /**
+   * Every route that answers a contract detail goes through here, so the
+   * event history can never ship with its actors unresolved.
+   *
+   * The lookup lives in this layer rather than inside the use cases because
+   * it is presentation: the aggregate's rules do not depend on what an id is
+   * called, and threading a second return value through six use cases to
+   * decorate a screen would put a display concern in the middle of the
+   * domain's collaborators. `vistaDeContrato` demands the map rather than
+   * defaulting it, which is what makes "went through here" a compile-time
+   * fact instead of a convention.
+   */
+  private async detalleDe(contrato: Contrato): Promise<DatosContratoDetalle> {
+    const ids = contrato.eventos
+      .map((evento) => evento.usuarioId)
+      .filter((usuarioId): usuarioId is string => usuarioId !== null);
+
+    return vistaDeContrato(contrato, await this.autores.nombresPorId(ids));
+  }
 
   /**
    * Step 2 of the flow: the technician has the customer's data and the
@@ -171,7 +196,7 @@ export class ContratosController {
       ...(datos.equipos === undefined ? {} : { equipos: datos.equipos }),
     });
 
-    return vistaDeContrato(contrato);
+    return await this.detalleDe(contrato);
   }
 
   /**
@@ -227,7 +252,7 @@ export class ContratosController {
       }),
     });
 
-    return vistaDeContrato(contrato);
+    return await this.detalleDe(contrato);
   }
 
   /**
@@ -272,7 +297,7 @@ export class ContratosController {
   async detalle(
     @Param("id", new ZodValidationPipe(EsquemaIdDeContrato)) id: string,
   ): Promise<DatosContratoDetalle> {
-    return vistaDeContrato(await this.consultarContrato.ejecutar(id));
+    return await this.detalleDe(await this.consultarContrato.ejecutar(id));
   }
 
   /**
@@ -307,7 +332,7 @@ export class ContratosController {
     @Body(new ZodValidationPipe(EsquemaDarDeBaja)) datos: DatosDarDeBaja,
     @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<DatosContratoDetalle> {
-    return vistaDeContrato(
+    return await this.detalleDe(
       await this.darDeBajaContrato.ejecutar({
         contratoId: id,
         motivo: datos.motivo,
@@ -325,7 +350,7 @@ export class ContratosController {
     @Body(new ZodValidationPipe(EsquemaAnular)) datos: DatosAnular,
     @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<DatosContratoDetalle> {
-    return vistaDeContrato(
+    return await this.detalleDe(
       await this.anularContrato.ejecutar({
         contratoId: id,
         motivo: datos.motivo,
@@ -344,7 +369,7 @@ export class ContratosController {
     datos: DatosRegistrarRestitucion,
     @UsuarioActual() usuario: UsuarioAutenticado,
   ): Promise<DatosContratoDetalle> {
-    return vistaDeContrato(
+    return await this.detalleDe(
       await this.registrarRestitucionDeEquipos.ejecutar({
         contratoId: id,
         fecha: datos.fecha,

@@ -21,6 +21,19 @@ const NOMBRE_DOCUMENTO: Record<DatosDocumentoDisponible["documento"], string> = 
 
 const SIN_VALOR = "—";
 
+/**
+ * The wire's `tipo` is an enum for machines. Nobody reads `equipos_restituidos`
+ * off a screen and thinks in those terms, so every state the API can name gets
+ * a Spanish phrase here — UI copy, like the rest of what the office reads.
+ */
+const NOMBRE_EVENTO: Record<DatosContratoDetalle["eventos"][number]["tipo"], string> = {
+  creado: "Creado",
+  firmado: "Firmado",
+  dado_de_baja: "Dado de baja",
+  anulado: "Anulado",
+  equipos_restituidos: "Equipos restituidos",
+};
+
 export interface PropiedadesDetalleDeContrato {
   readonly contrato: DatosContratoDetalle;
   readonly onDescargar: (documento: DatosDocumentoDisponible) => void;
@@ -122,6 +135,59 @@ export function DetalleDeContrato({
           </ul>
         )}
       </section>
+
+      {/*
+        What happened to this contract, in the order it happened. It is the
+        only section here that answers a question about the past, and the only
+        one that names an employee.
+
+        Absent rather than empty when there is nothing to tell: an "Historial"
+        heading over a blank box reads as a screen that failed to load, and a
+        contract with zero events is not a state the API produces — creating
+        one records `creado`.
+
+        Dates stay in the API's ISO form, the same as "Fecha de firma" above.
+        A second date format on one screen is worse than an unfamiliar one.
+      */}
+      {contrato.eventos.length > 0 && (
+        <section className="detalle-contrato__seccion" aria-labelledby="titulo-historial">
+          <h2 id="titulo-historial">Historial</h2>
+          <ol className="detalle-contrato__historial">
+            {contrato.eventos.map((evento, indice) => (
+              // Events are append-only and never reorder, so the position is
+              // a stable key — and two events of the same tipo on one
+              // contract (two restitutions, say) are exactly why the tipo
+              // alone is not.
+              <li key={`${evento.tipo}-${indice}`} className="detalle-contrato__evento">
+                <p className="detalle-contrato__evento-linea">
+                  <span className="detalle-contrato__evento-hecho">
+                    {/*
+                      An unknown tipo means a server newer than this bundle.
+                      Showing its raw code is ugly; dropping the event from a
+                      legal history would be worse.
+                    */}
+                    {NOMBRE_EVENTO[evento.tipo] ?? evento.tipo}
+                  </span>
+                  {evento.fecha !== null && (
+                    <span className="detalle-contrato__evento-fecha">{evento.fecha}</span>
+                  )}
+                  {/*
+                    Only where there is a name. `creado` and `firmado` have no
+                    author and never will, and "por —" beside them would
+                    invent a missing value where nothing is missing.
+                  */}
+                  {evento.usuario !== null && evento.usuario !== undefined && (
+                    <span className="detalle-contrato__evento-autor">por {evento.usuario}</span>
+                  )}
+                </p>
+                {evento.detalle !== null && evento.detalle !== undefined && (
+                  <p className="detalle-contrato__evento-detalle">{evento.detalle}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
     </article>
   );
 }
