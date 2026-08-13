@@ -335,3 +335,89 @@ describe("PasoFirmaDual", () => {
     expect(EsquemaFirmarContrato.safeParse(cuerpo).success).toBe(true);
   });
 });
+
+/**
+ * The técnico's report was "no me dejó firmar los documentos". The gate was
+ * working exactly as designed — but the screen said nothing about what was
+ * missing, so a disabled button was the entire message. Standing in a
+ * customer's house, that is indistinguishable from a broken app.
+ *
+ * Every fact needed to answer it already existed: `EstadoPuerta` even
+ * distinguishes `falta_desplazar` from `cabe_sin_desplazar_falta_confirmar`.
+ * None of it reached the screen.
+ */
+describe("PasoFirmaDual — por qué Firmar está deshabilitado", () => {
+  function montar(crearObservador: ReturnType<typeof observadorFalsoPorTitulo>["crearObservador"]) {
+    return render(
+      <PasoFirmaDual
+        contratoId="c1"
+        crearCola={() => colaFalsa(() => Promise.resolve())}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+      />,
+    );
+  }
+
+  it("names the documents still unread, by title", async () => {
+    const { crearObservador } = observadorFalsoPorTitulo();
+    montar(crearObservador);
+    await esperarPasoListo();
+
+    const pendientes = screen.getByRole("status", { name: "Qué falta para poder firmar" });
+    expect(pendientes).toHaveTextContent("Condiciones Generales de Uso");
+    expect(pendientes).toHaveTextContent("Contrato de Comodato");
+  });
+
+  it("stops naming a document once it has been read to the end", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    montar(crearObservador);
+    await esperarPasoListo();
+
+    act(() => {
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+    });
+
+    // Its name stays — the signature is still missing — but the *reading*
+    // entry for it is gone, and the other document's is not. Asserting on the
+    // bare title would pass for the wrong reason.
+    const pendientes = screen.getByRole("status", { name: "Qué falta para poder firmar" });
+    expect(pendientes).not.toHaveTextContent("Leer Condiciones Generales de Uso hasta el final");
+    expect(pendientes).toHaveTextContent("Leer Contrato de Comodato hasta el final");
+    expect(pendientes).toHaveTextContent("Falta la firma de Condiciones Generales de Uso");
+  });
+
+  it("asks for the missing signatures too, not only the reading", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    montar(crearObservador);
+    await esperarPasoListo();
+
+    act(() => {
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Contrato de Comodato", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+    });
+
+    const pendientes = screen.getByRole("status", { name: "Qué falta para poder firmar" });
+    expect(pendientes).toHaveTextContent(/firma/i);
+  });
+
+  /** Nothing pending means nothing to say — and the button says it instead. */
+  it("disappears once everything is done", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    montar(crearObservador);
+    await esperarPasoListo();
+
+    act(() => {
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Contrato de Comodato", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+    });
+    const [condiciones, comodato] = screen.getAllByRole("img");
+    firmarEnLienzo(condiciones as Element, MINIMO_PUNTOS_FIRMA);
+    firmarEnLienzo(comodato as Element, MINIMO_PUNTOS_FIRMA);
+
+    expect(
+      screen.queryByRole("status", { name: "Qué falta para poder firmar" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Firmar" })).toBeEnabled();
+  });
+});
