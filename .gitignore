@@ -20,3 +20,14 @@ generated/
 
 # CodeGraph index — per-checkout, never shared
 .codegraph/
+
+# Sealed contract PDFs. `ALMACEN_DOCUMENTOS_RUTA` defaults to `var/documentos`
+# (apps/api/src/config/configuracion.ts), relative to wherever the API runs —
+# so signing anything locally, and running the integration suite, writes real
+# PDFs here. Each one carries a customer's name, DNI and signature image.
+#
+# Committing one would put personal data into version control permanently,
+# where deleting the file does not remove it from history. This is Ley 25.326
+# data, and the repository is the one place it must never reach.
+var/
+
