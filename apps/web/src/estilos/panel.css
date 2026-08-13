@@ -1,0 +1,301 @@
+/**
+ * PR2 (web-panel-oficina) — the office panel's shell, table reflow, filter
+ * bar and paginator. DESIGN.md D13: every responsive rule this feature
+ * needs lives in this one file, imported once from `estilos/index.css`.
+ *
+ * Breakpoints — the project's first (`estilos/` had zero `@media` queries
+ * before this PR):
+ *
+ *   BREAKPOINT_TABLETA    = 640px
+ *   BREAKPOINT_ESCRITORIO = 1024px
+ *
+ * These CANNOT be declared as CSS custom properties and read inside a
+ * `@media` condition — `@media (min-width: var(--x))` is invalid CSS, a
+ * language limitation, not a style choice (DESIGN.md D13). They are
+ * documented here as the single source of truth and repeated as literals
+ * in every query below. `convencionesDeEstilos.spec.ts` scans for exactly
+ * these two values and no others, so a third breakpoint cannot appear
+ * silently.
+ *
+ * Direction — mobile-first, growing-viewport queries only, never a
+ * shrinking one: the un-queried rules below ARE the narrow (<640px)
+ * layout; each query adds.
+ *
+ * (This comment block deliberately avoids spelling the banned query
+ * direction as a literal token near "@media": `convencionesDeEstilos.spec.ts`
+ * source-scans the raw stylesheet text, comments included, so writing the
+ * two side by side here would trip its own guard.)
+ */
+
+/* --- shell: LayoutPanel (D13) -------------------------------------------- */
+
+.layout-panel {
+  min-height: 100%;
+  /* A desktop operator reading for hours wants the browser's own 16px
+     default, not the 18px `:root` value sized for a tablet held at arm's
+     length (tokens.css). Scoped here rather than as a second global token
+     so `LayoutTablet`'s subtree is untouched. */
+  --fuente-base: 16px;
+}
+
+.layout-panel__contenido {
+  /* Deliberately capped, not full-bleed: stretched to 1920px a row's name
+     and its estado sit ~1800px apart and the eye loses the line. */
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--espacio-4);
+}
+
+/* --- BarraDeBusqueda (R-3.5, R-3.7, D14, D15) ---------------------------- */
+
+.barra-de-busqueda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-5);
+}
+
+/* The search box's own id — a real search field wants to read wider than
+   the bare 48px floor, so the width is a literal rather than the token. */
+#busqueda-contratos {
+  min-height: var(--tamano-toque-minimo);
+  min-width: 240px;
+}
+
+#busqueda-contratos:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+.barra-de-busqueda__estados {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+}
+
+/**
+ * DESIGN.md D14 — the estado filter renders as toggle buttons (`Boton`),
+ * not checkboxes: four checkboxes at the globally-mandated 48×48
+ * (`base.css:81-86`) would make a filter bar that is mostly checkbox.
+ * `Boton` already satisfies the touch-target guard; this rule is scoped to
+ * this container on purpose (not relying only on the shared `.boton` rule)
+ * so a future change that moves the chips off `Boton` is caught by the
+ * guard instead of silently losing coverage.
+ */
+.barra-de-busqueda__estados .boton {
+  min-height: var(--tamano-toque-minimo);
+  min-width: var(--tamano-toque-minimo);
+}
+
+.barra-de-busqueda__estados .boton:hover:not(:disabled) {
+  background-color: var(--color-primario-oscuro);
+}
+
+.barra-de-busqueda__estados .boton:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+.boton--filtro-activo {
+  background-color: var(--color-primario-oscuro);
+  border-color: var(--color-primario-oscuro);
+}
+
+/* --- TablaDeContratos (R-3.4, R-3.5, R-3.6, R-3.8, D12) ------------------ */
+
+/**
+ * The mid-range safety net (DESIGN.md D12): a real table with five columns
+ * can still overrun between 640px and ~900px. `overflow-x: auto` is legal —
+ * the guard above bans only `hidden`/`clip`, never `auto`.
+ */
+.tabla-de-contratos__desplazamiento {
+  overflow-x: auto;
+  margin-bottom: var(--espacio-5);
+  border: 1px solid var(--color-borde-suave);
+  border-radius: var(--radio-borde);
+}
+
+.tabla-de-contratos__desplazamiento:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+.tabla-de-contratos {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/**
+ * Narrow layout (<640px, no query): the card reflow. Every table element
+ * becomes a block; `td::before` reads the `data-etiqueta` markup
+ * `TablaDeContratos.tsx` already carries on every cell (D12) to restate the
+ * column label beside its value. The header row is not removed — removing
+ * it would drop it from the accessibility tree, unlike hiding it — it is
+ * moved off-screen with a technique that avoids the banned clipped-overflow
+ * approach entirely, using `clip-path` instead of the older
+ * `clip: rect(...)` plus a clipped-overflow declaration.
+ */
+.tabla-de-contratos,
+.tabla-de-contratos tbody,
+.tabla-de-contratos tr {
+  display: block;
+  width: 100%;
+}
+
+.tabla-de-contratos thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.tabla-de-contratos tr {
+  margin-bottom: var(--espacio-3);
+  border: 1px solid var(--color-borde-suave);
+  border-radius: var(--radio-borde);
+}
+
+/**
+ * Rows are exempt from the 48px touch-target floor (R-3.5) — they are not
+ * interactive: no `min-height` here. `cursor: pointer` is never declared
+ * either (R-3.4/R-3.8): no office contract-detail screen exists to land on,
+ * so a row must never look clickable.
+ */
+.tabla-de-contratos td {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--espacio-3);
+  padding: var(--espacio-2) var(--espacio-3);
+  border-bottom: 1px solid var(--color-borde-suave);
+  text-align: right;
+}
+
+.tabla-de-contratos td:last-child {
+  border-bottom: none;
+}
+
+.tabla-de-contratos td::before {
+  content: attr(data-etiqueta);
+  font-weight: 600;
+  text-align: left;
+}
+
+/* Wide layout (≥640px, BREAKPOINT_TABLETA): a real table again. */
+@media (min-width: 640px) {
+  .tabla-de-contratos {
+    display: table;
+  }
+
+  .tabla-de-contratos thead {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    clip-path: none;
+    white-space: normal;
+    display: table-header-group;
+  }
+
+  .tabla-de-contratos tbody {
+    display: table-row-group;
+  }
+
+  .tabla-de-contratos tr {
+    display: table-row;
+    margin-bottom: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  .tabla-de-contratos th,
+  .tabla-de-contratos td {
+    display: table-cell;
+    padding: var(--espacio-2) var(--espacio-3);
+    text-align: left;
+  }
+
+  .tabla-de-contratos td::before {
+    content: none;
+  }
+
+  /* Desktop-only: a mouse loses the line between a name (left) and its
+     estado (right) on a wide row; zebra striping is the standard fix.
+     Background tint only — no cursor change, no underline (R-3.8): rows
+     stay read-only. */
+  .tabla-de-contratos tbody tr:hover {
+    background-color: color-mix(in srgb, var(--color-primario) 6%, var(--color-fondo));
+  }
+
+  .tabla-de-contratos tbody tr:nth-child(even) {
+    background-color: color-mix(in srgb, var(--color-borde-suave) 30%, var(--color-fondo));
+  }
+}
+
+/* --- Paginador (R-3.9, D16) ------------------------------------------------ */
+
+.paginador {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--espacio-2);
+  margin-top: var(--espacio-4);
+}
+
+.paginador .boton {
+  min-height: var(--tamano-toque-minimo);
+  min-width: var(--tamano-toque-minimo);
+}
+
+.paginador .boton:hover:not(:disabled) {
+  background-color: var(--color-primario-oscuro);
+}
+
+.paginador .boton:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+/**
+ * DESIGN.md D16 — narrow layout loses jump-to-page. This declaration
+ * carries no elevated priority marker, so the `[hidden]` protection rule in
+ * `base.css` remains the only one of those in the whole stylesheet.
+ * Prev/next stay reachable at every width.
+ */
+.paginador__numeros {
+  display: none;
+  gap: var(--espacio-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  .paginador__numeros {
+    display: flex;
+  }
+}
+
+.boton--pagina-actual {
+  border-color: var(--color-texto);
+}
+
+/* --- comfort width (BREAKPOINT_ESCRITORIO, D13) --------------------------- */
+
+/**
+ * The second documented breakpoint. Everything above is already usable at
+ * 640px; this is the "comfort" tier — a genuine desktop monitor gets a
+ * little more breathing room around the shell rather than a third layout.
+ */
+@media (min-width: 1024px) {
+  .layout-panel__contenido {
+    padding: var(--espacio-5);
+  }
+}
