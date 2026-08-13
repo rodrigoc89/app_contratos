@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router-dom";
 
 import { LayoutPanel } from "../componentes/plantillas/LayoutPanel";
+import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
 import { GuardiaDeRolTecnico, GuardiaDeRoles, GuardiaDeSesion } from "../funcionalidades/auth/contenedores/GuardiasDeRuta";
 import { InicioTecnico } from "../funcionalidades/auth/contenedores/InicioTecnico";
 import { PaginaLogin } from "../funcionalidades/auth/contenedores/PaginaLogin";
@@ -34,9 +35,9 @@ export const rutas: RouteObject[] = [
         element: <GuardiaDeRoles permitidos={["oficina", "admin"]} />,
         children: [
           {
-            path: "/contratos",
+            path: "/panel",
             element: (
-              <LayoutPanel>
+              <LayoutPanel cabecera={<CabeceraDeSesion />}>
                 <PaginaListaContratos />
               </LayoutPanel>
             ),
@@ -49,9 +50,9 @@ export const rutas: RouteObject[] = [
               inherits the `oficina`/`admin` gate with no second rule to keep
               in sync.
             */
-            path: "/contratos/:id",
+            path: "/panel/contratos/:id",
             element: (
-              <LayoutPanel>
+              <LayoutPanel cabecera={<CabeceraDeSesion />}>
                 <PaginaDetalleContrato />
               </LayoutPanel>
             ),

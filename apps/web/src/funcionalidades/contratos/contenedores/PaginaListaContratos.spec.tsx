@@ -36,8 +36,8 @@ function listaConUnContrato(): DatosListaContratos {
 
 function renderizarConCliente(cliente: QueryClient) {
   const enrutador = createMemoryRouter(
-    [{ path: "/contratos", element: <PaginaListaContratos /> }],
-    { initialEntries: ["/contratos"] },
+    [{ path: "/panel", element: <PaginaListaContratos /> }],
+    { initialEntries: ["/panel"] },
   );
   render(
     <QueryClientProvider client={cliente}>
@@ -126,7 +126,7 @@ describe("PaginaListaContratos", () => {
     const filaDeContrato = screen.getAllByRole("row")[1] as HTMLElement;
     fireEvent.click(filaDeContrato);
 
-    expect(enrutador.state.location.pathname).toBe("/contratos");
+    expect(enrutador.state.location.pathname).toBe("/panel");
     expect(buscarContratosSimulado).toHaveBeenCalledTimes(1);
   });
 
@@ -181,7 +181,7 @@ describe("PaginaListaContratos", () => {
     });
 
     expect(buscarContratosSimulado).toHaveBeenCalledWith(expect.objectContaining({ termino: "perez" }));
-    expect(enrutador.state.location.pathname).toBe("/contratos");
+    expect(enrutador.state.location.pathname).toBe("/panel");
 
     vi.useRealTimers();
   });

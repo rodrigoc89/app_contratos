@@ -16,8 +16,8 @@ export type Rol = DatosSesion["usuario"]["rol"];
  */
 const INICIO_POR_ROL: Record<Rol, string> = {
   tecnico: "/",
-  oficina: "/contratos",
-  admin: "/contratos",
+  oficina: "/panel",
+  admin: "/panel",
 };
 
 /**

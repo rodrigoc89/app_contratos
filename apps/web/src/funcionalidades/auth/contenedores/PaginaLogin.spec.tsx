@@ -83,14 +83,14 @@ describe("PaginaLogin", () => {
    * `tecnico` straight to its own home instead of relying only on the next
    * render's route guard to catch it.
    */
-  it("routes oficina straight to /contratos on valid login, not the fallback screen", async () => {
+  it("routes oficina straight to /panel on valid login, not the fallback screen", async () => {
     const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson(sesionFalsa("oficina")));
     vi.stubGlobal("fetch", fetchSimulado);
 
     const enrutador = createMemoryRouter(
       [
         { path: "/login", element: <PaginaLogin /> },
-        { path: "/contratos", element: <p>Listado</p> },
+        { path: "/panel", element: <p>Listado</p> },
         { path: "/panel-no-disponible", element: <p>No disponible</p> },
       ],
       { initialEntries: ["/login"] },
@@ -101,17 +101,17 @@ describe("PaginaLogin", () => {
     fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "correcta" } });
     fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
 
-    await waitFor(() => expect(enrutador.state.location.pathname).toBe("/contratos"));
+    await waitFor(() => expect(enrutador.state.location.pathname).toBe("/panel"));
   });
 
-  it("routes admin straight to /contratos on valid login too", async () => {
+  it("routes admin straight to /panel on valid login too", async () => {
     const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson(sesionFalsa("admin")));
     vi.stubGlobal("fetch", fetchSimulado);
 
     const enrutador = createMemoryRouter(
       [
         { path: "/login", element: <PaginaLogin /> },
-        { path: "/contratos", element: <p>Listado</p> },
+        { path: "/panel", element: <p>Listado</p> },
         { path: "/panel-no-disponible", element: <p>No disponible</p> },
       ],
       { initialEntries: ["/login"] },
@@ -122,7 +122,7 @@ describe("PaginaLogin", () => {
     fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "correcta" } });
     fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
 
-    await waitFor(() => expect(enrutador.state.location.pathname).toBe("/contratos"));
+    await waitFor(() => expect(enrutador.state.location.pathname).toBe("/panel"));
   });
 
   it("shows the server's message inline on invalid credentials", async () => {
