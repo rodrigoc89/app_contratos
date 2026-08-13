@@ -7,9 +7,26 @@ import { buscarContratos } from "../../datos/consultas/buscarContratos";
 import { clavesDeContratos, type FiltrosDeListaContratos } from "../../datos/consultas/clavesDeContratos";
 import { usarValorDebounced } from "./usarValorDebounced";
 
-/** The server's own default (`EsquemaConsultaDeContratos`) — kept explicit
- * rather than omitted so the query key never silently disagrees with it. */
-export const TAMANO_PAGINA_LISTA_CONTRATOS = 20;
+/**
+ * Deliberately NOT the server's default of 20 (`EsquemaConsultaDeContratos`),
+ * and always sent explicitly so the query key can never silently disagree
+ * with whatever the server would have chosen.
+ *
+ * How many rows fit on a screen is a presentation decision, so it is made
+ * here rather than by widening the API's default — `curl` and any future
+ * client keep the server's 20.
+ *
+ * Measured in a real browser at 1366×768 with 20 rows: the paginator landed
+ * at y=1386, some 618px below the fold, so changing page meant scrolling
+ * past the whole list every time. DESIGN.md D14 predicted that and accepted
+ * it; first contact with the screen said otherwise. At 10 rows the paginator
+ * is fully visible at 1920×1080 and sits 177px below the fold at 1366×768 —
+ * an improvement, not a cure. Going lower does not fix 1366 either: the
+ * arithmetic (371px of furniture above the table, 44px per row, 66px of
+ * paginator) needs about 5 rows to clear that fold, which is too few to be
+ * a useful list.
+ */
+export const TAMANO_PAGINA_LISTA_CONTRATOS = 10;
 
 const RETRASO_DEBOUNCE_MS = 300;
 

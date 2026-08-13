@@ -519,6 +519,119 @@ describe("PR2: exactly the documented breakpoints, min-width only (D13/D17)", ()
   });
 });
 
+describe("the paginator stays reachable without scrolling the list (R-3.9)", () => {
+  /**
+   * DESIGN.md D14 rejected a sticky paginator to save ~72px of height. First
+   * contact with the built screen overruled it: measured in a real browser,
+   * changing page meant scrolling past the entire list — the paginator sat
+   * 618px below the fold at 1366×768 with a 20-row page, and still 177px
+   * below it after the page size dropped to 10. Reaching the control that
+   * turns the page should not require reading the page first.
+   *
+   * Two of the three ways a sticky footer fails do so SILENTLY, which is
+   * what these assertions are for:
+   *
+   * 1. `position: sticky` with no inset never sticks. It is not an error,
+   *    it simply behaves as `static` — the rule looks correct and does
+   *    nothing. `bottom` is what arms it.
+   * 2. Without an opaque background the rows scroll visibly behind the
+   *    controls and the footer reads as a rendering fault.
+   *
+   * The third — the footer covering the last row at the end of the scroll —
+   * is a layout consequence no source scan can see; it is answered by
+   * `padding-block` here and verified in a browser, not by this file.
+   *
+   * `position: sticky` is unrelated to the banned clipped-overflow values:
+   * it needs no clipping, and adds no scroll container of its own.
+   */
+  const PATRON_PAGINADOR = /(?<!__numeros)\n\.paginador\s*\{([^}]*)\}/;
+
+  it("arms the sticky paginator with a bottom inset, since sticky alone silently does nothing", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+
+    const regla = PATRON_PAGINADOR.exec(panel?.contenido ?? "");
+    expect(regla, ".paginador rule not found in estilos/panel.css").not.toBeNull();
+    const cuerpo = regla?.[1] ?? "";
+
+    expect(
+      /position\s*:\s*sticky/.test(cuerpo),
+      "the paginator must be sticky so changing page never requires scrolling past the whole list (R-3.9)",
+    ).toBe(true);
+
+    expect(
+      /bottom\s*:/.test(cuerpo),
+      "`position: sticky` with no inset is inert — it behaves exactly like `static` and fails silently. Declare `bottom`.",
+    ).toBe(true);
+  });
+
+  it("gives the sticky paginator an opaque background so rows never show through it", () => {
+    const panel = archivo("estilos/panel.css");
+    const cuerpo = PATRON_PAGINADOR.exec(panel?.contenido ?? "")?.[1] ?? "";
+
+    expect(
+      /background(?:-color)?\s*:/.test(cuerpo),
+      "a sticky footer with a transparent background lets the rows scroll visibly behind its controls",
+    ).toBe(true);
+  });
+});
+
+describe("the visually-hidden table header does not widen the document (R-3.6)", () => {
+  /**
+   * Found by walking R-3.6's `[manual]` scenario in a real browser: at 360px
+   * the document's `scrollWidth` was 492 against a 360px viewport — 132px of
+   * horizontal overflow with nothing visible to scroll to.
+   *
+   * The cause is the narrow-layout `thead`. It is hidden rather than removed
+   * so the column labels stay in the accessibility tree, using the sr-only
+   * recipe — but that recipe's `overflow: hidden` is banned by the first
+   * guard in this file (it protects the document viewer's reading gate). The
+   * substitute, `clip-path: inset(50%)`, hides the element's PIXELS and does
+   * nothing to its LAYOUT: the `th` boxes still occupy space. Worse, the rule
+   * is `position: absolute` with no positioned ancestor, so its containing
+   * block is the initial containing block and it escapes the table's own
+   * `overflow-x: auto` region to overflow the page itself.
+   *
+   * The fix that holds is horizontal displacement: an absolutely-positioned
+   * box at a large negative `left` contributes nothing to `scrollWidth` in a
+   * left-to-right document, so no clipping — banned or otherwise — is needed.
+   * This app is Spanish-only and always LTR; in an RTL document the same
+   * offset would overflow the other way and this guard would need rethinking.
+   *
+   * Source-scanned rather than rendered because jsdom performs no layout —
+   * which is exactly why this defect survived 432 passing web tests.
+   */
+  const PATRON_THEAD_ESTRECHO = /\.tabla-de-contratos\s+thead\s*\{([^}]*)\}/;
+
+  it("moves the narrow-layout thead off-screen instead of only clipping its pixels", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+
+    const regla = PATRON_THEAD_ESTRECHO.exec(panel?.contenido ?? "");
+    expect(regla, ".tabla-de-contratos thead rule not found in estilos/panel.css").not.toBeNull();
+    const cuerpo = regla?.[1] ?? "";
+
+    const desplazamiento = /left\s*:\s*-\s*(\d+)px/.exec(cuerpo);
+    expect(
+      desplazamiento,
+      "the hidden thead declares no negative `left` — clip-path hides its pixels but leaves its boxes in layout, and they overflow the document horizontally (measured: 492px of scrollWidth against a 360px viewport)",
+    ).not.toBeNull();
+
+    // Far enough that no plausible header width reaches back into view.
+    expect(Number(desplazamiento?.[1])).toBeGreaterThanOrEqual(2000);
+  });
+
+  it("keeps the header hidden rather than removed, so its labels stay in the accessibility tree", () => {
+    const panel = archivo("estilos/panel.css");
+    const cuerpo = PATRON_THEAD_ESTRECHO.exec(panel?.contenido ?? "")?.[1] ?? "";
+
+    expect(
+      /display\s*:\s*none/i.test(cuerpo),
+      "the hidden thead must not use display: none — that drops the column labels from the accessibility tree, which is the whole reason it is hidden rather than removed",
+    ).toBe(false);
+  });
+});
+
 describe("the document viewer stays bounded to a fraction of the viewport, never to its content", () => {
   it("finds and constrains .visor-documento__iframe in estilos/organismos.css", () => {
     const organismos = archivo("estilos/organismos.css");
