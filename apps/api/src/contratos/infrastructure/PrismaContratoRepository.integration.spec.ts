@@ -1,11 +1,18 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
+import { ejecutarBackfillDeNombreDeBusqueda } from "../../../prisma/backfill/nombreDeBusqueda";
+import { normalizarTexto } from "../../shared/domain/normalizarTexto";
 import { ConflictoDeConcurrencia } from "../../shared/domain/ConflictoDeConcurrencia";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import {
   crearClienteDeIntegracion,
   limpiarBaseDeDatos,
 } from "../../shared/infrastructure/persistence/testDb";
+import {
+  contratoDesdeSemilla,
+  ESCENARIOS_DE_BUSQUEDA,
+  SEMILLAS_DE_BUSQUEDA,
+} from "../application/escenariosDeBusqueda.testing";
 import type { Reloj } from "../application/ports/Reloj";
 import { Comodatario } from "../domain/Comodatario";
 import { ContextoDeFirma } from "../domain/ContextoDeFirma";
@@ -821,6 +828,267 @@ describe("PrismaContratoRepository (integration)", () => {
 
       const leidoRestituido = await repo.porId(restituido.id);
       expect(leidoRestituido?.equiposPendientesDeRestitucion).toBe(false);
+    });
+  });
+
+  /**
+   * The same scenario table as `BuscarContratos.spec.ts`, against real
+   * Postgres this time (DESIGN.md D8). Seeding differs — that suite calls
+   * `agregar`, this one saves through the repository and then fixes up
+   * `creado_en` with a raw update, since `guardar` always writes it via the
+   * column default — but the assertions are byte-for-byte identical, so a
+   * behavioural difference between the two adapters fails both suites.
+   */
+  describe("buscar", () => {
+    /**
+     * `contratoDesdeSemilla` signs with the fixed ids "plantilla-escenario"
+     * and "firmante-escenario" (`escenariosDeBusqueda.testing.ts`) — real
+     * foreign keys here, unlike the in-memory double, so this suite has to
+     * put matching rows in place before any scenario can be saved.
+     */
+    async function crearPlantillaYFirmanteDeEscenario(): Promise<void> {
+      await prisma.plantillaContrato.create({
+        data: {
+          id: "plantilla-escenario",
+          version: "escenario",
+          condicionesGeneralesHtml: "<html>condiciones</html>",
+          comodatoHtml: "<html>contrato</html>",
+          vigenteDesde: new Date("2026-01-01T00:00:00.000Z"),
+        },
+      });
+      await prisma.firmanteComodante.create({
+        data: {
+          id: "firmante-escenario",
+          version: "escenario",
+          nombreCompleto: "Firmante De Escenario",
+          dni: "20111222",
+          imagenFirmaPng: "data:image/png;base64,firmante",
+          activo: true,
+        },
+      });
+    }
+
+    async function sembrarEscenarios(repo: PrismaContratoRepository): Promise<void> {
+      await crearPlantillaYFirmanteDeEscenario();
+      for (const semilla of SEMILLAS_DE_BUSQUEDA) {
+        const contrato = contratoDesdeSemilla(semilla);
+        await repo.guardar(contrato);
+        await prisma.$executeRaw`
+          UPDATE contratos SET creado_en = ${semilla.creadoEn} WHERE id = ${semilla.id}
+        `;
+      }
+    }
+
+    it.each(ESCENARIOS_DE_BUSQUEDA)("$nombre", async (escenario) => {
+      const repo = new PrismaContratoRepository(prisma, new RelojFijo(new Date()));
+      await sembrarEscenarios(repo);
+
+      const resultado = await repo.buscar(escenario.criterios);
+
+      expect(resultado.resumenes.map((r) => r.id)).toEqual(escenario.idsEsperados);
+      expect(resultado.total).toBe(escenario.totalEsperado);
+    });
+
+    /**
+     * The case the whole feature exists to protect, over the real database
+     * this time: Postgres `LIKE` is byte-exact and performs no Unicode
+     * normalisation of its own, so if the write path stored a decomposed
+     * `n` + U+0303 instead of the precomposed `ñ` a search for `"peña"`
+     * would silently find nothing.
+     */
+    it("round-trips ñ through the write path and the search path in agreement", async () => {
+      const repo = new PrismaContratoRepository(prisma, new RelojFijo(new Date()));
+      const contrato = Contrato.crearBorrador({
+        id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1",
+        comodatario: Comodatario.crear({
+          nombreCompleto: "Peña",
+          dni: "30.999.111",
+          domicilioCalle: "Av. Belgrano 1250",
+          ciudad: "La Banda",
+          whatsapp: "3854123456",
+        }),
+        equipos: equipos(),
+      });
+      await repo.guardar(contrato);
+
+      const encontrado = await repo.buscar({
+        termino: { tipo: "nombre", normalizado: "peña" },
+        estados: [],
+        pagina: 1,
+        tamanoPagina: 20,
+      });
+      const noEncontrado = await repo.buscar({
+        termino: { tipo: "nombre", normalizado: "pena" },
+        estados: [],
+        pagina: 1,
+        tamanoPagina: 20,
+      });
+
+      expect(encontrado.resumenes.map((r) => r.id)).toEqual([contrato.id]);
+      expect(noEncontrado.total).toBe(0);
+    });
+  });
+
+  /**
+   * R-2.11: the backfill must agree with the write path byte-for-byte, and
+   * gates the later, separate `NOT NULL` migration on zero remaining nulls.
+   */
+  describe("backfill (R-2.11)", () => {
+    /** Simulates a row written before Migration A's write path existed. */
+    async function insertarFilaPreExistente(
+      repo: PrismaContratoRepository,
+      id: string,
+      nombreCompleto: string,
+    ): Promise<void> {
+      const contrato = Contrato.crearBorrador({
+        id,
+        comodatario: Comodatario.crear({
+          nombreCompleto,
+          dni: "30.888.111",
+          domicilioCalle: "Av. Belgrano 1250",
+          ciudad: "La Banda",
+          whatsapp: "3854123456",
+        }),
+        equipos: equipos(),
+      });
+      await repo.guardar(contrato);
+      // The write path (ContratoMapper.ts D2) already filled the column —
+      // undo that here, deliberately, to reproduce a row from before
+      // Migration A shipped.
+      await prisma.$executeRaw`
+        UPDATE contratos SET comodatario_nombre_busqueda = NULL WHERE id = ${id}
+      `;
+    }
+
+    it("backfilled values equal normalizarTexto(comodatarioNombreCompleto), for names with ñ, accents and a decomposed ñ", async () => {
+      const repo = new PrismaContratoRepository(prisma, new RelojFijo(new Date()));
+      await insertarFilaPreExistente(
+        repo,
+        "ffffffff-ffff-4fff-8fff-ffffffffff01",
+        "Rodríguez",
+      );
+      await insertarFilaPreExistente(
+        repo,
+        "ffffffff-ffff-4fff-8fff-ffffffffff02",
+        "Peña", // precomposed ñ
+      );
+      await insertarFilaPreExistente(
+        repo,
+        "ffffffff-ffff-4fff-8fff-ffffffffff03",
+        "Peña", // decomposed ñ (n + combining tilde)
+      );
+
+      const resultado = await ejecutarBackfillDeNombreDeBusqueda(prisma);
+
+      expect(resultado.filasActualizadas).toBeGreaterThanOrEqual(3);
+      expect(resultado.nulosRestantes).toBe(0);
+
+      const filas = await prisma.contrato.findMany({
+        where: {
+          id: {
+            in: [
+              "ffffffff-ffff-4fff-8fff-ffffffffff01",
+              "ffffffff-ffff-4fff-8fff-ffffffffff02",
+              "ffffffff-ffff-4fff-8fff-ffffffffff03",
+            ],
+          },
+        },
+        select: { id: true, comodatarioNombreCompleto: true, comodatarioNombreBusqueda: true },
+      });
+
+      for (const fila of filas) {
+        expect(fila.comodatarioNombreBusqueda).toBe(
+          normalizarTexto(fila.comodatarioNombreCompleto),
+        );
+      }
+      // The precomposed and decomposed ñ rows must agree, byte for byte.
+      const [precompuesta, decompuesta] = [
+        filas.find((f) => f.id === "ffffffff-ffff-4fff-8fff-ffffffffff02"),
+        filas.find((f) => f.id === "ffffffff-ffff-4fff-8fff-ffffffffff03"),
+      ];
+      expect(precompuesta?.comodatarioNombreBusqueda).toBe(
+        decompuesta?.comodatarioNombreBusqueda,
+      );
+    });
+
+    it("is idempotent: running it again touches nothing and still reports zero nulls", async () => {
+      const repo = new PrismaContratoRepository(prisma, new RelojFijo(new Date()));
+      await insertarFilaPreExistente(
+        repo,
+        "ffffffff-ffff-4fff-8fff-ffffffffff04",
+        "Núñez",
+      );
+
+      const primera = await ejecutarBackfillDeNombreDeBusqueda(prisma);
+      const segunda = await ejecutarBackfillDeNombreDeBusqueda(prisma);
+
+      expect(primera.nulosRestantes).toBe(0);
+      expect(segunda.filasActualizadas).toBe(0);
+      expect(segunda.nulosRestantes).toBe(0);
+    });
+
+    it("a new row is correct without a backfill (D2's write path alone)", async () => {
+      const repo = new PrismaContratoRepository(prisma, new RelojFijo(new Date()));
+      const contrato = Contrato.crearBorrador({
+        id: "ffffffff-ffff-4fff-8fff-ffffffffff05",
+        comodatario: Comodatario.crear({
+          nombreCompleto: "Peña",
+          dni: "30.777.111",
+          domicilioCalle: "Av. Belgrano 1250",
+          ciudad: "La Banda",
+          whatsapp: "3854123456",
+        }),
+        equipos: equipos(),
+      });
+
+      await repo.guardar(contrato);
+
+      const fila = await prisma.contrato.findUnique({
+        where: { id: contrato.id },
+        select: { comodatarioNombreBusqueda: true },
+      });
+      expect(fila?.comodatarioNombreBusqueda).toBe("peña");
+    });
+
+    it("an updated name updates the search column, and the old name stops matching", async () => {
+      const repo = new PrismaContratoRepository(prisma, new RelojFijo(new Date()));
+      const contrato = Contrato.crearBorrador({
+        id: "ffffffff-ffff-4fff-8fff-ffffffffff06",
+        comodatario: Comodatario.crear({
+          nombreCompleto: "Perez",
+          dni: "30.666.111",
+          domicilioCalle: "Av. Belgrano 1250",
+          ciudad: "La Banda",
+          whatsapp: "3854123456",
+        }),
+        equipos: equipos(),
+      });
+      await repo.guardar(contrato);
+
+      contrato.actualizarComodatario(
+        Comodatario.crear({
+          nombreCompleto: "Peña",
+          dni: "30.666.111",
+          domicilioCalle: "Av. Belgrano 1250",
+          ciudad: "La Banda",
+          whatsapp: "3854123456",
+        }),
+      );
+      await repo.guardar(contrato);
+
+      const fila = await prisma.contrato.findUnique({
+        where: { id: contrato.id },
+        select: { comodatarioNombreBusqueda: true },
+      });
+      expect(fila?.comodatarioNombreBusqueda).toBe("peña");
+
+      const yaNoCoincide = await repo.buscar({
+        termino: { tipo: "nombre", normalizado: "perez" },
+        estados: [],
+        pagina: 1,
+        tamanoPagina: 20,
+      });
+      expect(yaNoCoincide.resumenes.some((r) => r.id === contrato.id)).toBe(false);
     });
   });
 });

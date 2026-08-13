@@ -9,6 +9,7 @@ import { PrismaFirmanteRepository } from "../firmantes/infrastructure/PrismaFirm
 import { PRISMA } from "../persistencia/PrismaModule";
 import { PrismaPlantillaRepository } from "../plantillas/infrastructure/PrismaPlantillaRepository";
 import { ActualizarBorrador } from "./application/ActualizarBorrador";
+import { BuscarContratos } from "./application/BuscarContratos";
 import { ConsultarContrato } from "./application/ConsultarContrato";
 import { CrearBorrador } from "./application/CrearBorrador";
 import { DescargarDocumento } from "./application/DescargarDocumento";
@@ -23,6 +24,7 @@ import { PrevisualizarContrato } from "./application/PrevisualizarContrato";
 import {
   ACTUALIZAR_BORRADOR,
   ALMACEN_DE_DOCUMENTOS,
+  BUSCAR_CONTRATOS,
   CONSULTAR_CONTRATO,
   CONTRATO_REPOSITORY,
   CREAR_BORRADOR,
@@ -205,6 +207,12 @@ class CierreDelGeneradorDeDocumentos implements OnApplicationShutdown {
         contratos: ContratoRepository,
         almacen: AlmacenDeDocumentos,
       ) => new DescargarDocumento(contratos, almacen),
+    },
+    {
+      provide: BUSCAR_CONTRATOS,
+      inject: [CONTRATO_REPOSITORY],
+      useFactory: (contratos: ContratoRepository) =>
+        new BuscarContratos(contratos),
     },
   ],
 })

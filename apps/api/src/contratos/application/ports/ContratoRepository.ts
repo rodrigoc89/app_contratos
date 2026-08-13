@@ -1,4 +1,45 @@
-import type { Contrato } from "../../domain/Contrato";
+import type { FechaCalendario } from "../../../shared/domain/FechaCalendario";
+import type { Contrato, EstadoContrato } from "../../domain/Contrato";
+import type { TerminoInterpretado } from "../interpretarTerminoDeBusqueda";
+
+/**
+ * One row of the office list screen — a read model, not the aggregate
+ * (DESIGN.md D4). Hydrating twenty aggregates to render five fields each
+ * would pull every signature, document and event along with them: slow, and
+ * a privacy over-fetch of exactly the evidence `vistas.ts` exists to keep
+ * server-side under Ley 25.326.
+ */
+export interface ResumenDeContrato {
+  readonly id: string;
+  readonly numero: number | null;
+  readonly estado: EstadoContrato;
+  /** Display form, untouched — dotting and normalisation are presentation. */
+  readonly comodatarioNombreCompleto: string;
+  /** Digits only, as stored. */
+  readonly comodatarioDni: string;
+  readonly fechaFirma: FechaCalendario | null;
+  /** The ordering key (R-2.2): storage-assigned, never domain state. */
+  readonly creadoEn: Date;
+}
+
+export interface CriteriosDeBusqueda {
+  /**
+   * Already interpreted by `interpretarTerminoDeBusqueda`, never a raw
+   * string — so no adapter can re-decide what the user typed.
+   */
+  readonly termino: TerminoInterpretado | null;
+  /** Empty means every state; never a hidden default. */
+  readonly estados: readonly EstadoContrato[];
+  /** 1-based. */
+  readonly pagina: number;
+  readonly tamanoPagina: number;
+}
+
+export interface ResultadoDeBusqueda {
+  readonly resumenes: readonly ResumenDeContrato[];
+  /** Untruncated match count, before paging. */
+  readonly total: number;
+}
 
 export interface ContratoRepository {
   porId(id: string): Promise<Contrato | null>;
@@ -22,4 +63,13 @@ export interface ContratoRepository {
    * time would produce the same one.
    */
   siguienteNumero(): Promise<number>;
+
+  /**
+   * The office list and search (DESIGN.md D4). Filtering, ordering
+   * (`creadoEn DESC, id DESC` — R-2.2), paging and the untruncated `total`
+   * all live behind this one method, so `ContratosEnMemoria` and
+   * `PrismaContratoRepository` can be driven by the exact same scenario
+   * table (`escenariosDeBusqueda.testing.ts`, DESIGN.md D8).
+   */
+  buscar(criterios: CriteriosDeBusqueda): Promise<ResultadoDeBusqueda>;
 }

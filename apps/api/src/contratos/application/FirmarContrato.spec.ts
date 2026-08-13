@@ -107,6 +107,23 @@ class ContratosEnMemoria implements ContratoRepository {
   siguienteNumero(): Promise<number> {
     return Promise.resolve(this.proximoNumero++);
   }
+
+  /**
+   * `FirmarContrato` never calls `buscar` — this local double predates it
+   * and exists only so `ContratoRepository`'s signature compiles here. A
+   * throwing stub, deliberately: a silent no-op could hide a future test
+   * that starts relying on it by accident. Kept separate from
+   * `ContratosEnMemoria` in `dobles.testing.ts`, which implements `buscar`
+   * for real — this file's `perderLaCarrera` race-losing behaviour is
+   * specific to this suite and must not be merged into the shared double.
+   */
+  buscar(): Promise<never> {
+    return Promise.reject(
+      new Error(
+        "ContratosEnMemoria (FirmarContrato.spec.ts): buscar() no está implementado en este doble local — FirmarContrato no lo usa.",
+      ),
+    );
+  }
 }
 
 class GeneradorFalso implements GeneradorDeDocumentos {

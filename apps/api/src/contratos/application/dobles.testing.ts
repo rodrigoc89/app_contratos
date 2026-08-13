@@ -1,15 +1,21 @@
 import { FirmanteComodante } from "../../firmantes/domain/FirmanteComodante";
 import { PlantillaContrato } from "../../plantillas/domain/PlantillaContrato";
+import { normalizarTexto } from "../../shared/domain/normalizarTexto";
 import { FechaCalendario } from "../../shared/domain/FechaCalendario";
 import { Comodatario } from "../domain/Comodatario";
 import { ContextoDeFirma } from "../domain/ContextoDeFirma";
-import { Contrato } from "../domain/Contrato";
+import { Contrato, VERSION_SIN_PERSISTIR } from "../domain/Contrato";
 import type { DocumentoContrato } from "../domain/Contrato";
 import { Equipos } from "../domain/Equipos";
 import { FirmaCapturada } from "../domain/FirmaCapturada";
 import type { TipoDocumentoFirmado } from "../domain/FirmaCapturada";
 import type { AlmacenDeDocumentos } from "./ports/AlmacenDeDocumentos";
-import type { ContratoRepository } from "./ports/ContratoRepository";
+import type {
+  ContratoRepository,
+  CriteriosDeBusqueda,
+  ResultadoDeBusqueda,
+  ResumenDeContrato,
+} from "./ports/ContratoRepository";
 import type { IdentificadorUnico } from "./ports/IdentificadorUnico";
 import type {
   EntradaGeneracion,
@@ -97,8 +103,31 @@ export class ContratosEnMemoria implements ContratoRepository {
   private proximoNumero = 1042;
   private readonly almacenados = new Map<string, Contrato>();
 
-  agregar(contrato: Contrato): void {
+  /**
+   * `creadoEn` is storage-assigned, not domain state (DESIGN.md D3):
+   * `EventoContrato` carries no timestamp, so there is nothing on the
+   * aggregate to derive it from. This double takes on the same job Postgres
+   * already does via `contratos.creado_en @default(now())`.
+   */
+  private readonly creadosEn = new Map<string, Date>();
+  /** Backs the default `creadoEn`, so insertion order is the default order when a test supplies no explicit instant. */
+  private contadorDeInstantes = 0;
+
+  private siguienteInstante(): Date {
+    this.contadorDeInstantes += 1;
+    return new Date(this.contadorDeInstantes);
+  }
+
+  /**
+   * `creadoEn` is accepted, never required: most specs do not care about
+   * ordering and get a strictly increasing default; scenario tables that
+   * do care (R-2.2) pass one explicitly.
+   */
+  agregar(contrato: Contrato, creadoEn?: Date): void {
     this.almacenados.set(contrato.id, contrato);
+    if (!this.creadosEn.has(contrato.id)) {
+      this.creadosEn.set(contrato.id, creadoEn ?? this.siguienteInstante());
+    }
   }
 
   porId(id: string): Promise<Contrato | null> {
@@ -106,6 +135,15 @@ export class ContratosEnMemoria implements ContratoRepository {
   }
 
   guardar(contrato: Contrato): Promise<void> {
+    // Stamped on first insert only, selected by the exact predicate
+    // `PrismaContratoRepository.guardar` uses to choose `create` over
+    // `update` — never touched again on a later save.
+    if (
+      contrato.versionAlmacenada === VERSION_SIN_PERSISTIR &&
+      !this.creadosEn.has(contrato.id)
+    ) {
+      this.creadosEn.set(contrato.id, this.siguienteInstante());
+    }
     this.guardados.push(contrato);
     this.almacenados.set(contrato.id, contrato);
     return Promise.resolve();
@@ -114,6 +152,80 @@ export class ContratosEnMemoria implements ContratoRepository {
   siguienteNumero(): Promise<number> {
     return Promise.resolve(this.proximoNumero++);
   }
+
+  /**
+   * The office list and search, driven for real: filtering, the shared
+   * `normalizarTexto`, `creadoEn DESC, id DESC` ordering, slicing and the
+   * untruncated `total` (DESIGN.md D4). A stub here would silently void
+   * every scenario in `escenariosDeBusqueda.testing.ts`.
+   */
+  buscar(criterios: CriteriosDeBusqueda): Promise<ResultadoDeBusqueda> {
+    const estadosPermitidos = new Set(criterios.estados);
+
+    const candidatos = [...this.almacenados.values()]
+      .filter((contrato) => {
+        if (
+          estadosPermitidos.size > 0 &&
+          !estadosPermitidos.has(contrato.estado)
+        ) {
+          return false;
+        }
+        return coincideConElTermino(contrato, criterios.termino);
+      })
+      .sort((a, b) => {
+        const creadoA = this.creadosEn.get(a.id)?.getTime() ?? 0;
+        const creadoB = this.creadosEn.get(b.id)?.getTime() ?? 0;
+        if (creadoA !== creadoB) {
+          return creadoB - creadoA;
+        }
+        // The tiebreaker is not cosmetic: offset pagination over a
+        // non-total order can repeat or skip a row across a page boundary.
+        if (a.id === b.id) {
+          return 0;
+        }
+        return a.id < b.id ? 1 : -1;
+      });
+
+    const total = candidatos.length;
+    const inicio = (criterios.pagina - 1) * criterios.tamanoPagina;
+    const pagina = candidatos.slice(inicio, inicio + criterios.tamanoPagina);
+
+    const resumenes: ResumenDeContrato[] = pagina.map((contrato) => ({
+      id: contrato.id,
+      numero: contrato.numero,
+      estado: contrato.estado,
+      comodatarioNombreCompleto: contrato.comodatario.nombreCompleto,
+      comodatarioDni: contrato.comodatario.dni.valor,
+      fechaFirma: contrato.fechaFirma,
+      creadoEn: this.creadosEn.get(contrato.id) ?? new Date(0),
+    }));
+
+    return Promise.resolve({ resumenes, total });
+  }
+}
+
+/**
+ * `nombre` matches as a substring of the normalized name, exactly as
+ * `PrismaContratoRepository` matches against the persisted
+ * `comodatario_nombre_busqueda` column — both sides run through the same
+ * `normalizarTexto` (DESIGN.md D1/D4), so `ñ` and `n` stay different letters
+ * here too. `dni` matches as a prefix of the stored, bare-digits DNI.
+ */
+function coincideConElTermino(
+  contrato: Contrato,
+  termino: CriteriosDeBusqueda["termino"],
+): boolean {
+  if (termino === null) {
+    return true;
+  }
+
+  if (termino.tipo === "dni") {
+    return contrato.comodatario.dni.valor.startsWith(termino.digitos);
+  }
+
+  return normalizarTexto(contrato.comodatario.nombreCompleto).includes(
+    termino.normalizado,
+  );
 }
 
 export class IdentificadoresFijos implements IdentificadorUnico {
