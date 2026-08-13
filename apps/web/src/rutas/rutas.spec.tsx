@@ -77,7 +77,7 @@ describe("route guards", () => {
 
     renderizarEn("/");
 
-    expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nuevo contrato" })).toBeInTheDocument();
   });
 
   it("sends an oficina session straight to the contract list, not the old fallback screen", async () => {
@@ -98,7 +98,7 @@ describe("route guards", () => {
     renderizarEn("/");
 
     expect(await screen.findByRole("heading", { name: "Contratos" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Datos del cliente" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Nuevo contrato" })).not.toBeInTheDocument();
   });
 
   it("reaches /panel directly as oficina", async () => {
@@ -115,7 +115,7 @@ describe("route guards", () => {
 
     renderizarEn("/panel");
 
-    expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nuevo contrato" })).toBeInTheDocument();
   });
 
   it("still lands an unrecognized role on the role-agnostic fallback, never a dead end", () => {
@@ -135,7 +135,7 @@ describe("route guards", () => {
   it("navigates to login the instant the session is cleared out of band, with no reload", async () => {
     establecerSesion(sesionFalsa("tecnico"));
     renderizarEn("/");
-    expect(screen.getByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nuevo contrato" })).toBeInTheDocument();
 
     act(() => {
       limpiarSesion();
@@ -165,13 +165,13 @@ describe("route guards", () => {
     renderizarEn("/");
 
     expect(screen.queryByLabelText("Usuario")).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Datos del cliente" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Nuevo contrato" })).not.toBeInTheDocument();
 
     await act(async () => {
       resolverRespuesta?.(respuestaSesion(sesionFalsa("tecnico")));
     });
 
-    expect(await screen.findByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Nuevo contrato" })).toBeInTheDocument();
   });
 
   it("restores the técnico session at boot from a stored refresh token, reaching the home without ever showing login", async () => {
@@ -180,7 +180,7 @@ describe("route guards", () => {
 
     renderizarEn("/");
 
-    expect(await screen.findByRole("heading", { name: "Datos del cliente" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Nuevo contrato" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Usuario")).not.toBeInTheDocument();
   });
 

@@ -167,3 +167,19 @@ describe("PaginaLogin", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/cerraste tu sesión/i);
   });
 });
+
+/**
+ * The first screen a técnico sees had no heading at all — the form opened on
+ * a bare "Usuario" label. Same defect as both draft steps, same fix.
+ */
+describe("PaginaLogin — encabezado", () => {
+  it("titles the screen", () => {
+    render(
+      <MemoryRouter>
+        <PaginaLogin />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+  });
+});

@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { Boton } from "../atomos/Boton";
 import { CampoTexto } from "../atomos/CampoTexto";
 import { Etiqueta } from "../atomos/Etiqueta";
+import { IndicadorDePaso, PASOS_DEL_BORRADOR } from "../moleculas/IndicadorDePaso";
 import { EscanerDeMac } from "./EscanerDeMac";
 
 /**
@@ -65,7 +66,8 @@ export function FormularioEquipos({
 
   return (
     <form onSubmit={manejarEnvio} className="formulario">
-      <h2>Equipos entregados</h2>
+      <IndicadorDePaso pasos={PASOS_DEL_BORRADOR} actual={2} />
+      <h1>Nuevo contrato</h1>
       <Etiqueta htmlFor="antenaModelo">Modelo de antena</Etiqueta>
       <CampoTexto
         id="antenaModelo"
@@ -80,7 +82,7 @@ export function FormularioEquipos({
       />
       <fieldset className="formulario__fieldset">
         <legend>¿Se entregó inyector PoE?</legend>
-        <Etiqueta>
+        <Etiqueta className="etiqueta--opcion">
           <input
             type="radio"
             name="poe"
@@ -90,7 +92,7 @@ export function FormularioEquipos({
           />
           Sí
         </Etiqueta>
-        <Etiqueta>
+        <Etiqueta className="etiqueta--opcion">
           <input
             type="radio"
             name="poe"
@@ -109,12 +111,26 @@ export function FormularioEquipos({
         disabled={deshabilitado}
       />
       {error !== null && <p role="alert">{error}</p>}
-      <Boton type="button" onClick={onVolver} disabled={deshabilitado}>
-        Volver
-      </Boton>
-      <Boton type="submit" disabled={deshabilitado}>
-        {etiquetaEnvio}
-      </Boton>
+      <div className="formulario__acciones">
+        {/*
+          Going back and committing are not the same act, and they used to be
+          the same button. The secondary one loses the fill rather than the
+          primary gaining one: PR #53's note holds — a filled button carries
+          more presence than an outlined one on a tablet in direct sun, so
+          the fill belongs to the action that matters.
+        */}
+        <Boton
+          type="button"
+          className="boton--secundario"
+          onClick={onVolver}
+          disabled={deshabilitado}
+        >
+          Volver
+        </Boton>
+        <Boton type="submit" disabled={deshabilitado}>
+          {etiquetaEnvio}
+        </Boton>
+      </div>
     </form>
   );
 }
