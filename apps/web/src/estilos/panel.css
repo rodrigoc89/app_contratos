@@ -132,9 +132,25 @@
  * `TablaDeContratos.tsx` already carries on every cell (D12) to restate the
  * column label beside its value. The header row is not removed — removing
  * it would drop it from the accessibility tree, unlike hiding it — it is
- * moved off-screen with a technique that avoids the banned clipped-overflow
- * approach entirely, using `clip-path` instead of the older
- * `clip: rect(...)` plus a clipped-overflow declaration.
+ * moved off-screen — but NOT with `clip-path`, which was the first attempt
+ * and is a trap here.
+ *
+ * `clip-path: inset(50%)` hides an element's PIXELS and leaves its LAYOUT
+ * untouched: the `th` boxes still occupy space. Because this rule is
+ * `position: absolute` with no positioned ancestor, its containing block is
+ * the initial containing block, so those boxes escaped the table's own
+ * `overflow-x: auto` region and widened the PAGE — measured in a real
+ * browser at 360px as a document `scrollWidth` of 492 against a 360px
+ * viewport, with nothing visible to scroll to. R-3.6 requires the opposite.
+ *
+ * The sr-only recipe normally contains that with the clipped-overflow
+ * declaration the first guard in `convencionesDeEstilos.spec.ts` bans
+ * outright (it protects the document viewer's reading gate) — which is why
+ * that recipe cannot be used verbatim here. So the header is displaced
+ * horizontally instead: an absolutely-positioned box at a large negative
+ * `left` contributes nothing to `scrollWidth` in a left-to-right document,
+ * and needs no clipping at all. This app is Spanish-only and always LTR; in
+ * an RTL document the offset would have to flip.
  */
 .tabla-de-contratos,
 .tabla-de-contratos tbody,
@@ -145,12 +161,12 @@
 
 .tabla-de-contratos thead {
   position: absolute;
+  left: -10000px;
   width: 1px;
   height: 1px;
   padding: 0;
   margin: -1px;
   border: 0;
-  clip-path: inset(50%);
   white-space: nowrap;
 }
 
@@ -194,12 +210,12 @@
 
   .tabla-de-contratos thead {
     position: static;
+    left: auto;
     width: auto;
     height: auto;
     padding: 0;
     margin: 0;
     border: 0;
-    clip-path: none;
     white-space: normal;
     display: table-header-group;
   }
@@ -241,12 +257,40 @@
 
 /* --- Paginador (R-3.9, D16) ------------------------------------------------ */
 
+/**
+ * Sticky, reversing DESIGN.md D14 — which rejected this to save ~72px of
+ * height, before the screen existed to measure. It does now: at 1366×768 the
+ * paginator sat 618px below the fold with a 20-row page and 177px below it
+ * after the page size dropped to 10, so turning the page meant scrolling
+ * past the whole list first. The height D14 wanted to protect is worth less
+ * than the control it was protecting it from.
+ *
+ * `bottom` is not decoration: `position: sticky` with no inset is inert and
+ * behaves exactly like `static`, silently. The background is not decoration
+ * either — without it the rows scroll visibly behind the controls.
+ *
+ * `padding-block` plus the negative `margin-bottom` keep the last row
+ * reachable: the footer would otherwise cover it at the end of the scroll,
+ * which is the one failure mode a source scan cannot see.
+ *
+ * Sticky needs no clipping and creates no scroll container, so it is
+ * unrelated to the clipped-overflow values the first guard bans. It works
+ * here because the paginator is a SIBLING of the table's scroll region, not
+ * a descendant — a scrollable ancestor would silently disable it.
+ */
 .paginador {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--espacio-2);
   margin-top: var(--espacio-4);
+  margin-bottom: calc(-1 * var(--espacio-5));
+  padding-block: var(--espacio-3);
+  background-color: var(--color-fondo);
+  border-top: 1px solid var(--color-borde-suave);
 }
 
 .paginador .boton {
