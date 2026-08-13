@@ -53,7 +53,25 @@ export function enlaceDeDescarga(
   return `/${RUTA_CONTRATOS}/${contratoId}/documentos/${documento}`;
 }
 
-export function vistaDeContrato(contrato: Contrato): DatosContratoDetalle {
+/**
+ * The names behind `EventoContrato.usuarioId`, keyed by id.
+ *
+ * Passed in rather than looked up here: this module maps a loaded aggregate
+ * to a response shape and performs no I/O, which is what makes every view in
+ * it testable with no database and no container.
+ */
+export type AutoresDeEventos = ReadonlyMap<string, string>;
+
+/**
+ * `autores` is required, not optional with an empty default, on purpose: a
+ * default would let a caller that forgot to resolve the names emit a history
+ * where every transition looks anonymous — a wrong answer that reads exactly
+ * like a right one. Required, the compiler asks every call site what it knows.
+ */
+export function vistaDeContrato(
+  contrato: Contrato,
+  autores: AutoresDeEventos,
+): DatosContratoDetalle {
   const { comodatario, equipos, plazo } = contrato;
 
   return {
@@ -101,6 +119,10 @@ export function vistaDeContrato(contrato: Contrato): DatosContratoDetalle {
       tipo: evento.tipo,
       fecha: evento.fecha?.iso ?? null,
       detalle: evento.detalle,
+      // The id never reaches the response — only what it resolves to. An id
+      // with no name degrades to null rather than falling back to itself.
+      usuario:
+        evento.usuarioId === null ? null : (autores.get(evento.usuarioId) ?? null),
     })),
 
     equiposPendientesDeRestitucion: contrato.equiposPendientesDeRestitucion,

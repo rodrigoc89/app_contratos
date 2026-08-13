@@ -87,6 +87,21 @@ export const EsquemaEventoContrato = z.object({
   tipo: EsquemaTipoEventoContrato,
   fecha: z.string().regex(FECHA_ISO).nullable(),
   detalle: z.string().nullable(),
+  /**
+   * Who performed the transition, as a name a person can read — resolved
+   * server-side from the `usuario_id` the event row stores, which never
+   * leaves the API.
+   *
+   * Null on `creado` and `firmado`, where the null is meaningful rather than
+   * missing: a draft precedes anything with legal weight, and signing records
+   * its técnico in the signing context alongside the device, the IP and the
+   * coordinates.
+   *
+   * Also null when an id cannot be resolved to a name. The authoritative
+   * record is `contrato_eventos.usuario_id`, which is kept forever; this
+   * field is what the screen shows, not what the audit rests on.
+   */
+  usuario: z.string().nullable(),
 });
 
 /**

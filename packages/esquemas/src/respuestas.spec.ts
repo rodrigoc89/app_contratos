@@ -39,7 +39,9 @@ const detalle = () => ({
       enlace: "/contratos/11111111-1111-4111-8111-111111111111/documentos/comodato",
     },
   ],
-  eventos: [{ tipo: "firmado", fecha: "2026-08-04", detalle: "Nº 1042" }],
+  eventos: [
+    { tipo: "firmado", fecha: "2026-08-04", detalle: "Nº 1042", usuario: null },
+  ],
   equiposPendientesDeRestitucion: false,
 });
 
@@ -57,10 +59,66 @@ describe("EsquemaContratoDetalle", () => {
       fechaFirma: null,
       plantillaVersionId: null,
       documentos: [],
-      eventos: [{ tipo: "creado", fecha: null, detalle: null }],
+      eventos: [{ tipo: "creado", fecha: null, detalle: null, usuario: null }],
     };
 
     expect(EsquemaContratoDetalle.safeParse(borrador).success).toBe(true);
+  });
+
+  /**
+   * DESIGN.md §3 promises baja, anulación and restitución record "a reason and
+   * an actor". The actor has been stored since the transitions shipped; this
+   * is the field that lets a screen answer *who* without the reader opening
+   * Postgres.
+   */
+  it("carries the actor of a transition, by name", () => {
+    const anulado = {
+      ...detalle(),
+      estado: "anulado",
+      eventos: [
+        { tipo: "creado", fecha: null, detalle: null, usuario: null },
+        { tipo: "firmado", fecha: "2026-08-04", detalle: "Nº 1042", usuario: null },
+        {
+          tipo: "anulado",
+          fecha: "2026-08-12",
+          detalle: "Error de carga",
+          usuario: "oficina",
+        },
+      ],
+    };
+
+    const analizado = EsquemaContratoDetalle.parse(anulado);
+
+    expect(analizado.eventos.map((evento) => evento.usuario)).toEqual([
+      null,
+      null,
+      "oficina",
+    ]);
+  });
+
+  /**
+   * The actor travels as a *name*, never as the `usuario_id` the event row
+   * stores. An internal identifier on the wire is a handle onto the identity
+   * table that no client has any business holding — and a UUID on screen
+   * would be worse than showing nothing at all, which is the whole reason
+   * this field is resolved server-side.
+   */
+  it("never carries the raw user id of an event", () => {
+    const analizado = EsquemaContratoDetalle.parse({
+      ...detalle(),
+      eventos: [
+        {
+          tipo: "dado_de_baja",
+          fecha: "2026-08-12",
+          detalle: "Mudanza",
+          usuario: "oficina",
+          usuarioId: "99999999-9999-4999-8999-999999999999",
+        },
+      ],
+    });
+
+    expect(analizado.eventos[0]).not.toHaveProperty("usuarioId");
+    expect(JSON.stringify(analizado)).not.toContain("99999999");
   });
 
   /**

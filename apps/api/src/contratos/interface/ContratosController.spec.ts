@@ -16,6 +16,7 @@ import {
   ANULAR_CONTRATO,
   BUSCAR_CONTRATOS,
   DAR_DE_BAJA_CONTRATO,
+  DIRECTORIO_DE_AUTORES,
   REGISTRAR_RESTITUCION,
   CONSULTAR_CONTRATO,
   CREAR_BORRADOR,
@@ -71,6 +72,9 @@ beforeEach(async () => {
       { provide: DAR_DE_BAJA_CONTRATO, useValue: noUsadoEnEstaSuite },
       { provide: ANULAR_CONTRATO, useValue: noUsadoEnEstaSuite },
       { provide: REGISTRAR_RESTITUCION, useValue: noUsadoEnEstaSuite },
+      // This suite only exercises `GET /contratos`, which answers list rows
+      // and never a detail — so the directory is never asked anything.
+      { provide: DIRECTORIO_DE_AUTORES, useValue: noUsadoEnEstaSuite },
       { provide: EMISOR_DE_TOKEN_DE_ACCESO, useValue: emisor },
       Reflector,
       { provide: APP_GUARD, useClass: AutenticacionGuard },

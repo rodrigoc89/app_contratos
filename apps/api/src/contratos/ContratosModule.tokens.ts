@@ -21,6 +21,7 @@ export const GENERADOR_DE_DOCUMENTOS = Symbol("GENERADOR_DE_DOCUMENTOS");
 export const ALMACEN_DE_DOCUMENTOS = Symbol("ALMACEN_DE_DOCUMENTOS");
 export const RELOJ_CONTRATOS = Symbol("RELOJ_CONTRATOS");
 export const IDENTIFICADOR_DE_CONTRATO = Symbol("IDENTIFICADOR_DE_CONTRATO");
+export const DIRECTORIO_DE_AUTORES = Symbol("DIRECTORIO_DE_AUTORES");
 
 // ---- use cases ------------------------------------------------------------
 

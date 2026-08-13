@@ -19,6 +19,7 @@ import { DescargarDocumento } from "./application/DescargarDocumento";
 import { FirmarContrato } from "./application/FirmarContrato";
 import type { AlmacenDeDocumentos } from "./application/ports/AlmacenDeDocumentos";
 import type { ContratoRepository } from "./application/ports/ContratoRepository";
+import type { DirectorioDeAutores } from "./application/ports/DirectorioDeAutores";
 import type { FirmanteRepository } from "./application/ports/FirmanteRepository";
 import type { IdentificadorUnico } from "./application/ports/IdentificadorUnico";
 import type { PlantillaRepository } from "./application/ports/PlantillaRepository";
@@ -34,6 +35,7 @@ import {
   DAR_DE_BAJA_CONTRATO,
   CREAR_BORRADOR,
   DESCARGAR_DOCUMENTO,
+  DIRECTORIO_DE_AUTORES,
   FIRMANTE_REPOSITORY,
   REGISTRAR_RESTITUCION,
   FIRMAR_CONTRATO,
@@ -46,6 +48,7 @@ import {
 import { AlmacenDeDocumentosEnDisco } from "./infrastructure/AlmacenDeDocumentosEnDisco";
 import { GeneradorDeDocumentosPuppeteer } from "./infrastructure/GeneradorDeDocumentosPuppeteer";
 import { PrismaContratoRepository } from "./infrastructure/PrismaContratoRepository";
+import { PrismaDirectorioDeAutores } from "./infrastructure/PrismaDirectorioDeAutores";
 import { RelojDelSistema } from "./infrastructure/RelojDelSistema";
 import { ContratosController } from "./interface/ContratosController";
 
@@ -125,6 +128,16 @@ class CierreDelGeneradorDeDocumentos implements OnApplicationShutdown {
       inject: [PRISMA],
       useFactory: (prisma: PrismaClient): FirmanteRepository =>
         new PrismaFirmanteRepository(prisma),
+    },
+    {
+      provide: DIRECTORIO_DE_AUTORES,
+      inject: [PRISMA],
+      // Reads names out of `usuarios`, which `identidad` owns. Wired here as
+      // a `contratos` port rather than by importing `IdentidadModule`: the
+      // question is one column wide, and a module import would hand this
+      // module every user operation there is.
+      useFactory: (prisma: PrismaClient): DirectorioDeAutores =>
+        new PrismaDirectorioDeAutores(prisma),
     },
 
     // ---- documents -------------------------------------------------------
