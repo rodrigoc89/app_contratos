@@ -80,6 +80,32 @@ describe("TablaDeContratos", () => {
     expect(within(fila).queryByText(estado)).not.toBeInTheDocument();
   });
 
+  /**
+   * The estado is what this screen exists to answer, so it is the one field
+   * that carries a visual encoding as well as its label. The encoding hangs
+   * off `data-estado`, which is markup and therefore assertable here, rather
+   * than off a colour jsdom cannot see.
+   *
+   * The label is asserted to survive on purpose: colour must never be the
+   * only carrier of the meaning — for a colour-blind reader, and for anyone
+   * reading a printed or greyscale screenshot, the Spanish word is what
+   * remains.
+   */
+  it.each([
+    ["borrador", "Borrador"],
+    ["vigente", "Vigente"],
+    ["dado_de_baja", "Dado de baja"],
+    ["anulado", "Anulado"],
+  ] as const)("marks estado %s with a data-estado hook while keeping its label as text", (estado, etiqueta) => {
+    render(<TablaDeContratos contratos={[contrato({ estado })]} />);
+
+    const fila = screen.getAllByRole("row")[1] as HTMLElement;
+    const insignia = within(fila).getByText(etiqueta);
+
+    expect(insignia).toHaveAttribute("data-estado", estado);
+    expect(insignia.textContent).toBe(etiqueta);
+  });
+
   it("shows a draft's null numero and null fechaFirma as an honest placeholder, never a blank cell or a crash", () => {
     render(<TablaDeContratos contratos={[contrato({ estado: "borrador", numero: null, fechaFirma: null })]} />);
 

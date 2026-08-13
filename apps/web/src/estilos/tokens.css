@@ -23,6 +23,32 @@
   --color-error: #b3261e;
   --color-foco: #0b634a;
 
+  /**
+   * Estado badges for the office list. Same precedent as the panel's
+   * `--fuente-base` rebind (DESIGN.md D13): the técnico's tablet is read in
+   * direct Santiago del Estero sunlight and stays on the flat
+   * maximum-contrast palette above, while the office reads a monitor
+   * indoors, where a tint carries a category better than another block of
+   * solid brand green.
+   *
+   * Each pair is a light tint plus a dark foreground, measured at 7.3:1 or
+   * better — comfortably past the 4.5:1 body-text threshold, because a badge
+   * is small text.
+   *
+   * The four tints differ in HUE and barely in luminance (1.02–1.08:1
+   * between them), which is exactly why colour is never allowed to carry the
+   * meaning on its own: the Spanish label always renders alongside, and
+   * `TablaDeContratos.spec.tsx` fails if it ever stops.
+   */
+  --color-estado-vigente-fondo: #d7f0e4;
+  --color-estado-vigente-texto: #08533e;
+  --color-estado-borrador-fondo: #e9edf0;
+  --color-estado-borrador-texto: #39454c;
+  --color-estado-baja-fondo: #fdecd2;
+  --color-estado-baja-texto: #6d4106;
+  --color-estado-anulado-fondo: #fbe0de;
+  --color-estado-anulado-texto: #8c1d18;
+
   /* Spacing scale */
   --espacio-1: 4px;
   --espacio-2: 8px;

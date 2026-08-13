@@ -519,6 +519,267 @@ describe("PR2: exactly the documented breakpoints, min-width only (D13/D17)", ()
   });
 });
 
+/**
+ * Resolves a `var(--token)` or a literal hex against `tokens.css`, so the
+ * assertions below test the COLOUR a user sees rather than the spelling of
+ * the declaration.
+ */
+function valorDeColor(declaracion: string, tokens: string): string | undefined {
+  const texto = declaracion.trim();
+
+  /**
+   * `color-mix()` must be computed, not peeked at. Reading the first `var()`
+   * inside one returns the colour being mixed FROM, which is nowhere near
+   * what renders — `color-mix(in srgb, var(--color-primario) 8%, white)` is
+   * a pale tint, not brand green. The first version of this helper did
+   * exactly that and reported an 8% tint as a solid fill, which is the same
+   * class of mistake it exists to catch, and it can produce false passes as
+   * easily as false failures.
+   */
+  const mezcla = /^color-mix\(\s*in\s+srgb\s*,\s*(.+?)\s+(\d+(?:\.\d+)?)%\s*,\s*(.+?)\s*\)$/i.exec(texto);
+  if (mezcla) {
+    const primero = valorDeColor(mezcla[1] ?? "", tokens);
+    const segundo = valorDeColor(mezcla[3] ?? "", tokens);
+    if (primero === undefined || segundo === undefined) return undefined;
+    const proporcion = Number(mezcla[2]) / 100;
+    const [a, b] = [canales(primero), canales(segundo)];
+    const canal = (i: number) => Math.round((a[i] ?? 0) * proporcion + (b[i] ?? 0) * (1 - proporcion));
+    return `#${[0, 1, 2].map((i) => canal(i).toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  const referencia = /^var\(\s*(--[\w-]+)\s*\)$/.exec(texto);
+  if (referencia) {
+    const token = new RegExp(`${referencia[1]}\\s*:\\s*(#[0-9a-f]{3,8})`, "i").exec(tokens);
+    return token?.[1]?.toLowerCase();
+  }
+
+  return /^#[0-9a-f]{3,8}$/i.test(texto) ? texto.toLowerCase() : undefined;
+}
+
+function canales(hex: string): readonly [number, number, number] {
+  const c = hex.replace("#", "");
+  const ancho = c.length <= 4 ? 1 : 2;
+  const leer = (i: number) => {
+    const trozo = c.slice(i * ancho, i * ancho + ancho);
+    return parseInt(ancho === 1 ? trozo + trozo : trozo, 16);
+  };
+  return [leer(0), leer(1), leer(2)];
+}
+
+/** WCAG relative luminance. */
+function luminancia(hex: string): number {
+  const [r, g, b] = canales(hex).map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  }) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contraste(a: string, b: string): number {
+  const [claro, oscuro] = [luminancia(a), luminancia(b)].sort((x, y) => y - x) as [number, number];
+  return (claro + 0.05) / (oscuro + 0.05);
+}
+
+function fondoDeclarado(cuerpo: string): string | undefined {
+  return /background(?:-color)?\s*:\s*([^;}]+)/.exec(cuerpo)?.[1]?.trim();
+}
+
+describe("valorDeColor resolves what renders, not what is written", () => {
+  /**
+   * Proven directly rather than assumed, for the same reason
+   * `tieneReemplazoDeFoco` is: the colour guards below are loops over real
+   * CSS, so they assert nothing until someone violates them — and a resolver
+   * that quietly returns the wrong colour produces false PASSES as readily
+   * as false failures. This one already got it wrong once, by reading the
+   * first `var()` inside a `color-mix()` and reporting an 8% tint as a solid
+   * fill.
+   */
+  const TOKENS = `
+    :root {
+      --color-primario: #0b634a;
+      --color-fondo: #ffffff;
+      --corto: #fff;
+    }
+  `;
+
+  it("resolves a token reference", () => {
+    expect(valorDeColor("var(--color-primario)", TOKENS)).toBe("#0b634a");
+  });
+
+  it("resolves a literal, and three-digit shorthand", () => {
+    expect(valorDeColor("#0B634A", TOKENS)).toBe("#0b634a");
+    expect(canales(valorDeColor("var(--corto)", TOKENS) ?? "")).toEqual([255, 255, 255]);
+  });
+
+  it("computes a color-mix instead of reading the colour being mixed FROM", () => {
+    const mezcla = valorDeColor(
+      "color-mix(in srgb, var(--color-primario) 8%, var(--color-fondo))",
+      TOKENS,
+    );
+
+    expect(mezcla, "an 8% tint must not resolve to the undiluted brand colour").not.toBe("#0b634a");
+    // Red channel: 0.08 × 11 + 0.92 × 255 = 235.48 -> 235.
+    expect(canales(mezcla ?? "")).toEqual([235, 243, 241]);
+  });
+
+  it("resolves a 100% mix to the colour itself, and 0% to the other one", () => {
+    expect(valorDeColor("color-mix(in srgb, var(--color-primario) 100%, #ffffff)", TOKENS)).toBe("#0b634a");
+    expect(valorDeColor("color-mix(in srgb, var(--color-primario) 0%, #ffffff)", TOKENS)).toBe("#ffffff");
+  });
+
+  it("returns undefined for anything it cannot resolve, rather than guessing", () => {
+    expect(valorDeColor("var(--no-existe)", TOKENS)).toBeUndefined();
+    expect(valorDeColor("rgb(11 99 74)", TOKENS)).toBeUndefined();
+    expect(valorDeColor("transparent", TOKENS)).toBeUndefined();
+  });
+});
+
+describe("a filter's on/off state is visible, not just announced (R-3.8)", () => {
+  /**
+   * The defect this guard exists for, measured in a real browser before it
+   * was fixed: an unselected estado chip was `#0b634a` and a selected one
+   * `#094f3b` — a contrast ratio of **1.32:1**, which is indistinguishable.
+   * Every chip read as a big filled button whether or not it was active, so
+   * the office could not tell which filters were on. `aria-pressed` was
+   * correct throughout, which made it worse rather than better: a screen
+   * reader knew the state and a sighted user did not.
+   *
+   * The rule is expressed as a measured ratio rather than "these two
+   * selectors must differ", because differing is exactly what the broken
+   * version already did. Only the amount was wrong.
+   *
+   * 3:1 is the WCAG 1.4.11 threshold for non-text state indication.
+   */
+  const RATIO_MINIMO_ESTADO = 3;
+
+  const REGLA_CHIP = /\.barra-de-busqueda__estados\s+\.boton\s*\{([^}]*)\}/;
+  const REGLA_CHIP_ACTIVO = /\.barra-de-busqueda__estados\s+\.boton--filtro-activo\s*\{([^}]*)\}/;
+  const REGLA_CHIP_HOVER = /\.barra-de-busqueda__estados\s+\.boton:hover:not\(:disabled\)\s*\{([^}]*)\}/;
+
+  function colores() {
+    const panel = archivo("estilos/panel.css");
+    const tokens = archivo("estilos/tokens.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    expect(tokens, "estilos/tokens.css is missing").toBeDefined();
+    const css = panel?.contenido ?? "";
+    const t = tokens?.contenido ?? "";
+
+    const leer = (patron: RegExp, nombre: string) => {
+      const cuerpo = patron.exec(css)?.[1];
+      expect(cuerpo, `${nombre} rule not found in estilos/panel.css`).toBeDefined();
+      const declaracion = fondoDeclarado(cuerpo ?? "");
+      expect(declaracion, `${nombre} declares no background`).toBeDefined();
+      const color = valorDeColor(declaracion ?? "", t);
+      expect(color, `${nombre}'s background does not resolve to a colour: ${declaracion}`).toBeDefined();
+      return color as string;
+    };
+
+    return {
+      apagado: leer(REGLA_CHIP, "the inactive estado chip"),
+      encendido: leer(REGLA_CHIP_ACTIVO, "the active estado chip"),
+      hover: leer(REGLA_CHIP_HOVER, "the estado chip's hover"),
+    };
+  }
+
+  it(`separates a selected estado chip from an unselected one by at least ${RATIO_MINIMO_ESTADO}:1`, () => {
+    const { apagado, encendido } = colores();
+    const ratio = contraste(apagado, encendido);
+
+    expect(
+      ratio,
+      `an unselected chip (${apagado}) and a selected one (${encendido}) differ by only ${ratio.toFixed(2)}:1 — the office cannot see which filters are active`,
+    ).toBeGreaterThanOrEqual(RATIO_MINIMO_ESTADO);
+  });
+
+  it("never paints an unselected chip's hover in the selected colour, which would make hovering a lie", () => {
+    const { encendido, hover } = colores();
+
+    expect(
+      hover,
+      `hovering an unselected chip paints it ${hover}, the exact colour of a selected one — the affordance says "this is on" about a filter that is off`,
+    ).not.toBe(encendido);
+  });
+
+  /**
+   * The same rule, applied to the other control on this screen that has an
+   * on/off state: which page you are on. It had the identical defect for the
+   * identical reason — the current page was marked by swapping a border
+   * colour on an already-solid fill, so "you are here" was nearly invisible.
+   *
+   * Kept as its own assertion rather than folded into a loop because the two
+   * controls resolve their colours from different selectors; what is shared
+   * is the threshold, not the mechanism.
+   */
+  it(`separates the current page from the other page buttons by at least ${RATIO_MINIMO_ESTADO}:1`, () => {
+    const panel = archivo("estilos/panel.css");
+    const tokens = archivo("estilos/tokens.css");
+    const css = panel?.contenido ?? "";
+    const t = tokens?.contenido ?? "";
+
+    const cuerpoBase = /\.paginador\s+\.boton\s*\{([^}]*)\}/.exec(css)?.[1];
+    const cuerpoActual = /\.paginador\s+\.boton--pagina-actual\s*\{([^}]*)\}/.exec(css)?.[1];
+    expect(cuerpoBase, ".paginador .boton rule not found").toBeDefined();
+    expect(cuerpoActual, ".paginador .boton--pagina-actual rule not found").toBeDefined();
+
+    const otras = valorDeColor(fondoDeclarado(cuerpoBase ?? "") ?? "", t);
+    const actual = valorDeColor(fondoDeclarado(cuerpoActual ?? "") ?? "", t);
+    expect(otras, "the pagination buttons declare no resolvable background").toBeDefined();
+    expect(actual, "the current page declares no resolvable background").toBeDefined();
+
+    const ratio = contraste(otras as string, actual as string);
+    expect(
+      ratio,
+      `the current page (${actual}) and the other page buttons (${otras}) differ by only ${ratio.toFixed(2)}:1 — "you are here" has to be visible without counting`,
+    ).toBeGreaterThanOrEqual(RATIO_MINIMO_ESTADO);
+  });
+});
+
+describe("the estado a contract is in is encoded, never spelled out alone (R-3.8)", () => {
+  /**
+   * The list exists to answer "what state is this contract in", and that
+   * field was the least visually salient thing on the screen — plain text in
+   * the third column. Each estado now carries its own badge treatment.
+   *
+   * The label is never removed, and this guard does not let it be: colour is
+   * a second channel, never the only one. `TablaDeContratos.spec.tsx` asserts
+   * the Spanish word survives in the markup; this asserts the colours exist
+   * and are actually distinct from one another.
+   */
+  const ESTADOS = ["vigente", "borrador", "dado-de-baja", "anulado"] as const;
+
+  it("gives every estado its own badge rule", () => {
+    const panel = archivo("estilos/panel.css");
+    const css = panel?.contenido ?? "";
+
+    for (const estado of ESTADOS) {
+      expect(
+        new RegExp(`\\[data-estado=["']?${estado.replace(/-/g, "[_-]")}["']?\\]`).test(css),
+        `no badge rule for estado "${estado}" — its rows would fall back to the default treatment and read as identical to another state`,
+      ).toBe(true);
+    }
+  });
+
+  it("paints the four estados in colours that are actually different from each other", () => {
+    const panel = archivo("estilos/panel.css");
+    const tokens = archivo("estilos/tokens.css");
+    const css = panel?.contenido ?? "";
+    const t = tokens?.contenido ?? "";
+
+    const fondos = ESTADOS.map((estado) => {
+      const patron = new RegExp(
+        `\\[data-estado=["']?${estado.replace(/-/g, "[_-]")}["']?\\][^{]*\\{([^}]*)\\}`,
+      );
+      const cuerpo = patron.exec(css)?.[1] ?? "";
+      return valorDeColor(fondoDeclarado(cuerpo) ?? "", t);
+    });
+
+    expect(
+      new Set(fondos).size,
+      `the four estado badges resolve to ${new Set(fondos).size} distinct colours (${fondos.join(", ")}) — two states that look the same are worse than no colour at all, because they suggest a distinction that is not there`,
+    ).toBe(ESTADOS.length);
+  });
+});
+
 describe("the paginator stays reachable without scrolling the list (R-3.9)", () => {
   /**
    * DESIGN.md D14 rejected a sticky paginator to save ~72px of height. First
