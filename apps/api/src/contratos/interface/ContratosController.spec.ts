@@ -13,7 +13,10 @@ import type { BuscarContratos, DatosBusqueda } from "../application/BuscarContra
 import type { ResultadoDeBusqueda } from "../application/ports/ContratoRepository";
 import {
   ACTUALIZAR_BORRADOR,
+  ANULAR_CONTRATO,
   BUSCAR_CONTRATOS,
+  DAR_DE_BAJA_CONTRATO,
+  REGISTRAR_RESTITUCION,
   CONSULTAR_CONTRATO,
   CREAR_BORRADOR,
   DESCARGAR_DOCUMENTO,
@@ -65,6 +68,9 @@ beforeEach(async () => {
       { provide: DESCARGAR_DOCUMENTO, useValue: noUsadoEnEstaSuite },
       { provide: RELOJ_CONTRATOS, useValue: { ahora: () => new Date() } },
       { provide: BUSCAR_CONTRATOS, useValue: buscarContratos as unknown as BuscarContratos },
+      { provide: DAR_DE_BAJA_CONTRATO, useValue: noUsadoEnEstaSuite },
+      { provide: ANULAR_CONTRATO, useValue: noUsadoEnEstaSuite },
+      { provide: REGISTRAR_RESTITUCION, useValue: noUsadoEnEstaSuite },
       { provide: EMISOR_DE_TOKEN_DE_ACCESO, useValue: emisor },
       Reflector,
       { provide: APP_GUARD, useClass: AutenticacionGuard },

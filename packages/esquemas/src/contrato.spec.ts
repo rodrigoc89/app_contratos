@@ -5,6 +5,9 @@ import {
   EsquemaComodatario,
   EsquemaCrearContrato,
   EsquemaEquipos,
+  EsquemaDarDeBaja,
+  EsquemaAnular,
+  EsquemaRegistrarRestitucion,
 } from "./contrato";
 
 const comodatario = () => ({
@@ -155,6 +158,76 @@ describe("EsquemaActualizarContrato", () => {
       EsquemaActualizarContrato.safeParse({
         equipos: { ...equipos(), antenaMac: "no-es-una-mac" },
       }).success,
+    ).toBe(false);
+  });
+});
+
+/**
+ * The three post-signature transitions (DESIGN.md §3). Each is `strictObject`
+ * for the same reason `EsquemaConsultaDeContratos` is: a near-miss key that
+ * parses as "field absent" is how `?estado=` silently returned every contract
+ * (R-2.12). Here the stakes are higher — a dropped `motivo` would end a
+ * contract with no recorded reason.
+ *
+ * `usuarioId` is deliberately NOT in any of these. The actor comes from the
+ * verified token, never from the body: a request that could name its own
+ * author would make the audit trail worth nothing.
+ */
+describe("EsquemaDarDeBaja", () => {
+  it("accepts a reason and an ISO date", () => {
+    const resultado = EsquemaDarDeBaja.safeParse({
+      motivo: "Baja solicitada por el abonado",
+      fecha: "2027-03-10",
+    });
+
+    expect(resultado.success).toBe(true);
+  });
+
+  it("refuses an empty or blank reason, naming the field", () => {
+    for (const motivo of ["", "   "]) {
+      const resultado = EsquemaDarDeBaja.safeParse({ motivo, fecha: "2027-03-10" });
+      expect(resultado.success).toBe(false);
+      expect(resultado.error?.issues[0]?.path).toEqual(["motivo"]);
+    }
+  });
+
+  it("refuses a date that is not a calendar date", () => {
+    for (const fecha of ["10/03/2027", "2027-3-10", "ayer", ""]) {
+      expect(EsquemaDarDeBaja.safeParse({ motivo: "Deuda", fecha }).success).toBe(false);
+    }
+  });
+
+  it("refuses an actor supplied by the caller — that comes from the token", () => {
+    const resultado = EsquemaDarDeBaja.safeParse({
+      motivo: "Deuda",
+      fecha: "2027-03-10",
+      usuarioId: "usuario-que-no-soy",
+    });
+
+    expect(resultado.success).toBe(false);
+  });
+});
+
+describe("EsquemaAnular", () => {
+  it("accepts a reason and an ISO date", () => {
+    expect(
+      EsquemaAnular.safeParse({ motivo: "DNI mal cargado", fecha: "2026-08-20" }).success,
+    ).toBe(true);
+  });
+
+  it("refuses a blank reason — an annulment with no reason is not one", () => {
+    expect(EsquemaAnular.safeParse({ motivo: "  ", fecha: "2026-08-20" }).success).toBe(false);
+  });
+});
+
+describe("EsquemaRegistrarRestitucion", () => {
+  it("accepts just the date the equipment came back", () => {
+    expect(EsquemaRegistrarRestitucion.safeParse({ fecha: "2027-04-01" }).success).toBe(true);
+  });
+
+  it("takes no reason: returning equipment is a fact, not a decision", () => {
+    expect(
+      EsquemaRegistrarRestitucion.safeParse({ fecha: "2027-04-01", motivo: "porque sí" }).success,
     ).toBe(false);
   });
 });
