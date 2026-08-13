@@ -44,3 +44,21 @@
 
   --radio-borde: 8px;
 }
+
+/**
+ * PR2 (web-panel-oficina) — breakpoints, documented here as the single
+ * source of truth (DESIGN.md D13). This project's first responsive rules:
+ * before this PR, `estilos/` declared zero `@media` queries anywhere.
+ *
+ *   BREAKPOINT_TABLETA    = 640px   — narrow (card reflow) → wide (table)
+ *   BREAKPOINT_ESCRITORIO = 1024px  — the "comfort" tier
+ *
+ * These CANNOT be declared as CSS custom properties: `@media
+ * (min-width: var(--x))` is invalid CSS — a language limitation, not a
+ * style choice — so unlike every other value in this file, they are
+ * documented as plain numbers here and repeated as literals inside the
+ * responsive rules themselves (`estilos/panel.css`). Mobile-first, growing
+ * viewport only — this app declares no shrinking-viewport query anywhere.
+ * `convencionesDeEstilos.spec.ts` scans the shipped CSS and fails if a
+ * third breakpoint value or that other query direction ever appears.
+ */

@@ -9,6 +9,7 @@ import { ErrorDeApi } from "../../../datos/clienteHttp";
 import type { MotivoCierreDeSesion } from "../../../datos/sesion/estadoSesion";
 import { iniciarSesion } from "../../../datos/sesion/sesion";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
+import { rutaInicialPara } from "../logica/rutaInicialPara";
 
 /**
  * Task 21, spec `web-auth-session` — "Session expires mid-form": the
@@ -32,9 +33,9 @@ function motivoDesdeEstado(estado: unknown): MotivoCierreDeSesion | null {
 /**
  * The login screen. Validates against the shared `EsquemaLogin` before any
  * network call (spec `web-auth-session` — "Client-side login validation"),
- * then routes by role: `tecnico` reaches the guarded route tree, anyone
- * else reaches `/panel-no-disponible` directly (DESIGN.md D10) rather than
- * relying only on `GuardiaDeRolTecnico` to catch it on the next render.
+ * then routes through `rutaInicialPara` (DESIGN.md D9) — the same pure
+ * mapping the route guards use — rather than relying only on the next
+ * render's guard to catch it.
  */
 export function PaginaLogin() {
   const navegar = useNavigate();
@@ -58,7 +59,7 @@ export function PaginaLogin() {
     establecerEnviando(true);
     try {
       const sesion = await iniciarSesion(validacion.data);
-      navegar(sesion.usuario.rol === "tecnico" ? "/" : "/panel-no-disponible", { replace: true });
+      navegar(rutaInicialPara(sesion.usuario.rol), { replace: true });
     } catch (motivo) {
       establecerError(
         motivo instanceof ErrorDeApi ? mensajeDeError(motivo).mensaje : "No se pudo iniciar sesión.",

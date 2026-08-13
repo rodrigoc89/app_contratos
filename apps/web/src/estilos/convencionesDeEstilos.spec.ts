@@ -69,6 +69,46 @@ function archivo(rutaSufijo: string): { ruta: string; contenido: string } | unde
   return archivosCss(DIRECTORIO_SRC).find((candidato) => candidato.ruta.endsWith(rutaSufijo));
 }
 
+// `.exec()` on a non-global pattern returns only the FIRST match. Several
+// selectors below (`.tabla-de-contratos tr`/`td`) are declared more than
+// once across the narrow-layout, base and >=640px table rules, so a
+// single-match check silently ignores every later declaration — this is
+// the guard-remediation fix for PR2 verify report finding W-1.
+function todasLasCoincidencias(contenido: string, selector: string): ReadonlyArray<string> {
+  const patron = new RegExp(`${selector}\\s*\\{([^}]*)\\}`, "g");
+  return [...contenido.matchAll(patron)].map((coincidencia) => coincidencia[1] ?? "");
+}
+
+const PATRON_OUTLINE_REMOVIDO = /outline\s*:\s*(?:none|0)\b/gi;
+
+/** A declared outline that is a real indicator rather than another removal. */
+const PATRON_OUTLINE_DECLARADO = /outline\s*:\s*([^;}]+)/gi;
+
+/**
+ * Whether an `outline: none` is accompanied by something a keyboard user can
+ * still see: either the rule scopes the removal away from keyboard focus
+ * (`:not(:focus-visible)`), or the same rule declares a real outline after it.
+ *
+ * Split out of the scan that uses it because that scan matches nothing in the
+ * current stylesheets. A rule expressed only as a loop over real CSS asserts
+ * nothing until someone violates it, which is exactly when you want it to
+ * already be right — so the judgement is proven here instead of assumed.
+ *
+ * Values are captured and then tested, never decided by a lookahead: a
+ * negative lookahead sitting behind a variable-width `\s*` is defeated by
+ * backtracking, which is how the previous version of this rule came to treat
+ * `outline: none` as its own replacement.
+ */
+function tieneReemplazoDeFoco(selector: string, cuerpo: string): boolean {
+  if (/:not\(\s*:focus-visible\s*\)/.test(selector)) {
+    return true;
+  }
+
+  return [...cuerpo.matchAll(PATRON_OUTLINE_DECLARADO)].some(
+    (coincidencia) => !/^(?:none|0)\b/.test((coincidencia[1] ?? "").trim()),
+  );
+}
+
 describe("stylesheets never clip a scrollable surface", () => {
   it("finds the shipped CSS files, so a passing suite is not an empty one", () => {
     expect(archivosCss(DIRECTORIO_SRC).length).toBeGreaterThan(0);
@@ -203,6 +243,280 @@ describe("destructive signature actions stay separated from the commit action (P
   // observed rather than inferred — against the rendered DOM, in
   // `LienzoDeFirma.spec.tsx`. A source scan would pass even if `Boton`
   // dropped the prop on the floor, which is exactly what it used to do.
+});
+
+describe("PR2 (web-panel-oficina): the 48px floor covers the new controls, never data rows (R-3.5)", () => {
+  function cuerpoDeRegla(contenido: string, selector: string, mensajeAusente: string): string {
+    const regla = new RegExp(`${selector}\\s*\\{([^}]*)\\}`).exec(contenido);
+    expect(regla, mensajeAusente).not.toBeNull();
+    return regla?.[1] ?? "";
+  }
+
+  function esperaMinimoDeToque(cuerpo: string, quien: string): void {
+    for (const propiedad of ["min-height", "min-width"]) {
+      const declaracion = new RegExp(
+        `${propiedad}\\s*:\\s*(?:var\\(--tamano-toque-minimo\\)|(\\d+)px)`,
+      ).exec(cuerpo);
+      expect(declaracion, `${quien} has no ${propiedad}`).not.toBeNull();
+      const valorLiteral = declaracion?.[1];
+      if (valorLiteral !== undefined) {
+        expect(Number(valorLiteral)).toBeGreaterThanOrEqual(48);
+      }
+    }
+  }
+
+  it("gives the search input a declared minimum touch target", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    const cuerpo = cuerpoDeRegla(
+      panel?.contenido ?? "",
+      "#busqueda-contratos",
+      "#busqueda-contratos rule not found in estilos/panel.css",
+    );
+    esperaMinimoDeToque(cuerpo, "#busqueda-contratos");
+  });
+
+  it("gives the estado filter chips a declared minimum touch target, scoped to their own selector", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    const cuerpo = cuerpoDeRegla(
+      panel?.contenido ?? "",
+      "\\.barra-de-busqueda__estados \\.boton",
+      ".barra-de-busqueda__estados .boton rule not found in estilos/panel.css",
+    );
+    esperaMinimoDeToque(cuerpo, ".barra-de-busqueda__estados .boton");
+  });
+
+  it("gives the pagination controls a declared minimum touch target, scoped to their own selector", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    const cuerpo = cuerpoDeRegla(
+      panel?.contenido ?? "",
+      "\\.paginador \\.boton",
+      ".paginador .boton rule not found in estilos/panel.css",
+    );
+    esperaMinimoDeToque(cuerpo, ".paginador .boton");
+  });
+
+  it("does NOT impose the 48px floor on table rows or cells, across every declaration of each selector", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+
+    // `.tabla-de-contratos tr` and `td` are each declared 2-3 times (the
+    // narrow-layout block, the standalone rule, and the >=640px table
+    // layout) — checking only the first declaration would miss a floor
+    // added to a later one.
+    for (const selector of ["\\.tabla-de-contratos tr", "\\.tabla-de-contratos td"]) {
+      const cuerpos = todasLasCoincidencias(panel?.contenido ?? "", selector);
+      expect(cuerpos.length, `${selector} rule not found in estilos/panel.css`).toBeGreaterThan(0);
+      for (const cuerpo of cuerpos) {
+        expect(/min-height\s*:\s*var\(--tamano-toque-minimo\)/.test(cuerpo)).toBe(false);
+      }
+    }
+  });
+});
+
+describe("PR2: rows never present a clickable cursor, controls declare hover and focus-visible (R-3.7, R-3.8)", () => {
+  it("declares no cursor: pointer on any declaration of a row/cell selector, hover variant included", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    const contenido = panel?.contenido ?? "";
+
+    // `.tabla-de-contratos tbody tr:hover` is checked explicitly, not just
+    // implied by the bare `tr`/`td` selectors: it is the rule a future
+    // author would most plausibly reach for to make rows look clickable,
+    // and no other selector in this guard covers it.
+    for (const selector of [
+      "\\.tabla-de-contratos tr",
+      "\\.tabla-de-contratos td",
+      "\\.tabla-de-contratos tbody tr:hover",
+    ]) {
+      const cuerpos = todasLasCoincidencias(contenido, selector);
+      expect(cuerpos.length, `${selector} rule not found`).toBeGreaterThan(0);
+      for (const cuerpo of cuerpos) {
+        expect(/cursor\s*:\s*pointer/.test(cuerpo)).toBe(false);
+      }
+    }
+  });
+
+  it("declares a :hover rule with a non-empty body for the estado chips and the pagination controls", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    const contenido = panel?.contenido ?? "";
+
+    // A raw `contenido.includes(selector)` check would pass on a mere
+    // comment mention of the selector, or on a rule with an empty body —
+    // neither declares an actual visible change. The optional
+    // `:not(:disabled)` suffix matches this file's real declarations.
+    for (const selectorBase of ["\\.barra-de-busqueda__estados \\.boton", "\\.paginador \\.boton"]) {
+      const regla = new RegExp(`${selectorBase}:hover(?::not\\(:disabled\\))?\\s*\\{([^}]*)\\}`).exec(contenido);
+      expect(regla, `no :hover rule found for ${selectorBase}:hover`).not.toBeNull();
+      expect(
+        (regla?.[1] ?? "").trim().length,
+        `:hover rule for ${selectorBase} declares no properties`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("excludes the disabled pagination control from the hover affordance (R-3.8)", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    const contenido = panel?.contenido ?? "";
+
+    // R-3.8: "a disabled control does not offer a hover affordance." A
+    // disabled <button> still matches CSS :hover in most browsers — only
+    // :active/click are suppressed by the `disabled` attribute — so the
+    // exclusion has to be explicit in the selector itself. Checking for the
+    // absence of a `cursor` declaration would prove nothing here: this
+    // stylesheet declares no `cursor` property anywhere, so that check
+    // would pass regardless of whether the real affordance (the hover
+    // background-color change) is actually excluded.
+    const regla = /\.paginador \.boton:hover:not\(:disabled\)\s*\{([^}]*)\}/.exec(contenido);
+    expect(
+      regla,
+      ".paginador .boton:hover:not(:disabled) rule not found — a disabled pagination control would inherit the enabled hover affordance",
+    ).not.toBeNull();
+    expect((regla?.[1] ?? "").trim().length).toBeGreaterThan(0);
+  });
+
+  it("declares a :focus-visible rule with a non-empty body for the search input, the estado chips and pagination", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    const contenido = panel?.contenido ?? "";
+
+    for (const selector of [
+      "#busqueda-contratos:focus-visible",
+      "\\.barra-de-busqueda__estados \\.boton:focus-visible",
+      "\\.paginador \\.boton:focus-visible",
+    ]) {
+      const regla = new RegExp(`${selector}\\s*\\{([^}]*)\\}`).exec(contenido);
+      expect(regla, `no :focus-visible rule found for ${selector}`).not.toBeNull();
+      expect(
+        (regla?.[1] ?? "").trim().length,
+        `:focus-visible rule for ${selector} declares no properties`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("never removes a focus indicator without declaring a replacement", () => {
+    // No CSS file under `src/` declares a bare `outline: none`/`outline: 0`
+    // today, so this scan runs zero iterations and its `expect` never
+    // executes. That IS the correct passing state for an invariant stated
+    // over every future declaration of an outline removal — but it also
+    // means the rule being applied could be wrong for years and no run
+    // would reveal it. So the rule itself lives in `tieneReemplazoDeFoco`
+    // and is proven directly by the test below this one; this scan only
+    // walks the real stylesheets and delegates the judgement.
+    for (const { ruta, contenido } of archivosCss(DIRECTORIO_SRC)) {
+      for (const coincidencia of contenido.matchAll(PATRON_OUTLINE_REMOVIDO)) {
+        const indice = coincidencia.index ?? 0;
+        const inicioLlave = contenido.lastIndexOf("{", indice);
+        const cuerpo = contenido.slice(inicioLlave + 1, contenido.indexOf("}", indice));
+        const selector = contenido.slice(
+          contenido.lastIndexOf("}", inicioLlave) + 1,
+          inicioLlave,
+        );
+
+        expect(
+          tieneReemplazoDeFoco(selector, cuerpo),
+          `${ruta} removes the focus outline with no visible replacement in the same rule`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  /**
+   * The rule the scan above applies, exercised directly.
+   *
+   * Two ways this judgement was silently wrong before, both of which these
+   * cases would have caught:
+   *
+   * 1. The rule body used to be sliced from the opening brace, so the
+   *    selector was never part of what got inspected — and `:focus-visible`
+   *    only ever appears in a selector. The legitimate-scoping branch could
+   *    therefore never fire.
+   * 2. The replacement check was `/outline\s*:\s*(?!none|0)/`. A negative
+   *    lookahead preceded by a variable-width `\s*` is defeated by
+   *    backtracking: against `outline: none` the `\s*` gives back its space,
+   *    the lookahead then evaluates at `" none"` — which does not begin with
+   *    `none` — and succeeds. The removal counted as its own replacement, so
+   *    the guard could never fail.
+   */
+  describe("tieneReemplazoDeFoco", () => {
+    it("accepts a removal scoped away from keyboard focus", () => {
+      expect(tieneReemplazoDeFoco(".boton:focus:not(:focus-visible)", "outline: none;")).toBe(true);
+    });
+
+    it("accepts a removal that declares a real outline in the same rule", () => {
+      expect(
+        tieneReemplazoDeFoco(".boton:focus", "outline: none; outline: 2px solid var(--color-foco);"),
+      ).toBe(true);
+    });
+
+    it("rejects a bare removal — this is the case the old backtracking bug let through", () => {
+      expect(tieneReemplazoDeFoco(".boton:focus", "outline: none;")).toBe(false);
+      expect(tieneReemplazoDeFoco(".boton:focus", "outline:0;")).toBe(false);
+    });
+
+    it("rejects a removal that targets keyboard focus itself", () => {
+      expect(tieneReemplazoDeFoco(".boton:focus-visible", "outline: none;")).toBe(false);
+    });
+
+    it("does not accept a replacement that is itself another removal", () => {
+      expect(tieneReemplazoDeFoco(".boton:focus", "outline: none; outline: 0;")).toBe(false);
+    });
+  });
+});
+
+describe("PR2: exactly the documented breakpoints, min-width only (D13/D17)", () => {
+  const PATRON_MEDIA_MIN_WIDTH = /@media\s*\(\s*min-width\s*:\s*(\d+)px\s*\)/g;
+  const BREAKPOINTS_DOCUMENTADOS = new Set([640, 1024]);
+
+  it("declares exactly the two documented breakpoints (640px, 1024px) and no others", () => {
+    const valores = new Set<number>();
+    for (const { contenido } of archivosCss(DIRECTORIO_SRC)) {
+      for (const coincidencia of contenido.matchAll(PATRON_MEDIA_MIN_WIDTH)) {
+        const valor = coincidencia[1];
+        if (valor !== undefined) {
+          valores.add(Number(valor));
+        }
+      }
+    }
+
+    expect(valores.size, "no @media (min-width: …) rule was found at all").toBeGreaterThan(0);
+    for (const valor of valores) {
+      expect(
+        BREAKPOINTS_DOCUMENTADOS.has(valor),
+        `${valor}px is not one of the two documented breakpoints (640, 1024) — a third breakpoint appeared`,
+      ).toBe(true);
+    }
+  });
+
+  it("uses min-width media queries only — no max-width query anywhere", () => {
+    for (const { ruta, contenido } of archivosCss(DIRECTORIO_SRC)) {
+      expect(
+        /@media[^{]*max-width/i.test(contenido),
+        `${ruta} declares a max-width media query — this app is mobile-first, min-width only`,
+      ).toBe(false);
+    }
+  });
+
+  it(".layout-panel rebinds --fuente-base to at least 16px, while :root keeps its 18px tablet value", () => {
+    const panel = archivo("estilos/panel.css");
+    const tokens = archivo("estilos/tokens.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+    expect(tokens, "estilos/tokens.css is missing").toBeDefined();
+
+    const reglaLayoutPanel = /\.layout-panel\s*\{([^}]*)\}/.exec(panel?.contenido ?? "");
+    expect(reglaLayoutPanel, ".layout-panel rule not found in estilos/panel.css").not.toBeNull();
+    const valorFuente = /--fuente-base\s*:\s*(\d+)px/.exec(reglaLayoutPanel?.[1] ?? "");
+    expect(valorFuente, ".layout-panel does not rebind --fuente-base").not.toBeNull();
+    expect(Number(valorFuente?.[1])).toBeGreaterThanOrEqual(16);
+
+    const valorRaiz = /:root\s*\{[^}]*--fuente-base\s*:\s*(\d+)px/.exec(tokens?.contenido ?? "");
+    expect(valorRaiz, ":root --fuente-base not found in tokens.css").not.toBeNull();
+    expect(Number(valorRaiz?.[1])).toBe(18);
+  });
 });
 
 describe("the document viewer stays bounded to a fraction of the viewport, never to its content", () => {

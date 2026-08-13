@@ -1,0 +1,83 @@
+import type { EstadoContrato } from "@contratos/esquemas";
+import type { FormEvent, KeyboardEvent } from "react";
+
+import { Boton } from "../atomos/Boton";
+import { CampoTexto } from "../atomos/CampoTexto";
+import { Etiqueta } from "../atomos/Etiqueta";
+
+interface PropiedadesBarraDeBusqueda {
+  readonly termino: string;
+  readonly onCambiarTermino: (valor: string) => void;
+  /** Flushes the debounce immediately — DESIGN.md D15's `Enter` handler. */
+  readonly onBuscarInmediato: () => void;
+  readonly estados: readonly EstadoContrato[];
+  readonly onAlternarEstado: (estado: EstadoContrato) => void;
+}
+
+const ESTADOS: ReadonlyArray<{ readonly valor: EstadoContrato; readonly etiqueta: string }> = [
+  { valor: "borrador", etiqueta: "Borrador" },
+  { valor: "vigente", etiqueta: "Vigente" },
+  { valor: "dado_de_baja", etiqueta: "Dado de baja" },
+  { valor: "anulado", etiqueta: "Anulado" },
+];
+
+/**
+ * DESIGN.md D15 — the search box sits in `<form role="search">`. Without a
+ * form, `Enter` would do nothing at all; with a form and no handler,
+ * `Enter` triggers a full page reload. `manejarEnvio` is what turns that
+ * into "search now" instead (R-3.7).
+ *
+ * DESIGN.md D14 — the `estados` filter renders as toggle **buttons**
+ * (`aria-pressed`), not checkboxes: four checkboxes at the globally-mandated
+ * 48×48 (`base.css:81-86`) would make a filter bar that is mostly checkbox.
+ * Reusing `Boton` — which already satisfies the 48px guard — sidesteps that
+ * rule instead of fighting it.
+ */
+export function BarraDeBusqueda({
+  termino,
+  onCambiarTermino,
+  onBuscarInmediato,
+  estados,
+  onAlternarEstado,
+}: PropiedadesBarraDeBusqueda) {
+  function manejarEnvio(evento: FormEvent<HTMLFormElement>): void {
+    evento.preventDefault();
+    onBuscarInmediato();
+  }
+
+  function manejarTecla(evento: KeyboardEvent<HTMLInputElement>): void {
+    if (evento.key === "Escape") {
+      onCambiarTermino("");
+    }
+  }
+
+  return (
+    <form role="search" onSubmit={manejarEnvio} className="barra-de-busqueda">
+      <Etiqueta htmlFor="busqueda-contratos">Buscar por nombre o DNI</Etiqueta>
+      <CampoTexto
+        id="busqueda-contratos"
+        type="search"
+        value={termino}
+        onCambiar={onCambiarTermino}
+        onKeyDown={manejarTecla}
+        placeholder="Nombre o DNI"
+      />
+      <div role="group" aria-label="Filtrar por estado" className="barra-de-busqueda__estados">
+        {ESTADOS.map(({ valor, etiqueta }) => {
+          const activo = estados.includes(valor);
+          return (
+            <Boton
+              key={valor}
+              type="button"
+              aria-pressed={activo}
+              className={activo ? "boton--filtro-activo" : undefined}
+              onClick={() => onAlternarEstado(valor)}
+            >
+              {etiqueta}
+            </Boton>
+          );
+        })}
+      </div>
+    </form>
+  );
+}

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DatosSesion } from "@contratos/esquemas";
@@ -74,6 +74,55 @@ describe("PaginaLogin", () => {
       );
     });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  /**
+   * web-auth-session (revision: role gating resolves a home, R-3.1) —
+   * `oficina`/`admin` no longer land on `/panel-no-disponible`: they reach
+   * `/contratos` directly, the same way `PaginaLogin` already routes
+   * `tecnico` straight to its own home instead of relying only on the next
+   * render's route guard to catch it.
+   */
+  it("routes oficina straight to /contratos on valid login, not the fallback screen", async () => {
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson(sesionFalsa("oficina")));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    const enrutador = createMemoryRouter(
+      [
+        { path: "/login", element: <PaginaLogin /> },
+        { path: "/contratos", element: <p>Listado</p> },
+        { path: "/panel-no-disponible", element: <p>No disponible</p> },
+      ],
+      { initialEntries: ["/login"] },
+    );
+    render(<RouterProvider router={enrutador} />);
+
+    fireEvent.change(screen.getByLabelText("Usuario"), { target: { value: "oficina1" } });
+    fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "correcta" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
+
+    await waitFor(() => expect(enrutador.state.location.pathname).toBe("/contratos"));
+  });
+
+  it("routes admin straight to /contratos on valid login too", async () => {
+    const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson(sesionFalsa("admin")));
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    const enrutador = createMemoryRouter(
+      [
+        { path: "/login", element: <PaginaLogin /> },
+        { path: "/contratos", element: <p>Listado</p> },
+        { path: "/panel-no-disponible", element: <p>No disponible</p> },
+      ],
+      { initialEntries: ["/login"] },
+    );
+    render(<RouterProvider router={enrutador} />);
+
+    fireEvent.change(screen.getByLabelText("Usuario"), { target: { value: "admin1" } });
+    fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "correcta" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
+
+    await waitFor(() => expect(enrutador.state.location.pathname).toBe("/contratos"));
   });
 
   it("shows the server's message inline on invalid credentials", async () => {
