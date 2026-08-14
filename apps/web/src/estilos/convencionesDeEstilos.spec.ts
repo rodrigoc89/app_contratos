@@ -609,6 +609,37 @@ describe("PR2: exactly the documented breakpoints, min-width only (D13/D17)", ()
     expect(valorRaiz, ":root --fuente-base not found in tokens.css").not.toBeNull();
     expect(Number(valorRaiz?.[1])).toBe(18);
   });
+
+  /**
+   * The rebind above is necessary and was never sufficient, which the guard
+   * beside it could not see.
+   *
+   * `body` declares `font-size: var(--fuente-base)` (`base.css:40`), and that
+   * `var()` is resolved ON `body` — an ancestor of `.layout-panel`. A custom
+   * property rebound on a DESCENDANT cannot retroactively change a value
+   * already computed further up, so inherited text inside the panel kept the
+   * 18px `body` computed value. Measured in Chrome before this rule existed:
+   * a panel `td` rendered at 18px at 360, 1366 and 1920px wide, while
+   * `.boton`, `.campo-texto` and `.etiqueta` — the atoms that read
+   * `var(--fuente-base)` in their OWN rule (`atomos.css`) — rendered at 16px.
+   * The panel was split between two type sizes, not moved to one.
+   *
+   * So the rebind must be CONSUMED here as well as declared. Reading it back
+   * on `.layout-panel` itself is what re-resolves the property below its own
+   * declaration and gives the subtree a single inherited base. Asserting only
+   * the declaration is what let an inert rule read as a working one.
+   */
+  it(".layout-panel consumes the rebind it declares — a rebind alone never reaches inherited text", () => {
+    const panel = archivo("estilos/panel.css");
+    expect(panel, "estilos/panel.css is missing").toBeDefined();
+
+    const reglaLayoutPanel = /\.layout-panel\s*\{([^}]*)\}/.exec(panel?.contenido ?? "");
+    expect(reglaLayoutPanel, ".layout-panel rule not found in estilos/panel.css").not.toBeNull();
+    expect(
+      /font-size\s*:\s*var\(\s*--fuente-base\s*\)/.test(reglaLayoutPanel?.[1] ?? ""),
+      ".layout-panel rebinds --fuente-base without reading it back, so the rebind is inert for every inherited element in the panel",
+    ).toBe(true);
+  });
 });
 
 /**
