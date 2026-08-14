@@ -413,8 +413,41 @@
  * The name link in the list is styled here too — it must read as a link
  * without turning the row into one, so it takes the brand colour and an
  * underline on hover only, while the row keeps its plain cursor (R-3.8).
+ *
+ * It is also a TARGET, and it was not sized like one: an `<a>` is inline, so
+ * its box is exactly one line tall — measured in Chrome at 1366×768, 91×24
+ * to 174.5×24, and 91×27 at 360px. WCAG 2.5.5 AA asks 44×44 and this project
+ * asks 48 (`tokens.css`). Ten of these render per page and each is the only
+ * way into its contract.
+ *
+ * `min-height` alone would have been inert: an inline box ignores it, the
+ * same silent no-op as `position: sticky` without an inset. The `display` is
+ * what arms it, which is why both are here and why
+ * `convencionesDeEstilos.spec.ts` asserts both.
+ *
+ * A real box, deliberately, and not an invisible `::after` hit area: in a
+ * ten-row table the overlays of two adjacent rows overlap, and a tap then
+ * opens the wrong customer's contract — worse than the defect being fixed.
+ * The cost is paid in height, and it is real: the name cell is what sets the
+ * row, so a row goes from 53.6px to 73.5px at 1366×768 — about two fewer
+ * rows on screen at once. It was taken deliberately over the alternatives.
+ * At 360px the cards mostly do not move at all (249.1px unchanged, 222.1 →
+ * 243.1 where the name fits on one line), because a wrapped name already
+ * cleared the floor. The paginator is sticky (R-3.9), so turning the page
+ * never needs the lost height back.
+ *
+ * Nothing PAINTED changes. No background, no border, and the hover underline
+ * still spans the text alone, so the target grew and the affordance did not:
+ * the row keeps `cursor: auto`, has no click handler, and its hover tint
+ * stays weaker than the zebra striping (measured 1.0958 against 1.1129).
+ * Growing this box must never start telling the office that the row is
+ * clickable (R-3.4/R-3.8).
  */
 .tabla-de-contratos__enlace {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tamano-toque-minimo);
+  min-width: var(--tamano-toque-minimo);
   color: var(--color-primario);
   font-weight: 600;
   text-decoration: none;
@@ -428,7 +461,14 @@
   margin: 0 0 var(--espacio-4);
 }
 
+/* The only way back to the list, and it measured 166.6×24 — the same inline
+   box the row link had, for the same reason and with the same fix. Nothing
+   above it needs the height, so this one costs 24px of page. */
 .pagina-detalle-contrato__volver a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tamano-toque-minimo);
+  min-width: var(--tamano-toque-minimo);
   color: var(--color-primario);
   font-weight: 600;
   text-decoration: none;
