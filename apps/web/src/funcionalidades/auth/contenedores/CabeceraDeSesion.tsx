@@ -28,6 +28,23 @@ export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: s
   async function salir(): Promise<void> {
     try {
       await cerrarSesion();
+    } catch {
+      // Swallowed on purpose. `cerrarSesion` already handles the logout
+      // request failing; what can still reach here is the local cleanup
+      // throwing before it — `localStorage` raises a SecurityError when the
+      // browser blocks storage — and by then leaving is still the only
+      // sensible outcome, so there is nothing to decide and nothing to tell
+      // the person on the tablet.
+      //
+      // It cannot be left uncaught: the click handler discards the promise
+      // with `void`, and `void` only evaluates its operand and throws the
+      // value away — it attaches no rejection handler. So the rejection
+      // escaped the component as a browser `unhandledrejection` (and made the
+      // test process exit non-zero with every assertion green).
+      //
+      // Nothing is logged here either: this path runs while holding session
+      // and customer data, and Ley 25.326 keeps DNI, phone numbers and GPS
+      // coordinates out of anything we write down.
     } finally {
       // `cerrarSesion` clears local state before awaiting the request, so a
       // network failure must not strand someone in a session they asked to
