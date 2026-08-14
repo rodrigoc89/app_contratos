@@ -38,8 +38,10 @@ import tseslint from "typescript-eslint";
  *   reads directly — so decorator and parameter-injection semantics are the
  *   ones `tsc` uses, not a re-declared approximation.
  * - **Vitest, not Jest.** Specs are `*.spec.ts`/`*.spec.tsx` colocated with
- *   their source, and are linted exactly like the source beside them: there
- *   is no per-rule relaxation for test files anywhere in this config.
+ *   their source, plus `*.testing.ts` for shared fixtures and test doubles.
+ *   They are linted like the source beside them, with exactly one documented
+ *   exception: the `no-unsafe-*` family, which the test harnesses themselves
+ *   make unenforceable — see the TEST FILES section at the bottom.
  */
 export default tseslint.config(
   {
@@ -139,24 +141,21 @@ export default tseslint.config(
       "@typescript-eslint/unified-signatures": "error",
       "@typescript-eslint/use-unknown-in-catch-callback-variable": "error",
 
+      // The `no-unsafe-*` family stays ON here, as `recommendedTypeChecked`
+      // ships it, and is scoped off for test files only — see TEST FILES at
+      // the bottom of this config for the measurement and the reasoning.
+      // This is the rule set that stops an `any` from entering production
+      // source at all, which is the whole point of a codebase with zero
+      // `any` and zero `@ts-ignore` in it.
+
       // ── DEFERRED ──────────────────────────────────────────────────────
       // Enabled by `recommendedTypeChecked`, switched off here because each
-      // one reports real findings that need a judgement call — and this PR
-      // is not allowed to make judgement calls in source it is only meant
-      // to lint. Counts are from a naive `recommendedTypeChecked` run on
-      // 4dcfa45; each is a follow-up, not a permanent exemption.
+      // one reports real findings that need a judgement call — and the PR
+      // that installed the linter was not allowed to make judgement calls in
+      // source it was only meant to lint. Counts are from a naive
+      // `recommendedTypeChecked` run on 4dcfa45; each is a follow-up, not a
+      // permanent exemption.
       //
-      // The `no-unsafe-*` family (96 findings) is almost entirely one cause:
-      // `supertest`'s `response.body` is `any`, so every assertion against a
-      // response body in `apps/api` trips it. 94 of those 96 are in
-      // `*.spec.ts`; only 2 are in production source. Scoping the family to
-      // non-test files would buy most of the value back cheaply — but that
-      // is a call for the maintainer, not something to slip into the PR
-      // that installs the linter.
-      "@typescript-eslint/no-unsafe-member-access": "off", // 78 — all in apps/api specs
-      "@typescript-eslint/no-unsafe-argument": "off", // 11 — all in apps/api specs
-      "@typescript-eslint/no-unsafe-assignment": "off", // 5 — 2 in apps/api src
-      "@typescript-eslint/no-unsafe-call": "off", // 2 — all in apps/api specs
       // 50 findings (11 in apps/api src). NestJS ports return `Promise<T>`
       // by contract, so an implementation with nothing to await is normal
       // and correct here; turning these into non-async methods is an
@@ -226,6 +225,55 @@ export default tseslint.config(
       // fix.
       "react-hooks/refs": "off",
       "react-hooks/set-state-in-effect": "off",
+    },
+  },
+
+  // ── TEST FILES ────────────────────────────────────────────────────────
+  // The one per-rule relaxation in this config, and the only place a rule is
+  // scoped rather than deferred outright.
+  //
+  // Measured on 6bf9980, the family reported 96 findings across the
+  // workspace: 94 in test files and 2 in production source. That split is
+  // not a coincidence — the 94 are two test harnesses whose public types are
+  // `any` by design, and the 2 production ones are fixed in this same change
+  // (`LimiteEstricto.ts`, now reading `Reflect.getMetadata` into `unknown`).
+  //
+  // - **`supertest`** (92 of the 94). `request(app).get(...)` resolves to a
+  //   `Response` whose `body` is typed `any`, because supertest cannot know
+  //   what any given endpoint returns. Every assertion against a response
+  //   body in the `apps/api` controller specs therefore trips the family:
+  //   `respuesta.body.error` is `no-unsafe-member-access`, `const cuerpo =
+  //   respuesta.body` is `no-unsafe-assignment`, and handing either to
+  //   `expect()` is `no-unsafe-argument`.
+  // - **Vitest asymmetric matchers** (the other 2, in
+  //   `FormularioBorrador.spec.tsx`). `expect.objectContaining(...)` is
+  //   declared as returning `any` so it can stand in for any expected value.
+  //
+  // Neither is fixable in this repo's source: both come from a dependency's
+  // published type declarations, and the only local "fixes" are a cast or an
+  // `eslint-disable` — the exact hole the family exists to catch, moved
+  // somewhere less visible. Keeping the family off everywhere to accommodate
+  // them would give up production enforcement for nothing.
+  //
+  // So the family is enforced in production source, where an `any` is a
+  // genuine defect, and off in test files, where it is the harness talking.
+  // A spec asserting against an untyped response body is doing its job; the
+  // assertion is the type check.
+  //
+  // `no-unsafe-return` is in the list despite having zero findings today.
+  // Leaving it on for specs would flag only one thing — a spec helper that
+  // wraps a supertest call and returns its body — while the copy-pasted
+  // inline version of the same access goes unflagged, because the other four
+  // rules are off here. That penalises the better-factored spec, so the
+  // family is scoped as a unit.
+  {
+    files: ["**/*.spec.ts", "**/*.spec.tsx", "**/*.testing.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
     },
   },
 
