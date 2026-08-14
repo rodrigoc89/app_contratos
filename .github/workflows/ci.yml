@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+# A newer push to the same branch makes the in-flight run obsolete, so cancel
+# it instead of paying for a result nobody will read. Runs on master are keyed
+# by their own ref, so a merge never cancels a PR run or vice versa.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read-only: nothing in this workflow writes to the repository or publishes
+# anything. No repository secret is used, requested, or needed.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck and unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    env:
+      # Not a secret, and nothing in this job connects to it: no database is
+      # started here. It exists only because `apps/api/prisma.config.ts`
+      # resolves `DATABASE_URL` eagerly at config-load time, so even
+      # `prisma generate` — which is purely offline codegen — refuses to run
+      # when the variable is unset.
+      DATABASE_URL: postgresql://contratos:contratos@127.0.0.1:5432/contratos
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        # Version comes from `packageManager` in the root package.json.
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          # `engines.node` is ">=22", but the web suite does not actually pass
+          # on Node 22: three `clienteHttp` Blob tests fail there. Node 24 is
+          # the current Active LTS and is green across every package, so CI
+          # pins it rather than the declared floor.
+          node-version: 24
+          # Caches the pnpm content-addressable store, keyed on pnpm-lock.yaml.
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        # `apps/api/generated/` is git-ignored and no install hook creates it,
+        # so typecheck cannot resolve `generated/prisma/client` without this.
+        # Offline codegen — it never contacts a database.
+        run: pnpm --filter @contratos/api prisma:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        # `apps/api/vitest.config.ts` excludes `*.integration.spec.ts`, so this
+        # stays database-free and browser-free; integration runs in its own job.
+        run: pnpm -r test
+
+  integration:
+    name: Integration tests (Postgres and Chromium)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        # Same major as docker-compose.yml at the repo root.
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: contratos
+          POSTGRES_PASSWORD: contratos
+          POSTGRES_DB: contratos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contratos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Points at this job's own service container, written inline on purpose:
+      # a throwaway database that exists only for the length of this run holds
+      # nothing worth protecting, so it must not go through repository secrets.
+      DATABASE_URL: postgresql://contratos:contratos@127.0.0.1:5432/contratos
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore the Puppeteer browser cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Chromium for Puppeteer
+        # Required, and deliberately not left to the install hook: with a warm
+        # pnpm store, `pnpm install` does not re-run puppeteer's postinstall,
+        # and the browser lives in ~/.cache/puppeteer rather than in the store
+        # — so the download can silently not happen. This command is explicit
+        # and idempotent: a no-op when the cache above already restored it.
+        run: pnpm --filter @contratos/api exec puppeteer browsers install chrome
+
+      - name: Generate the Prisma client
+        run: pnpm --filter @contratos/api prisma:generate
+
+      - name: Apply database migrations
+        run: pnpm --filter @contratos/api prisma:migrate:deploy
+
+      - name: Integration tests
+        # These specs TRUNCATE their tables between cases, which is safe only
+        # because DATABASE_URL above points at this run's disposable service
+        # container and never at a developer or production database.
+        #
+        # Nothing is uploaded from this job on success or on failure: the suite
+        # renders real contract PDFs (names, DNIs, signature images), and a
+        # test artifact is exactly the wrong place for Ley 25.326 data. The
+        # step log is the whole diagnostic surface, by design.
+        run: pnpm --filter @contratos/api test:integration
