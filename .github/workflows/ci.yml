@@ -68,6 +68,47 @@ jobs:
         # stays database-free and browser-free; integration runs in its own job.
         run: pnpm -r test
 
+  lint:
+    name: ESLint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    env:
+      # Same reason as `verify` above: not a secret, nothing connects to it,
+      # and it exists only so `apps/api/prisma.config.ts` stops refusing to
+      # load before the offline `prisma generate` below.
+      DATABASE_URL: postgresql://contratos:contratos@127.0.0.1:5432/contratos
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate the Prisma client
+        # Type-aware linting resolves the same imports typecheck does, so it
+        # needs `generated/prisma/client` to exist for exactly the reason the
+        # `verify` job does. Without it, every `apps/api` file that touches
+        # Prisma types lints against `any` and the type-aware rules go quiet
+        # instead of failing — a silent loss of coverage, not an error.
+        run: pnpm --filter @contratos/api prisma:generate
+
+      - name: Lint
+        # `--max-warnings 0` is inside the `lint` script: every rule in
+        # eslint.config.mjs is `error`, and a warning here would mean a rule
+        # was quietly downgraded rather than fixed.
+        run: pnpm lint
+
   integration:
     name: Integration tests (Postgres and Chromium)
     runs-on: ubuntu-24.04
