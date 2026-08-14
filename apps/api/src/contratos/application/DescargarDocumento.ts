@@ -1,6 +1,5 @@
 import { ConflictoDeEstado } from "../../shared/domain/ConflictoDeEstado";
 import { RecursoNoEncontrado } from "../../shared/domain/RecursoNoEncontrado";
-import { NOMBRE_DOCUMENTO } from "../../shared/domain/TipoDocumentoFirmado";
 import type { TipoDocumentoFirmado } from "../../shared/domain/TipoDocumentoFirmado";
 import { buscarContrato } from "./buscarContrato";
 import type { AlmacenDeDocumentos } from "./ports/AlmacenDeDocumentos";
@@ -70,8 +69,3 @@ export class DescargarDocumento {
     };
   }
 }
-
-/** Human name of a document, for anything a person reads. */
-export const nombreLegibleDelDocumento = (
-  documento: TipoDocumentoFirmado,
-): string => NOMBRE_DOCUMENTO[documento];

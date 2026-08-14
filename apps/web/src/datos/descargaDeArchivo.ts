@@ -28,10 +28,6 @@ const NOMBRE_ARCHIVO: Record<DatosDocumentoDisponible["documento"], string> = {
 /** `Accept` is the only header this endpoint needs beyond the Bearer one `clienteHttpBlob` already attaches. */
 const OPCIONES_PDF = { encabezados: { Accept: "application/pdf" } };
 
-export function nombreDeArchivo(documento: DatosDocumentoDisponible["documento"]): string {
-  return NOMBRE_ARCHIVO[documento];
-}
-
 export async function descargarPdf(documento: DatosDocumentoDisponible): Promise<File> {
   const blob = await clienteHttpBlob(documento.enlace, OPCIONES_PDF);
   return new File([blob], NOMBRE_ARCHIVO[documento.documento], { type: "application/pdf" });

@@ -134,9 +134,3 @@
     transform: rotate(360deg);
   }
 }
-
-.icono {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
