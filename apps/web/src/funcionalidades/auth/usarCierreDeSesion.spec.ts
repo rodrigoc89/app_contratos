@@ -37,16 +37,26 @@ describe("usarCierreDeSesion", () => {
     await result.current();
 
     expect(cerrar).toHaveBeenCalledTimes(1);
-    expect(navegar).toHaveBeenCalledWith("/login", { replace: true });
+    expect(navegar).toHaveBeenCalledWith("/login", {
+      replace: true,
+      state: { motivo: "cierre_explicito" },
+    });
   });
 
   /**
    * Task 21: `PaginaLogin` reads the reason from router state alone
    * (`motivoDesdeEstado`), never from `obtenerMotivoUltimoCierre()`, so the
-   * confirmation message exists only if the caller carries it here.
+   * confirmation exists only if this navigation carries it.
+   *
+   * It used to be a parameter, and the header left it empty — which is
+   * exactly how the control almost everyone taps ended up landing on a
+   * silent login screen while `PanelNoDisponible` confirmed the very same
+   * action. Everyone who reaches this hook tapped "Cerrar sesión"; an expiry
+   * arrives through `GuardiasDeRuta` carrying its own reason. So the reason
+   * is unconditional here, and no caller can forget it.
    */
-  it("carries the logout reason to the login screen when one is given", async () => {
-    const { result } = renderHook(() => usarCierreDeSesion("cierre_explicito"));
+  it("carries the explicit-logout reason without being asked for one", async () => {
+    const { result } = renderHook(() => usarCierreDeSesion());
 
     await result.current();
 
@@ -57,18 +67,18 @@ describe("usarCierreDeSesion", () => {
   });
 
   /**
-   * The header deliberately passes no reason, and its own spec pins the
-   * navigation options exactly. Setting `state: undefined` instead of
-   * omitting the key would slip past `toHaveBeenCalledWith` — which ignores
-   * undefined-valued properties — so the key's absence is asserted directly.
+   * `toHaveBeenCalledWith` ignores undefined-valued properties, so a state
+   * carrying `motivo: undefined` would satisfy the assertion above and still
+   * leave `PaginaLogin` with nothing to show. Pinned structurally instead —
+   * `toStrictEqual`, unlike `toEqual`, refuses an undefined-valued key.
    */
-  it("omits the state entirely when no reason is given", async () => {
+  it("carries a real reason, not an undefined-valued key", async () => {
     const { result } = renderHook(() => usarCierreDeSesion());
 
     await result.current();
 
     const [, opciones] = navegar.mock.calls[0] as [string, Record<string, unknown>];
-    expect(Object.keys(opciones)).toEqual(["replace"]);
+    expect(opciones).toStrictEqual({ replace: true, state: { motivo: "cierre_explicito" } });
   });
 
   /**
@@ -84,7 +94,10 @@ describe("usarCierreDeSesion", () => {
 
     await result.current();
 
-    expect(navegar).toHaveBeenCalledWith("/login", { replace: true });
+    expect(navegar).toHaveBeenCalledWith("/login", {
+      replace: true,
+      state: { motivo: "cierre_explicito" },
+    });
   });
 
   /**
@@ -109,7 +122,10 @@ describe("usarCierreDeSesion", () => {
       await new Promise((resolver) => setTimeout(resolver, 0));
 
       expect(escapadas).toEqual([]);
-      expect(navegar).toHaveBeenCalledWith("/login", { replace: true });
+      expect(navegar).toHaveBeenCalledWith("/login", {
+        replace: true,
+        state: { motivo: "cierre_explicito" },
+      });
     } finally {
       process.off("unhandledRejection", anotarEscapada);
     }

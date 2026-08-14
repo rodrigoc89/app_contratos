@@ -44,7 +44,12 @@ describe("CabeceraDeSesion", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
 
     await waitFor(() => expect(cerrar).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(navegar).toHaveBeenCalledWith("/login", { replace: true }));
+    await waitFor(() =>
+      expect(navegar).toHaveBeenCalledWith("/login", {
+        replace: true,
+        state: { motivo: "cierre_explicito" },
+      }),
+    );
   });
 
   /**
@@ -59,7 +64,12 @@ describe("CabeceraDeSesion", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
 
-    await waitFor(() => expect(navegar).toHaveBeenCalledWith("/login", { replace: true }));
+    await waitFor(() =>
+      expect(navegar).toHaveBeenCalledWith("/login", {
+        replace: true,
+        state: { motivo: "cierre_explicito" },
+      }),
+    );
   });
 
   /**
@@ -87,7 +97,12 @@ describe("CabeceraDeSesion", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
 
-      await waitFor(() => expect(navegar).toHaveBeenCalledWith("/login", { replace: true }));
+      await waitFor(() =>
+        expect(navegar).toHaveBeenCalledWith("/login", {
+          replace: true,
+          state: { motivo: "cierre_explicito" },
+        }),
+      );
       await new Promise((resolver) => setTimeout(resolver, 0));
 
       expect(escapadas).toEqual([]);

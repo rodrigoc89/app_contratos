@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import type { MotivoCierreDeSesion } from "../../datos/sesion/estadoSesion";
 import { cerrarSesion } from "../../datos/sesion/sesion";
 
+/** Named so the union in `estadoSesion` keeps type-checking this value. */
+const MOTIVO: MotivoCierreDeSesion = "cierre_explicito";
+
 /**
  * The one way out of the app (DESIGN.md D4/D8).
  *
@@ -14,16 +17,22 @@ import { cerrarSesion } from "../../datos/sesion/sesion";
  * kept stranding the person on the screen they had just tapped to leave. A
  * third copy would have repeated it. There is one copy now.
  *
- * `motivo` is the only thing the two call sites ever disagreed on, so it is
- * the only parameter: `PaginaLogin` shows its confirmation from router state
- * alone (`motivoDesdeEstado`), never from `obtenerMotivoUltimoCierre()`, so
- * a caller that wants the message must carry it.
+ * The reason is carried unconditionally, and used to be a parameter only
+ * because the header passed none — so leaving from the header, the control
+ * almost everyone taps, landed on a silent login screen while the fallback
+ * screen confirmed the very same action. `PaginaLogin` shows its
+ * confirmation from router state alone (`motivoDesdeEstado`), never from
+ * `obtenerMotivoUltimoCierre()`, so the message exists only if this
+ * navigation carries it. Every caller of this hook is a person deliberately
+ * tapping "Cerrar sesión"; an expiry reaches `/login` through
+ * `GuardiasDeRuta` instead, with its own reason. There is nothing left for a
+ * caller to decide.
  *
  * Returns the handler rather than performing anything itself, because the
  * two screens differ entirely in their surroundings — a header with a
  * username, versus a standalone screen — and only the leaving is shared.
  */
-export function usarCierreDeSesion(motivo?: MotivoCierreDeSesion): () => Promise<void> {
+export function usarCierreDeSesion(): () => Promise<void> {
   const navegar = useNavigate();
 
   return async function salir(): Promise<void> {
@@ -52,16 +61,16 @@ export function usarCierreDeSesion(motivo?: MotivoCierreDeSesion): () => Promise
       // anything that can throw (DESIGN.md D4) — a failure must never trap
       // someone in a session they asked to leave. Leaving happens either way.
       //
-      // The `state` key is omitted rather than set to `undefined` when there
-      // is no `motivo`, so the options object stays exactly what the header
-      // passed before this hook existed.
+      // The reason travels in router state and nowhere else: it names an
+      // action, not a person, so nothing here carries customer data
+      // (Ley 25.326), and `PaginaLogin` reads it from exactly this spot.
       //
       // `void` because under `RouterProvider` (a data router, see
       // `rutas/enrutador.tsx`) `navegar` returns `Promise<void>` that settles
       // once the login route's loaders have run. This is the last statement
       // of a `finally`, nothing reads the result, and awaiting it would only
       // delay resolving `salir()` — which both call sites already discard.
-      void navegar("/login", motivo === undefined ? { replace: true } : { replace: true, state: { motivo } });
+      void navegar("/login", { replace: true, state: { motivo: MOTIVO } });
     }
   };
 }

@@ -9,15 +9,12 @@ import { usarCierreDeSesion } from "../usarCierreDeSesion";
  * home. It exists so an unrecognized role never reads as a broken login.
  */
 export function PanelNoDisponible() {
-  // Task 21: carries the explicit-logout reason so `PaginaLogin` shows a
-  // confirmation distinct from a mid-visit expiry, same as the reactive
-  // redirect `GuardiaDeSesion` would otherwise perform on its own.
-  //
-  // The leaving itself lives in `usarCierreDeSesion`, shared with
-  // `CabeceraDeSesion`: this screen's handler was a copy of the header's,
-  // made before PR #61 fixed the header, and a copy inherits a shape but not
-  // its later corrections.
-  const salir = usarCierreDeSesion("cierre_explicito");
+  // Task 21: the login screen confirms an explicit logout distinctly from a
+  // mid-visit expiry. That reason now lives inside `usarCierreDeSesion`,
+  // shared with `CabeceraDeSesion`: this screen's handler was a copy of the
+  // header's, made before PR #61 fixed the header, and a copy inherits a
+  // shape but not its later corrections.
+  const salir = usarCierreDeSesion();
 
   return (
     <div className="panel-no-disponible">
