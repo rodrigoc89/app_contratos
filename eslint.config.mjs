@@ -148,37 +148,58 @@ export default tseslint.config(
       // source at all, which is the whole point of a codebase with zero
       // `any` and zero `@ts-ignore` in it.
 
+      // `no-floating-promises`, `no-misused-promises`,
+      // `no-unnecessary-type-assertion` and `no-redundant-type-constituents`
+      // were all deferred here and are now enforced at their
+      // `recommendedTypeChecked` default: their findings were fixed at the
+      // source rather than configured away. Nothing below re-lists them —
+      // an explicit `"error"` for a rule the preset already errors on is a
+      // second copy that can silently drift.
+
       // ── DEFERRED ──────────────────────────────────────────────────────
       // Enabled by `recommendedTypeChecked`, switched off here because each
-      // one reports real findings that need a judgement call — and the PR
-      // that installed the linter was not allowed to make judgement calls in
-      // source it was only meant to lint. Counts are from a naive
-      // `recommendedTypeChecked` run on 4dcfa45; each is a follow-up, not a
-      // permanent exemption.
+      // one reports findings this codebase would have to make *worse* to
+      // silence. Counts are re-measured on fa62fef by force-enabling each
+      // rule over the whole workspace; the split is production source vs.
+      // `*.spec.ts(x)`/`*.testing.ts`.
       //
-      // 50 findings (11 in apps/api src). NestJS ports return `Promise<T>`
-      // by contract, so an implementation with nothing to await is normal
-      // and correct here; turning these into non-async methods is an
-      // interface decision, not a lint fix.
+      // 50 findings — 49 in test files, 1 in production source. Every one is
+      // an `async` method with nothing to await because a port declares
+      // `Promise<T>`: the in-memory doubles (`HasherFalso.hashear`,
+      // `EmisorFalso.emitir`, `PaginaFalsa.pdf`) implement async interfaces
+      // whose real adapters do I/O, and the production one
+      // (`AuthController.yo`) is a NestJS route handler. Dropping `async`
+      // does not even compile — the body would have to return
+      // `Promise.resolve(...)` by hand — so the rule's advice here is
+      // strictly worse code. No true positives.
       "@typescript-eslint/require-await": "off",
-      // 25, all in specs: `expect(objeto.metodo)` on an unbound method is
-      // the idiomatic Vitest spy assertion.
+      // 25, all in specs, and all four shapes are deliberate:
+      //   17 — `Controlador.prototype.manejar` handed to a fake
+      //        `ExecutionContext` in the guard specs. NestJS's own
+      //        `context.getHandler()` returns exactly that unbound prototype
+      //        method; the guard reads decorator metadata off it and never
+      //        calls it, so binding would misrepresent what is under test.
+      //    4 — static factories (`Dni.crear`, `DireccionMac.crear`) gathered
+      //        into a table-driven spec. They never touch `this`.
+      //    3 — `expect(controlador.cerrar).toHaveBeenCalledTimes(1)`, the
+      //        idiomatic Vitest spy assertion.
+      //    1 — saving `globalThis.crypto.randomUUID` to restore it after a
+      //        stub. Binding a saved global would defeat the restore.
+      // No true positives.
       "@typescript-eslint/unbound-method": "off",
-      // 17 across both apps. Each removal is safe on its own but needs the
-      // assertion read in context to be sure it is not load-bearing.
-      "@typescript-eslint/no-unnecessary-type-assertion": "off",
-      // 4 + 1. Both are genuinely worth fixing — an unhandled rejection is a
-      // real bug class — but the fix is per-site ("is this deliberately
-      // fire-and-forget, or should the failure surface?"), so it belongs in
-      // a change that can also add the test.
-      "@typescript-eslint/no-floating-promises": "off",
-      "@typescript-eslint/no-misused-promises": "off",
-      // 3, all in apps/api src (`configuracionHttp.ts`, `respuestaDeError.ts`).
+      // 3, all the same shape: a plain `number` compared against a NestJS
+      // `HttpStatus` member (`configuracionHttp.ts:88` twice,
+      // `respuestaDeError.ts:189`). Express and Nest both type a status code
+      // as `number` — `HttpException.getStatus()` returns `number`, and an
+      // express error's `.status` is whatever the body parser put there — so
+      // the enum is only ever on one side. The two ways to silence it are
+      // both worse: annotating the local `HttpStatus` would be a lie
+      // (`configuracionHttp` defaults it to `0`, which is not a member) and
+      // rests on TypeScript's `number`-into-numeric-enum hole, and comparing
+      // bare `413`/`400` literals instead throws away the names that make
+      // the branch readable. This repo declares no `enum` of its own, so the
+      // rule's entire surface here is those three comparisons.
       "@typescript-eslint/no-unsafe-enum-comparison": "off",
-      // 3 — literal unions absorbed by a widening `string` in the shared
-      // error-code types. A real modelling smell in `packages/esquemas`,
-      // and changing it moves a type both apps depend on.
-      "@typescript-eslint/no-redundant-type-constituents": "off",
     },
   },
 
@@ -201,6 +222,14 @@ export default tseslint.config(
     files: ["apps/web/**/*.{ts,tsx}"],
     extends: [reactHooks.configs.flat["recommended-latest"]],
     rules: {
+      // `react-hooks/exhaustive-deps` was deferred here over one real
+      // finding — `VisorDeDocumento.tsx:55`, a missing `onCambiaEstado` —
+      // which its own PR has since fixed. It now reports zero across
+      // `apps/web`, so it is left at the plugin's `recommended-latest`
+      // default and the next missing dependency is caught while it is still
+      // cheap. It is not re-listed below for the same reason the type-aware
+      // block does not re-list its graduates.
+
       // ── DEFERRED ──────────────────────────────────────────────────────
       // `rules-of-hooks` hardcodes `/^use[A-Z0-9]/` as the definition of a
       // custom hook, with no configuration hook of any kind (see
@@ -213,12 +242,6 @@ export default tseslint.config(
       // either the plugin gains a name pattern or the team decides
       // otherwise.
       "react-hooks/rules-of-hooks": "off",
-      // 1 real finding (`VisorDeDocumento.tsx:55`, missing `onCambiaEstado`)
-      // plus 7 pre-existing `eslint-disable-next-line` comments that have
-      // never been checked by anything, because no linter was installed.
-      // Both need reading hook by hook, and a dependency array is runtime
-      // behaviour: changing one needs its own failing test first.
-      "react-hooks/exhaustive-deps": "off",
       // 1 each — `Toast.tsx:26` writes a ref during render;
       // `PasoFirmaDual.tsx:119` sets state synchronously inside an effect.
       // Both are real React Compiler findings and both change behaviour to
@@ -277,12 +300,16 @@ export default tseslint.config(
     },
   },
 
-  // The 7 `eslint-disable-next-line react-hooks/exhaustive-deps` comments in
-  // `apps/web` all target the one rule deferred just above, so every one of
-  // them is trivially "unused" right now. Reporting that would be noise
-  // about a decision this config already documents. Flip this back on in the
-  // same change that enables `exhaustive-deps` — at that point it becomes a
-  // useful rule, because a suppression that has stopped suppressing anything
-  // is exactly the kind of stale comment worth deleting.
-  { linterOptions: { reportUnusedDisableDirectives: "off" } },
+  // On, now that `exhaustive-deps` is — the two only make sense together.
+  // While that rule was off, all 7 of the `eslint-disable-next-line
+  // react-hooks/exhaustive-deps` comments in `apps/web` were trivially
+  // "unused", so this reported nothing but the deferral it was already
+  // documenting. With the rule enforcing again, 6 of the 7 are suppressing a
+  // real finding and the 7th was suppressing nothing at all — measured by
+  // deleting it and confirming `exhaustive-deps` still reports zero at that
+  // effect. Its explanation was worth keeping and stayed as a plain comment;
+  // only the directive went. That is the whole value of this option: a
+  // suppression that has stopped suppressing anything reads as a live
+  // exception and is not one.
+  { linterOptions: { reportUnusedDisableDirectives: "error" } },
 );

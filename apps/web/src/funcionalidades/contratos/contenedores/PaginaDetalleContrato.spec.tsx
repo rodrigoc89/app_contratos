@@ -38,7 +38,7 @@ function contrato(): DatosContratoDetalle {
     ],
     eventos: [],
     equiposPendientesDeRestitucion: false,
-  } as DatosContratoDetalle;
+  };
 }
 
 function renderizar() {

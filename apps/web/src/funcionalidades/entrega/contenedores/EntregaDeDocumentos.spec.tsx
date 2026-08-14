@@ -166,7 +166,9 @@ describe("EntregaDeDocumentos", () => {
  */
 describe("EntregaDeDocumentos — se puede volver a enviar", () => {
   it("keeps the action after a successful share", async () => {
-    const entregar = vi.fn().mockResolvedValue({ via: "compartido" } as ResultadoEntrega);
+    const entregar = vi
+      .fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>()
+      .mockResolvedValue({ via: "compartido" });
     render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
@@ -175,7 +177,9 @@ describe("EntregaDeDocumentos — se puede volver a enviar", () => {
   });
 
   it("keeps the action after falling back to a download", async () => {
-    const entregar = vi.fn().mockResolvedValue({ via: "descarga" } as ResultadoEntrega);
+    const entregar = vi
+      .fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>()
+      .mockResolvedValue({ via: "descarga" });
     render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
@@ -185,7 +189,9 @@ describe("EntregaDeDocumentos — se puede volver a enviar", () => {
   });
 
   it("actually delivers again when asked again", async () => {
-    const entregar = vi.fn().mockResolvedValue({ via: "descarga" } as ResultadoEntrega);
+    const entregar = vi
+      .fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>()
+      .mockResolvedValue({ via: "descarga" });
     render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
@@ -199,7 +205,9 @@ describe("EntregaDeDocumentos — se puede volver a enviar", () => {
    * it must survive a second attempt rather than blinking out and back.
    */
   it("still explains the download after sharing again", async () => {
-    const entregar = vi.fn().mockResolvedValue({ via: "descarga" } as ResultadoEntrega);
+    const entregar = vi
+      .fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>()
+      .mockResolvedValue({ via: "descarga" });
     render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} />);
 
     await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));

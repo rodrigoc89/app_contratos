@@ -50,4 +50,4 @@ class RequestCompatibleConJsdom extends RequestNativo {
   }
 }
 
-globalThis.Request = RequestCompatibleConJsdom as unknown as typeof Request;
+globalThis.Request = RequestCompatibleConJsdom;

@@ -26,7 +26,7 @@ function motivoDesdeEstado(estado: unknown): MotivoCierreDeSesion | null {
   if (typeof estado !== "object" || estado === null || !("motivo" in estado)) {
     return null;
   }
-  const { motivo } = estado as { motivo: unknown };
+  const { motivo } = estado;
   return motivo === "sesion_expirada" || motivo === "cierre_explicito" ? motivo : null;
 }
 
@@ -59,7 +59,13 @@ export function PaginaLogin() {
     establecerEnviando(true);
     try {
       const sesion = await iniciarSesion(validacion.data);
-      navegar(rutaInicialPara(sesion.usuario.rol), { replace: true });
+      // `void` because under `RouterProvider` (a data router, see
+      // `rutas/enrutador.tsx`) `navegar` returns `Promise<void>` that settles
+      // once the destination's loaders have run. Awaiting it would keep the
+      // submit button disabled until the next screen's data arrived, since
+      // `establecerEnviando(false)` lives in the `finally` below — so the
+      // result is deliberately ignored and the form releases immediately.
+      void navegar(rutaInicialPara(sesion.usuario.rol), { replace: true });
     } catch (motivo) {
       establecerError(
         motivo instanceof ErrorDeApi ? mensajeDeError(motivo).mensaje : "No se pudo iniciar sesión.",

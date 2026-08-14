@@ -18,13 +18,22 @@ export function PanelNoDisponible() {
     // Task 21: carries the explicit-logout reason so `PaginaLogin` shows a
     // confirmation distinct from a mid-visit expiry, same as the reactive
     // redirect `GuardiaDeSesion` would otherwise perform on its own.
-    navegar("/login", { replace: true, state: { motivo: "cierre_explicito" } });
+    //
+    // `void` because under `RouterProvider` (a data router, see
+    // `rutas/enrutador.tsx`) `navegar` returns `Promise<void>`, which settles
+    // once the target route's loaders have run. Nothing after this line
+    // depends on that, and awaiting it would hold the handler open past the
+    // navigation for no observable gain.
+    void navegar("/login", { replace: true, state: { motivo: "cierre_explicito" } });
   }
 
   return (
     <div className="panel-no-disponible">
       <p>Todavía no hay un panel disponible para su rol.</p>
-      <Boton onClick={manejarCerrarSesion}>Cerrar sesión</Boton>
+      {/* `void` rather than passing `manejarCerrarSesion` straight through:
+          `onClick` expects a void return, and handing React an async function
+          makes it discard a promise it never inspects. */}
+      <Boton onClick={() => void manejarCerrarSesion()}>Cerrar sesión</Boton>
     </div>
   );
 }

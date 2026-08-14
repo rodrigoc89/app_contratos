@@ -60,7 +60,18 @@ export type CodigoDeError =
 export interface CuerpoDeError {
   readonly error: {
     readonly mensaje: string;
-    readonly codigo: CodigoDeError | string;
+    /**
+     * A known code, or any other string — the client must survive a server
+     * that has learned a code it has not (see `mensajeDeError`'s `default`).
+     *
+     * `string & {}` rather than a plain `string`: a bare `CodigoDeError |
+     * string` collapses to `string`, so the union above is erased before
+     * anything can use it, and neither an editor nor a `switch` ever sees
+     * the known codes. Intersecting keeps them visible for completion and
+     * narrowing while still accepting every other string, which is what the
+     * union was always meant to say.
+     */
+    readonly codigo: CodigoDeError | (string & {});
     readonly campos?: Record<string, string>;
     readonly referencia?: string;
   };
