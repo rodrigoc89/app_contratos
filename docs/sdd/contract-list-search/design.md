@@ -277,11 +277,42 @@ No precedent exists — confirmed, not assumed: zero `@media`, `@container`, `cl
 
 The 1280px cap is deliberate rather than full-bleed: stretched to 1920px, a row's name and its estado sit ~1800px apart and the eye loses the line. 1280px still uses far more monitor than 720px while keeping a row scannable in one fixation sweep.
 
-**Type size.** `.layout-panel` rebinds `--fuente-base: 16px` for its subtree. The `:root` value stays 18px, so the tablet is untouched, and every atom inside the panel (`.boton`, `.campo-texto`, `.etiqueta` all read `var(--fuente-base)`) becomes consistent automatically — that is why this is a scoped token rebind rather than a parallel `--fuente-panel` token no atom reads.
+**Type size.** `.layout-panel` rebinds `--fuente-base: 16px` for its subtree **and reads it back with `font-size: var(--fuente-base)` on the same rule**. The `:root` value stays 18px, so the tablet is untouched, and every atom inside the panel (`.boton`, `.campo-texto`, `.etiqueta` all read `var(--fuente-base)`) becomes consistent automatically — that is why this is a scoped token rebind rather than a parallel `--fuente-panel` token no atom reads.
 
-The justification is **viewing distance, not density**: `tokens.css:39-40` documents 18px as "assumes a tablet held at arm's length, not read up close". A desktop monitor at 50–70cm with an operator reading for hours wants the 16px browser default that user zoom is calibrated around. We do not go below 16px. The density gain is real but modest — measured at roughly one extra row per screen — and is not the reason.
+The read-back is not redundant. See "Correction — the rebind was inert for inherited text" below; the original design shipped the rebind alone and it only ever reached the atoms.
+
+The justification is **viewing distance, not density**: `tokens.css:39-40` documents 18px as "assumes a tablet held at arm's length, not read up close". A desktop monitor at 50–70cm with an operator reading for hours wants the 16px browser default that user zoom is calibrated around. We do not go below 16px. Density is explicitly **not** the reason, which is just as well — see the correction below, where the density claim is retracted too.
 
 A source-scan assertion pins `:root --fuente-base` at 18px so nobody later "fixes" the panel by shrinking the tablet.
+
+#### Correction — the rebind was inert for inherited text (2026-08-14)
+
+**The decision stands; the implementation did not implement it.** For the whole life of this feature the office panel rendered its prose and its table at 18px, the tablet value D13 exists to move away from.
+
+`base.css:40` declares `body { font-size: var(--fuente-base) }`. That `var()` is resolved **on `body`**, which is an *ancestor* of `.layout-panel`. Rebinding a custom property on a descendant cannot retroactively change a value already computed further up the tree, so `body`'s 18px computed font-size stood and every element in the panel that merely *inherits* its size inherited 18px.
+
+What the rebind did reach were the atoms that read `var(--fuente-base)` in **their own** rule (`atomos.css:22, 79, 91` and `panel.css`'s form field). Those did resolve the panel-scoped 16px. So the panel was not "18px throughout" and not "16px throughout" — it was **split across two type sizes**, which is worse than either and is the thing nobody noticed for the same reason the inert rule read as a working one.
+
+Measured in Chrome (`--fuente-base` rebind only, no read-back), at 360, 1366 and 1920px wide:
+
+| Element | Before | After |
+|---|---|---|
+| `.layout-panel` computed | 18px | **16px** |
+| `td` (data cell) | 18px | **16px** |
+| `td::before` (narrow-layout column label) | 18px | **16px** |
+| `dd`, `.detalle-contrato__evento-*` | 18px | **16px** |
+| `.tabla-de-contratos__enlace` (row link) | 18px | **16px** |
+| `th` at <640px | 18px | **16px** |
+| `.boton`, `.campo-texto`, `.etiqueta` | 16px | 16px (unchanged — these already saw the rebind) |
+| `th` at ≥640px, `h1`, `.insignia-estado`, `p[role="status"]` | 12/28/13/15px | unchanged (`rem`-based; `rem` resolves against `html`, never against `.layout-panel`) |
+
+**Fix:** one declaration, `font-size: var(--fuente-base)`, on `.layout-panel` itself. Read back on the element that declares it, the property re-resolves to 16px there and the whole subtree inherits one base. The alternative — deleting the rebind and accepting 18px — was rejected: it would have meant *widening* the split (the atoms would have stayed at their own 16px unless `atomos.css` changed too, which is shared with the tablet), retiring a decision whose viewing-distance rationale is unchallenged, and deleting a guard for a rule that was never actually tried.
+
+`convencionesDeEstilos.spec.ts` now asserts the read-back as well as the rebind. The old assertion checked only that the declaration existed, which is precisely the check an inert declaration passes.
+
+**Retracted: "roughly one extra row per screen."** Measured at 1366×768 the row height is **73.5px before and after** — unchanged. Since PR #69 the row is set by `.tabla-de-contratos__enlace`'s 48px touch-target floor plus cell padding, not by the text, so shrinking the type buys no rows at all on desktop. The narrow card does shrink, 249.1px → 232.1px at 360px. The density argument was never the justification (see above) and is now known to be false for the desktop case; viewing distance remains the whole reason.
+
+Re-checked after the change, at 360px: document `scrollWidth === clientWidth === 360` (no horizontal scroll, R-3.6), no cell where `scrollWidth > clientWidth`, and every interactive control still at or above the 48px floor — smaller text cannot shrink a box whose `min-height` is `var(--tamano-toque-minimo)`, and no measured target moved. The two 0×0 boxes the sweep reports at 360px are `.paginador__numeros`' page buttons, `display: none` by D16, before and after alike.
 
 ### D14 — The 48px minimum, row density, and what the guard actually says
 

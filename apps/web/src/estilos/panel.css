@@ -36,6 +36,24 @@
      length (tokens.css). Scoped here rather than as a second global token
      so `LayoutTablet`'s subtree is untouched. */
   --fuente-base: 16px;
+  /* The rebind above is not enough on its own, and for two years of reading
+     this file it looked like it was.
+
+     `base.css:40` sets `body { font-size: var(--fuente-base) }`. That `var()`
+     is resolved ON `body`, an ANCESTOR of this element, so `body`'s computed
+     font-size was already 18px before this rule ran — and a custom property
+     rebound on a descendant cannot reach back up and change it. Everything in
+     the panel that merely INHERITS its size therefore kept 18px. Measured in
+     Chrome before this declaration existed: a `td` rendered 18px at 360,
+     1366 and 1920px wide, while `.boton`, `.campo-texto` and `.etiqueta` —
+     which read `var(--fuente-base)` in their own rules (`atomos.css`) — did
+     render at 16px. The panel was split across two sizes, not moved to one.
+
+     Reading the property back HERE re-resolves it on this element, below its
+     own declaration, which is what gives the subtree one inherited base.
+     `rem`-based sizes in this file are unaffected: `rem` resolves against
+     `html`, never against this element. */
+  font-size: var(--fuente-base);
 }
 
 .layout-panel__contenido {
