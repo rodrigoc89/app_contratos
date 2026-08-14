@@ -1,5 +1,3 @@
-import type { CodigoDeError } from "@contratos/esquemas";
-
 import type { ErrorDeApi } from "../datos/clienteHttp";
 
 /**
@@ -17,7 +15,7 @@ export interface MensajeDeError {
 const MENSAJE_GENERICO = "Ocurrió un error inesperado. Volvé a intentar.";
 
 export function mensajeDeError(error: ErrorDeApi): MensajeDeError {
-  switch (error.codigo as CodigoDeError | string) {
+  switch (error.codigo) {
     case "conflicto_de_concurrencia":
       // The ordinary case — one writer collided with another — is retried
       // transparently by `conReintentoDeConcurrencia` and never reaches
@@ -110,11 +108,11 @@ export function mensajeDeError(error: ErrorDeApi): MensajeDeError {
     case "cuerpo_invalido":
     case "http":
     default:
-      // `CuerpoDeError["error"]["codigo"]` is typed `CodigoDeError | string`
-      // on purpose (packages/esquemas/src/respuestas.ts) — the server can
-      // answer with a code this map has never seen. This default branch is
-      // the reason that is safe: an unknown code still produces a usable
-      // message instead of a crash or a blank screen.
+      // `CuerpoDeError["error"]["codigo"]` admits any string on purpose
+      // (packages/esquemas/src/respuestas.ts) — the server can answer with a
+      // code this map has never seen. This default branch is the reason that
+      // is safe: an unknown code still produces a usable message instead of a
+      // crash or a blank screen.
       return {
         titulo: "Error inesperado",
         mensaje: MENSAJE_GENERICO,

@@ -81,7 +81,7 @@ export function usarBusquedaDeContratos(): UsoBusquedaDeContratos {
    */
   useEffect(() => {
     establecerPagina(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberate: only term/estados reset the page, not every render.
+    // Deliberate: only term/estados reset the page, not every render.
   }, [termino, estados]);
 
   function alternarEstado(estado: EstadoContrato): void {

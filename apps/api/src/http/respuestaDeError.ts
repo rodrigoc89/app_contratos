@@ -209,7 +209,7 @@ function esCuerpoDeError(valor: unknown): valor is CuerpoDeError {
     return false;
   }
 
-  const error = (valor as { error: unknown }).error;
+  const error = valor.error;
   return (
     typeof error === "object" &&
     error !== null &&

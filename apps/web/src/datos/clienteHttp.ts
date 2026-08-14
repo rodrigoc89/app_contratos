@@ -11,7 +11,12 @@ import { refrescarSesion } from "./sesion/refresco";
  */
 export class ErrorDeApi extends Error {
   readonly estado: number;
-  readonly codigo: CodigoDeError | string;
+  /**
+   * Mirrors `CuerpoDeError["error"]["codigo"]` — see its comment in
+   * `packages/esquemas` for why the union is intersected with `{}` rather
+   * than widened to a bare `string`.
+   */
+  readonly codigo: CodigoDeError | (string & {});
   readonly campos?: Record<string, string>;
   readonly referencia?: string;
 
@@ -188,7 +193,7 @@ function esCuerpoDeError(valor: unknown): valor is CuerpoDeError {
     return false;
   }
 
-  const error = (valor as { error: unknown }).error;
+  const error = valor.error;
   return (
     typeof error === "object" &&
     error !== null &&

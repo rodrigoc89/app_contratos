@@ -49,7 +49,13 @@ export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: s
       // `cerrarSesion` clears local state before awaiting the request, so a
       // network failure must not strand someone in a session they asked to
       // leave. Leaving happens either way.
-      navegar("/login", { replace: true });
+      //
+      // `void` because under `RouterProvider` (a data router, see
+      // `rutas/enrutador.tsx`) `navegar` returns `Promise<void>` that settles
+      // after the login route's loaders run. This is the last statement of a
+      // `finally`, nothing reads the result, and awaiting it here would only
+      // delay resolving `salir()` — which the click handler already discards.
+      void navegar("/login", { replace: true });
     }
   }
 

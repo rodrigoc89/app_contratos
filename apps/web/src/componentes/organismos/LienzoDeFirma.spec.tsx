@@ -299,7 +299,7 @@ describe("LienzoDeFirma", () => {
   it("re-measures the canvas backing store on a window resize, not just once on mount — the rotation bug", () => {
     const { superficie } = superficieFalsa();
     render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficie} />);
-    const lienzo = screen.getByRole("img", { name: "Firma" }) as HTMLCanvasElement;
+    const lienzo = screen.getByRole<HTMLCanvasElement>("img", { name: "Firma" });
     expect(lienzo.width).toBe(0); // jsdom's default zero-size rect, at mount
 
     vi.spyOn(lienzo, "getBoundingClientRect").mockReturnValue({
@@ -312,7 +312,7 @@ describe("LienzoDeFirma", () => {
       right: 600,
       bottom: 300,
       toJSON: () => ({}),
-    } as DOMRect);
+    });
     fireEvent(window, new Event("resize"));
 
     expect(lienzo.width).toBe(600);

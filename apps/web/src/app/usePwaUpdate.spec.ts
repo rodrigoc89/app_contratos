@@ -83,7 +83,9 @@ describe("usePwaUpdate", () => {
     expect(result.current.disponible).toBe(false);
 
     ocupado = false;
-    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
 
     expect(result.current.disponible).toBe(true);
   });

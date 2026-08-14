@@ -9,7 +9,7 @@ import { EMISOR_DE_TOKEN_DE_ACCESO } from "../../identidad/application/ports/pue
 import { AutenticacionGuard } from "../../identidad/interface/guards/AutenticacionGuard";
 import { RolesGuard } from "../../identidad/interface/guards/RolesGuard";
 import { FiltroDeExcepciones } from "../../http/FiltroDeExcepciones";
-import type { BuscarContratos, DatosBusqueda } from "../application/BuscarContratos";
+import type { DatosBusqueda } from "../application/BuscarContratos";
 import type { ResultadoDeBusqueda } from "../application/ports/ContratoRepository";
 import {
   ACTUALIZAR_BORRADOR,
@@ -68,7 +68,7 @@ beforeEach(async () => {
       { provide: CONSULTAR_CONTRATO, useValue: noUsadoEnEstaSuite },
       { provide: DESCARGAR_DOCUMENTO, useValue: noUsadoEnEstaSuite },
       { provide: RELOJ_CONTRATOS, useValue: { ahora: () => new Date() } },
-      { provide: BUSCAR_CONTRATOS, useValue: buscarContratos as unknown as BuscarContratos },
+      { provide: BUSCAR_CONTRATOS, useValue: buscarContratos },
       { provide: DAR_DE_BAJA_CONTRATO, useValue: noUsadoEnEstaSuite },
       { provide: ANULAR_CONTRATO, useValue: noUsadoEnEstaSuite },
       { provide: REGISTRAR_RESTITUCION, useValue: noUsadoEnEstaSuite },

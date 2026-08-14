@@ -265,5 +265,5 @@ async function lanzarChromium(): Promise<NavegadorRenderPdf> {
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
-  return browser as unknown as NavegadorRenderPdf;
+  return browser;
 }

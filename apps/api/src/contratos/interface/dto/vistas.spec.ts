@@ -522,7 +522,7 @@ describe("contextoDeFirmaDesde", () => {
   it("accepts a signing with no location at all", () => {
     const { geo: _sinUbicacion, ...sinGeo } = cuerpoDeFirma();
 
-    const contexto = contextoDeFirmaDesde(sinGeo as never, {
+    const contexto = contextoDeFirmaDesde(sinGeo, {
       tecnicoId: "usuario-tecnico1",
       ip: null,
       userAgent: null,

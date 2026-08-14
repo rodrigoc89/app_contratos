@@ -33,7 +33,7 @@ function contrato(sobrescrituras: Partial<DatosContratoDetalle> = {}): DatosCont
     eventos: [],
     equiposPendientesDeRestitucion: false,
     ...sobrescrituras,
-  } as DatosContratoDetalle;
+  };
 }
 
 const HISTORIA_COMPLETA: DatosContratoDetalle["eventos"] = [

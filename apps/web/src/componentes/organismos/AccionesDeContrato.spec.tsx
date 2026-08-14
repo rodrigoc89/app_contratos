@@ -28,7 +28,7 @@ function contrato(
     documentos: [],
     eventos: [],
     equiposPendientesDeRestitucion,
-  } as DatosContratoDetalle;
+  };
 }
 
 function props(sobrescrituras: Partial<Parameters<typeof AccionesDeContrato>[0]> = {}) {
