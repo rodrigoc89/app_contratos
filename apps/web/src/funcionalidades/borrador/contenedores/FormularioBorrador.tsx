@@ -4,7 +4,7 @@ import {
   EsquemaEquipos,
   type DatosContratoCreado,
 } from "@contratos/esquemas";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Spinner } from "../../../componentes/atomos/Spinner";
 import { Toast } from "../../../componentes/moleculas/Toast";
@@ -164,6 +164,42 @@ export function FormularioBorrador({
     borradorLocal !== null && borradorLocal.contratoId !== null,
   );
 
+  /*
+    Every notification this component sends goes through this ref, never
+    through the `onCreado` a closure happened to capture.
+
+    The invariant a future editor needs: BOTH places that call `onCreado`
+    (the mount-time resume effect below and `manejarCrear`) only reach it
+    *after* an `await`, and the parent is free to re-render — with a brand
+    new `onCreado` identity — while that request is in flight.
+    `InicioTecnico` does exactly that: `manejarCreado` is a plain function
+    body, so it is a different function on every one of its renders. The ref
+    is re-pointed on every render of THIS component, so `.current` is always
+    the callback the parent passed most recently, and a notification can
+    never be delivered to a callback the parent has already replaced.
+
+    Why not put `onCreado` in the resume effect's dependency array instead —
+    the fix the linter itself suggests: `manejarCreado`'s whole job is to put
+    a freshly-allocated `ColaDeGuardado` into the parent's state (DESIGN.md
+    D3), so React can never bail out of that re-render, and a new identity
+    comes straight back down. That closes the same cycle PR #68 found in
+    `VisorDeDocumento` — effect → parent setState → new callback identity →
+    effect — except here every turn of it also re-issues
+    `GET /contratos/:id`. Measured against this exact component: 466 requests
+    in a 300 ms window with the dependency added, versus 1 without it. Both
+    halves are pinned by named tests in `FormularioBorrador.spec.tsx`, so
+    this comment cannot quietly drift away from the behaviour it describes.
+
+    It is NOT enough that `manejarCreado` happens to close over nothing but
+    its own setters today. That is a property of its current body, which no
+    one wrote down and any future edit can take away — silently, because the
+    stale call would still look correct in every existing test.
+  */
+  const onCreadoActual = useRef(onCreado);
+  useEffect(() => {
+    onCreadoActual.current = onCreado;
+  });
+
   useEffect(() => {
     const contratoIdARecuperar = borradorLocal?.contratoId ?? null;
     if (contratoIdARecuperar === null) {
@@ -193,7 +229,7 @@ export function FormularioBorrador({
         const contratoRecuperado: DatosContratoCreado = { id: contrato.id, estado: contrato.estado };
         establecerCreado(contratoRecuperado);
         establecerAvisoBorradorVisible(true);
-        onCreado?.(contratoRecuperado);
+        onCreadoActual.current?.(contratoRecuperado);
         establecerResumiendo(false);
       } catch {
         // Gone (`no_encontrado`), unreachable, or any other failure —
@@ -207,9 +243,15 @@ export function FormularioBorrador({
     return () => {
       cancelado = true;
     };
-    // Runs once per mount — `borradorLocal` is read once, above, and never
-    // changes for this component's lifetime.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Runs once per mount, and now has nothing left to go stale on. The ONE
+    // dependency this omits is `borradorLocal?.contratoId`, and it is a
+    // provable false positive: `borradorLocal` comes from a `useState` with
+    // no setter (read once, above), so it cannot change for this component's
+    // lifetime. `onCreado` was the second omission — the one this comment
+    // used to be silent about — and it is no longer read from this closure at
+    // all: see `onCreadoActual` above, which fixes it instead of documenting
+    // it, and explains why the dependency array is the wrong place for it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberate and complete: see just above.
   }, []);
 
   // DESIGN.md D8, "Written when: debounced on form change" — only once the
@@ -331,7 +373,7 @@ export function FormularioBorrador({
       // means even a contract-violating fake cannot hide the toast (see
       // FormularioBorrador.spec.tsx's verification-by-breaking test).
       tono.reproducir();
-      onCreado?.(contrato);
+      onCreadoActual.current?.(contrato);
     } catch (motivo) {
       // The entered values are never cleared here — a business-rule
       // rejection (`regla_de_negocio`) must let the technician correct and

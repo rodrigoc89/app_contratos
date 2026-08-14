@@ -16,9 +16,12 @@ interface PropiedadesLayoutPanel {
  * (`max-width: 720px`) that would waste most of a 1920px monitor, and it
  * carries its own spec plus the técnico flow depending on it.
  *
- * `.layout-panel` is what `panel.css` rebinds `--fuente-base` to 16px on —
- * a desktop operator reading for hours wants the browser default, not the
- * 18px `:root` value sized for a tablet held at arm's length.
+ * `.layout-panel` is what `panel.css` rebinds `--fuente-base` to 16px on,
+ * AND reads back with `font-size` — a desktop operator reading for hours
+ * wants the browser default, not the 18px `:root` value sized for a tablet
+ * held at arm's length. The read-back is what carries the rebind to
+ * inherited text; without it `body`'s already-computed 18px stands (see the
+ * rule's own comment in `panel.css`).
  */
 export function LayoutPanel({ children, cabecera }: PropiedadesLayoutPanel) {
   return (
