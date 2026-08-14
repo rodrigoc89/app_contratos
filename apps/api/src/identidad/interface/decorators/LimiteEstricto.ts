@@ -26,11 +26,16 @@ export const LimiteEstricto = (): MethodDecorator & ClassDecorator =>
 
 /** The `skipIf` predicate for the strict throttler. */
 export function noEsRutaDeLimiteEstricto(contexto: ExecutionContext): boolean {
-  const enElManejador = Reflect.getMetadata(
+  // `Reflect.getMetadata` is declared as returning `any` — it cannot know what
+  // a given key was set to. Naming the two reads `unknown` keeps that `any`
+  // from escaping into the rest of the function: the only thing either value
+  // is allowed to do is the `=== true` narrowing below, which is exactly the
+  // check `LimiteEstricto()` writes (`SetMetadata(CLAVE, true)`).
+  const enElManejador: unknown = Reflect.getMetadata(
     CLAVE_LIMITE_ESTRICTO,
     contexto.getHandler(),
   );
-  const enElControlador = Reflect.getMetadata(
+  const enElControlador: unknown = Reflect.getMetadata(
     CLAVE_LIMITE_ESTRICTO,
     contexto.getClass(),
   );
