@@ -1,7 +1,5 @@
-import { useNavigate } from "react-router-dom";
-
 import { Boton } from "../../../componentes/atomos/Boton";
-import { cerrarSesion } from "../../../datos/sesion/sesion";
+import { usarCierreDeSesion } from "../usarCierreDeSesion";
 import { usarSesionActual } from "../usarSesionActual";
 
 /**
@@ -21,43 +19,13 @@ import { usarSesionActual } from "../usarSesionActual";
  * "whose session is this?" has to be answerable without clicking anything.
  */
 export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: string } = {}) {
-  const navegar = useNavigate();
   const sesion = usarSesionActual();
   const nombre = nombreUsuario ?? sesion?.usuario.nombreUsuario ?? "";
-
-  async function salir(): Promise<void> {
-    try {
-      await cerrarSesion();
-    } catch {
-      // Swallowed on purpose. `cerrarSesion` already handles the logout
-      // request failing; what can still reach here is the local cleanup
-      // throwing before it — `localStorage` raises a SecurityError when the
-      // browser blocks storage — and by then leaving is still the only
-      // sensible outcome, so there is nothing to decide and nothing to tell
-      // the person on the tablet.
-      //
-      // It cannot be left uncaught: the click handler discards the promise
-      // with `void`, and `void` only evaluates its operand and throws the
-      // value away — it attaches no rejection handler. So the rejection
-      // escaped the component as a browser `unhandledrejection` (and made the
-      // test process exit non-zero with every assertion green).
-      //
-      // Nothing is logged here either: this path runs while holding session
-      // and customer data, and Ley 25.326 keeps DNI, phone numbers and GPS
-      // coordinates out of anything we write down.
-    } finally {
-      // `cerrarSesion` clears local state before awaiting the request, so a
-      // network failure must not strand someone in a session they asked to
-      // leave. Leaving happens either way.
-      //
-      // `void` because under `RouterProvider` (a data router, see
-      // `rutas/enrutador.tsx`) `navegar` returns `Promise<void>` that settles
-      // after the login route's loaders run. This is the last statement of a
-      // `finally`, nothing reads the result, and awaiting it here would only
-      // delay resolving `salir()` — which the click handler already discards.
-      void navegar("/login", { replace: true });
-    }
-  }
+  // Deliberately no `motivo`: this header has never carried one, so the
+  // login screen stays silent after a logout from here. `usarCierreDeSesion`
+  // owns the rest — the same unit `PanelNoDisponible` calls, so the
+  // rejection handling PR #61 added here cannot go missing from a copy again.
+  const salir = usarCierreDeSesion();
 
   return (
     <header className="cabecera-sesion">
