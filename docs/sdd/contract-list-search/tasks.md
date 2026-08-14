@@ -105,11 +105,11 @@ Chain strategy: stacked-to-main
 
 ## Manual pre-merge checklist (PR #2, not automated — no browser runner in this repo)
 
-- [ ] 360px: fields readable, pagination reachable without horizontal scroll
-- [ ] 1920px: no stretched column
-- [ ] Tab through screen: focus unmistakable at every stop
-- [ ] Mouse hover: only controls read as actionable, never rows
-- [ ] Touch-screen notebook: every control hit on first attempt
+- [x] 360px: fields readable, pagination reachable without horizontal scroll (Chrome/Puppeteer, 19 contracts: `scrollWidth === clientWidth === 360` on both the list and the detail page; paginator `position: sticky`, 328×73, visible without scrolling; all 50 `td` at 18px with zero cells overflowing)
+- [x] 1920px: no stretched column (`.layout-panel__contenido` capped at `max-width: 1280px`, `panel.css:41-47`; table measures 1230px and no column carries runaway slack)
+- [x] Tab through screen: focus unmistakable at every stop (20 tab stops at 1366×768, every one computing `outline: solid 3px rgb(11,99,74)` with `outline-offset: 2px` from `base.css:55-58`; no focus trap; tab order = DOM order = visual order)
+- [x] Mouse hover: only controls read as actionable, never rows (row and cell compute `cursor: auto` idle and hovered, clicking a row's non-link cell does not navigate — URL stays `/panel`; row hover tint 1.0958:1 against white is measurably WEAKER than the zebra striping's 1.1129:1. Re-measured unchanged after the touch-target fix below)
+- [x] Touch-screen notebook: every control hit on first attempt (FAILED first: the row name link measured 91×24 to 174.5×24 and `← Volver al listado` 166.6×24 — inline `<a>` boxes, one line tall, under WCAG 2.5.5's 44px and the project's 48px floor. Fixed in `panel.css` by giving both links `display: inline-flex` plus `min-height`/`min-width: var(--tamano-toque-minimo)`; `display` is load-bearing, a `min-height` on an inline box is inert. Re-measured: all 27 controls at 1366 and all 25 visible controls at 360 are ≥48×48 — links now 174.5×48 / 91×48 / 166.6×48 — and an `elementFromPoint` sweep at each control's centre finds zero occluded. Cost: rows grow 53.6px → 73.5px at 1366×768; at 360px the cards are mostly unchanged. `convencionesDeEstilos.spec.ts` gained a scan that requires the floor of EVERY interactive control the stylesheets declare, since the enumerated guard was green throughout this defect)
 
 ## PR #1 status: COMPLETE, C-1/W-2/W-5/S-1 remediated (see `sdd/contract-list-search/apply-progress` for full evidence)
 

@@ -1146,3 +1146,371 @@ describe("the signature surface is bounded on the canvas, never on the box holdi
     ).toBe(false);
   });
 });
+
+/**
+ * The touch-target floor, applied to EVERY control the stylesheets define
+ * rather than to a list of selectors somebody remembered to extend.
+ *
+ * "primary actions meet the 48px touch-target minimum" and its PR2 sibling
+ * above already assert `min-height`/`min-width` against
+ * `--tamano-toque-minimo` — for `.boton`, `#busqueda-contratos`,
+ * `.barra-de-busqueda__estados .boton` and `.paginador .boton`. Both were
+ * green while the two links the office actually navigates with measured, in
+ * Chrome at 1366×768:
+ *
+ *   a.tabla-de-contratos__enlace        91×24 … 174.5×24  (ten per page, and
+ *                                                          the only way into
+ *                                                          a contract)
+ *   .pagina-detalle-contrato__volver a  166.6×24
+ *
+ * WCAG 2.5.5 AA asks 44×44 and `tokens.css` asks 48. Neither rule declared a
+ * size at all, and neither selector was on the list. That is the defect
+ * itself, not an oversight in applying it: a guard written as an enumeration
+ * only ever covers what someone thought to enumerate, so the NEXT control
+ * ships exactly the same way — which is why widening the list would have
+ * fixed this instance and nothing else.
+ *
+ * So the polarity is inverted here. Anything the stylesheets declare that
+ * LOOKS like a control — an interaction pseudo-class in its selector, an
+ * inherently interactive element as the selector's key, or `cursor: pointer`
+ * in its body — must be covered, and anything that is genuinely not a target
+ * has to say so by name in `EXENCIONES`, with its reason. A new component
+ * cannot slip through by not being on a list.
+ *
+ * What this still cannot see, stated plainly rather than papered over:
+ *
+ * 1. A control the stylesheets never mention. The scan reads CSS, so a
+ *    `<button>` that is styled by nothing is invisible to it. The one class
+ *    of control that is inline by DEFAULT — a link — is covered from the
+ *    component side too, by the `<a>`/`<Link>` scan below, because that is
+ *    the case where the omission actually renders as 24px.
+ * 2. Computed geometry. jsdom performs no layout, so this asserts what the
+ *    stylesheet DECLARES. A declaration can still be defeated at runtime by
+ *    a more specific rule elsewhere, and only a browser sees that. The known
+ *    silent-no-op inside a declaration — `min-height` on an inline box —
+ *    is checked directly, in the last assertion of this block.
+ * 3. The horizontal floor accepts a block-level `display` and `width: 100%`
+ *    as satisfying it. A block-level control fills its container's inline
+ *    axis, which on every screen in this app is far past 48px, but the
+ *    number itself is a layout fact this file cannot compute.
+ */
+describe("every interactive control the stylesheets define meets the touch floor", () => {
+  const PATRON_COMENTARIO_CSS = /\/\*[\s\S]*?\*\//g;
+  const PSEUDOCLASES_INTERACTIVAS = /:(?:hover|active|focus|disabled|checked)\b/;
+
+  /**
+   * `label` is deliberately absent. A label forwards its clicks to the
+   * control it names, so the SIZE that matters belongs to that control, not
+   * to the words — `.formulario__campo label` and
+   * `.detalle-contrato__formulario label` are captions above an input, and
+   * demanding 48px of them would be noise. A label that IS the target —
+   * `.etiqueta--opcion`, the whole row of a radio option — is caught anyway,
+   * by its `cursor: pointer`.
+   */
+  const ELEMENTOS_INTERACTIVOS = new Set(["a", "button", "input", "select", "textarea", "summary"]);
+
+  const EXENCIONES: ReadonlyArray<{ readonly base: string; readonly porque: string }> = [
+    {
+      base: ".tabla-de-contratos tbody tr",
+      porque:
+        "R-3.5/R-3.8: a row is not a target. It has no click handler, keeps `cursor: auto`, and its hover tint is deliberately WEAKER than the zebra striping (measured 1.0958 against 1.1129) so it never reads as actionable. Giving it the floor would be the opposite of the requirement — the one link inside it carries the target instead.",
+    },
+    {
+      base: ".tabla-de-contratos__desplazamiento",
+      porque:
+        "the table's horizontal scroll region (D12). It is focusable so a keyboard can scroll it, which is why it declares `:focus-visible`, but scrolling is not a pointer target: WCAG 2.5.5 sizes things you activate. It is already full-width and far taller than the floor.",
+    },
+  ];
+
+  /**
+   * Innermost rules, comments stripped and selector lists split, as
+   * `{selector, cuerpo}`.
+   *
+   * Comments are removed FIRST because this file's other scans read raw
+   * text on purpose and these ones must not: `panel.css` quotes selectors
+   * and whole declarations inside its prose, and a commented-out control
+   * would otherwise be scanned as a real one — a violation nobody can fix,
+   * because the "rule" does not exist.
+   *
+   * The `([^{}]+)\{([^{}]*)\}` shape is the same one `removalesSinReemplazo`
+   * uses, and it yields innermost rules: a `@media` prelude can never be
+   * captured as a selector, because the attempt that starts there needs a
+   * `}` where the nested rule's `{` is and fails.
+   */
+  function reglasDeclaradas(contenido: string): ReadonlyArray<{ selector: string; cuerpo: string }> {
+    const sinComentarios = contenido.replace(PATRON_COMENTARIO_CSS, "");
+    return [...sinComentarios.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((coincidencia) => {
+      const cuerpo = coincidencia[2] ?? "";
+      return (coincidencia[1] ?? "")
+        .split(",")
+        .map((selector) => selector.trim().replace(/\s+/g, " "))
+        .filter((selector) => selector !== "" && !selector.startsWith("@"))
+        .map((selector) => ({ selector, cuerpo }));
+    });
+  }
+
+  /** The selector with every pseudo-class and pseudo-element removed. */
+  function selectorBase(selector: string): string {
+    return selector
+      .replace(/::[a-z-]+/g, "")
+      .replace(/:[a-z-]+\([^()]*\)/g, "")
+      .replace(/:[a-z-]+/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /** The rightmost compound — the thing the rule actually styles. */
+  function compuestoClave(base: string): string {
+    const partes = base.split(/\s*[>+~]\s*|\s+/).filter((parte) => parte !== "");
+    return partes.at(-1) ?? "";
+  }
+
+  function elementoClave(base: string): string {
+    return /^[a-z][a-z0-9]*/.exec(compuestoClave(base))?.[0] ?? "";
+  }
+
+  function claseClave(base: string): string {
+    return compuestoClave(base).match(/\.[A-Za-z0-9_-]+/g)?.at(-1) ?? "";
+  }
+
+  /**
+   * Where the floor for `base` is allowed to have been declared.
+   *
+   * A control usually carries several classes at once, so the declaration
+   * that sizes it need not sit on the selector that styles its colours:
+   * `.paginador .boton--pagina-actual` is sized by `.paginador .boton`, and
+   * `.detalle-contrato__formulario .campo-texto` by the `.campo-texto` atom.
+   * Both directions of that are BEM-shaped, never guessed — a modifier falls
+   * back to its base, and a scoped rule falls back to the bare key class,
+   * because in both cases the element genuinely matches the other selector
+   * too.
+   */
+  function identidadesDeCobertura(base: string): ReadonlyArray<string> {
+    const candidatos = [base, claseClave(base)].filter((candidato) => candidato !== "");
+    return [
+      ...new Set(
+        candidatos.flatMap((candidato) => {
+          const sinModificador = candidato.replace(/--[a-z0-9-]+$/, "");
+          return sinModificador === candidato ? [candidato] : [candidato, sinModificador];
+        }),
+      ),
+    ];
+  }
+
+  /**
+   * Whether any declaration of one of `propiedades` resolves to the token or
+   * to a literal at or above it. Every declaration is examined, not the
+   * first: a rule may set `height` for one reason and `min-height` for
+   * another, and only one of them has to clear the floor.
+   */
+  function declaraAlMenosElPiso(cuerpo: string, propiedades: ReadonlyArray<string>): boolean {
+    const patron = new RegExp(`(?:^|[;\\s])(?:${propiedades.join("|")})\\s*:\\s*([^;}]+)`, "g");
+    return [...cuerpo.matchAll(patron)].some((coincidencia) => {
+      const valor = (coincidencia[1] ?? "").trim();
+      if (/^var\(\s*--tamano-toque-minimo\s*\)/.test(valor)) {
+        return true;
+      }
+      const literal = /^(\d+(?:\.\d+)?)px$/.exec(valor);
+      return literal !== null && Number(literal[1]) >= 48;
+    });
+  }
+
+  /** Block-level: the box fills its container's inline axis on its own. */
+  const DISPLAY_DE_BLOQUE = /display\s*:\s*(?:flex|grid|block|table)\b/;
+  const ANCHO_COMPLETO = /(?:^|[;\s])(?:min-width|width)\s*:\s*100%/;
+
+  function cumplePisoVertical(cuerpo: string): boolean {
+    // `min-height` on an inline box is inert — the box is one line tall no
+    // matter what it declares, which is precisely how both office links came
+    // to measure 24px. A rule that pins itself back to `inline` has not
+    // declared a floor, it has declared a decoration.
+    if (/display\s*:\s*inline\s*(?:;|$)/.test(cuerpo)) {
+      return false;
+    }
+    return declaraAlMenosElPiso(cuerpo, ["min-height", "height"]);
+  }
+
+  function cumplePisoHorizontal(cuerpo: string): boolean {
+    return (
+      declaraAlMenosElPiso(cuerpo, ["min-width", "width"]) ||
+      ANCHO_COMPLETO.test(cuerpo) ||
+      DISPLAY_DE_BLOQUE.test(cuerpo)
+    );
+  }
+
+  const hojas = archivosCss(DIRECTORIO_SRC).map(({ ruta, contenido }) => ({
+    ruta: relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/"),
+    reglas: reglasDeclaradas(contenido),
+  }));
+
+  const todasLasReglas = hojas.flatMap(({ ruta, reglas }) =>
+    reglas.map((regla) => ({ ...regla, ruta, base: selectorBase(regla.selector) })),
+  );
+
+  const controles = todasLasReglas.filter(
+    (regla) =>
+      regla.base !== "" &&
+      !EXENCIONES.some((exencion) => exencion.base === regla.base) &&
+      (PSEUDOCLASES_INTERACTIVAS.test(regla.selector) ||
+        ELEMENTOS_INTERACTIVOS.has(elementoClave(regla.base)) ||
+        /cursor\s*:\s*pointer/.test(regla.cuerpo)),
+  );
+
+  function declarantes(predicado: (cuerpo: string) => boolean): ReadonlySet<string> {
+    return new Set(
+      todasLasReglas.filter((regla) => regla.base !== "" && predicado(regla.cuerpo)).map((regla) => regla.base),
+    );
+  }
+
+  function sinCobertura(predicado: (cuerpo: string) => boolean): ReadonlyArray<string> {
+    const declarados = declarantes(predicado);
+    return [
+      ...new Set(
+        controles
+          .filter((control) => !identidadesDeCobertura(control.base).some((identidad) => declarados.has(identidad)))
+          .map((control) => `${control.ruta}: ${control.selector}`),
+      ),
+    ];
+  }
+
+  it("finds controls to check, so a green run is never an empty one", () => {
+    expect(hojas.length).toBeGreaterThan(0);
+    // Whatever the exact count, a scan that suddenly sees a handful has
+    // stopped parsing the stylesheets rather than found a tidier codebase.
+    expect(controles.length).toBeGreaterThanOrEqual(15);
+  });
+
+  it("declares a vertical touch floor for each of them", () => {
+    expect(
+      sinCobertura(cumplePisoVertical),
+      "these controls declare no min-height/height at or above --tamano-toque-minimo, and none of the selectors they also match declares one for them. A control that is exactly one line tall measures 24px — under WCAG 2.5.5's 44px floor and well under this project's 48px.",
+    ).toEqual([]);
+  });
+
+  it("declares a horizontal touch floor for each of them", () => {
+    expect(
+      sinCobertura(cumplePisoHorizontal),
+      "these controls declare no min-width/width at or above --tamano-toque-minimo, are not full-width, and are not block-level",
+    ).toEqual([]);
+  });
+
+  it("keeps every exemption earning its place, so the list cannot rot into a blanket", () => {
+    for (const exencion of EXENCIONES) {
+      expect(
+        todasLasReglas.some((regla) => regla.base === exencion.base),
+        `EXENCIONES names ${exencion.base}, which no stylesheet declares any more — a stale exemption is a hole nobody is watching`,
+      ).toBe(true);
+    }
+  });
+});
+
+/**
+ * A link is the one control that is inline by DEFAULT, so it is the one
+ * where forgetting the floor is invisible in the source and obvious in a
+ * browser: `<a>` renders as a single line box, which measured 24px in Chrome
+ * for both office links.
+ *
+ * `min-height` alone does not fix that. An inline box ignores it — the same
+ * class of silent no-op as `position: sticky` without an inset — so the
+ * `display` is what arms the declaration, and it is asserted here rather
+ * than assumed.
+ *
+ * Scanned from the components as well as the stylesheets, because the two
+ * links are reached differently and either route alone leaves a hole:
+ * `TablaDeContratos.tsx` names its class on the element
+ * (`<Link className="tabla-de-contratos__enlace">`) while
+ * `PaginaDetalleContrato.tsx` renders a bare `<Link>` styled through its
+ * parent (`.pagina-detalle-contrato__volver a`).
+ */
+describe("a link declares a box, since a floor on an inline box is ignored", () => {
+  const DISPLAY_CON_CAJA = /display\s*:\s*(?:inline-flex|inline-grid|inline-block|flex|grid|block)\b/;
+  const PISO_VERTICAL = /(?:^|[;\s])min-height\s*:\s*var\(--tamano-toque-minimo\)/;
+  const PATRON_ENLACE_TSX = /<(?:a|Link)\b[^>]*\bclassName="([^"]+)"/g;
+
+  /** Components only — a `.spec.tsx` fixture is not a shipped screen. */
+  function archivosTsx(directorio: string): ReadonlyArray<{ ruta: string; contenido: string }> {
+    return readdirSync(directorio).flatMap((nombre) => {
+      const ruta = join(directorio, nombre);
+      if (statSync(ruta).isDirectory()) {
+        return archivosTsx(ruta);
+      }
+      return nombre.endsWith(".tsx") && !nombre.endsWith(".spec.tsx")
+        ? [{ ruta, contenido: readFileSync(ruta, "utf8") }]
+        : [];
+    });
+  }
+
+  /** Every rule whose body sizes and boxes the given selector. */
+  function cuerposDe(selector: string): ReadonlyArray<string> {
+    const escapado = selector.replace(/[-[\]{}()*+?.\\^$|#]/g, "\\$&");
+    return archivosCss(DIRECTORIO_SRC).flatMap(({ contenido }) =>
+      todasLasCoincidencias(contenido, escapado),
+    );
+  }
+
+  function esperaCajaConPiso(selector: string): void {
+    const cuerpos = cuerposDe(selector);
+    expect(cuerpos.length, `no rule declares ${selector}`).toBeGreaterThan(0);
+    expect(
+      cuerpos.some((cuerpo) => PISO_VERTICAL.test(cuerpo)),
+      `${selector} declares no min-height: var(--tamano-toque-minimo) — measured 24px in Chrome, against WCAG 2.5.5's 44px floor`,
+    ).toBe(true);
+    expect(
+      cuerpos.some((cuerpo) => DISPLAY_CON_CAJA.test(cuerpo)),
+      `${selector} declares a min-height but leaves the link inline, where a min-height is simply ignored — the fix would look right in the diff and change nothing on screen`,
+    ).toBe(true);
+  }
+
+  /** Selectors whose key is an `<a>`, taken from the stylesheets themselves. */
+  const selectoresDeAncla = [
+    ...new Set(
+      archivosCss(DIRECTORIO_SRC).flatMap(({ contenido }) =>
+        [...contenido.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?:^|\n)([^{}\n]*[\s>+~]a)\s*\{/g)].map(
+          (coincidencia) => (coincidencia[1] ?? "").trim(),
+        ),
+      ),
+    ),
+  ];
+
+  /** Classes the components put on an `<a>`/`<Link>`. */
+  const clasesDeEnlace = [
+    ...new Set(
+      archivosTsx(join(DIRECTORIO_SRC, "componentes"))
+        .concat(archivosTsx(join(DIRECTORIO_SRC, "funcionalidades")))
+        .flatMap(({ contenido }) =>
+          [...contenido.matchAll(PATRON_ENLACE_TSX)].flatMap((coincidencia) =>
+            (coincidencia[1] ?? "").split(/\s+/).filter((clase) => clase !== ""),
+          ),
+        ),
+    ),
+  ].map((clase) => `.${clase}`);
+
+  it("finds links to check in both the stylesheets and the components", () => {
+    expect(selectoresDeAncla.length, "no `… a { }` rule found — the anchor scan matched nothing").toBeGreaterThan(0);
+    expect(clasesDeEnlace.length, "no <a>/<Link> with a className found — the component scan matched nothing").toBeGreaterThan(0);
+  });
+
+  it.each([...new Set(selectoresDeAncla)])("gives %s a real box", (selector) => {
+    esperaCajaConPiso(selector);
+  });
+
+  it.each([...new Set(clasesDeEnlace)])("gives %s a real box", (selector) => {
+    esperaCajaConPiso(selector);
+  });
+
+  /**
+   * R-3.8, and the reason this fix is a box rather than an `::after` overlay
+   * or a cell-filling target: growing what a thumb can HIT must not grow
+   * what the eye reads as clickable. The row is not a link, and the moment
+   * the link inside it paints a background or a border it starts to look
+   * like the row is.
+   */
+  it("keeps the row link invisible — a bigger target, not a bigger affordance", () => {
+    for (const cuerpo of cuerposDe(".tabla-de-contratos__enlace")) {
+      expect(
+        /(?:^|[;\s])(?:background(?:-color)?|border(?:-\w+)?)\s*:/.test(cuerpo),
+        "the row link paints a background or a border — the row it sits in must not read as clickable (R-3.8), and nothing about the touch target requires painting anything",
+      ).toBe(false);
+    }
+  });
+});
