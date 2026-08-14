@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -182,6 +182,33 @@ describe("route guards", () => {
 
     expect(await screen.findByRole("heading", { name: "Nuevo contrato" })).toBeInTheDocument();
     expect(screen.queryByLabelText("Usuario")).not.toBeInTheDocument();
+  });
+
+  /**
+   * Leaving from the header used to land on `/login` in silence.
+   * `PanelNoDisponible` confirmed the same action from the start, and the
+   * header is the control almost everyone actually taps — on a shared tablet
+   * an unconfirmed logout reads as the app having dropped the session by
+   * itself, which is precisely the doubt that makes someone hand the device
+   * over without signing out.
+   *
+   * Asserted only once the whole logout has settled: `GuardiaDeSesion`
+   * reacts to the cleared session first and its own redirect does carry a
+   * reason, so a message caught mid-flight would prove nothing. The
+   * navigation `usarCierreDeSesion` performs last is what the person reads.
+   */
+  it("confirms the logout on the login screen after leaving from the header", async () => {
+    establecerSesion(sesionFalsa("tecnico"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+
+    renderizarEn("/");
+    fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+    await act(async () => {
+      await new Promise((resolver) => setTimeout(resolver, 0));
+    });
+
+    expect(screen.getByLabelText("Usuario")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Cerraste tu sesión correctamente.");
   });
 
   it("lands on login with a técnico-facing reason and clears the dead stored token when the boot refresh is refused", async () => {

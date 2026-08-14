@@ -21,10 +21,10 @@ import { usarSesionActual } from "../usarSesionActual";
 export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: string } = {}) {
   const sesion = usarSesionActual();
   const nombre = nombreUsuario ?? sesion?.usuario.nombreUsuario ?? "";
-  // Deliberately no `motivo`: this header has never carried one, so the
-  // login screen stays silent after a logout from here. `usarCierreDeSesion`
-  // owns the rest — the same unit `PanelNoDisponible` calls, so the
-  // rejection handling PR #61 added here cannot go missing from a copy again.
+  // `usarCierreDeSesion` owns the leaving AND the confirmation the login
+  // screen shows on arrival — the same unit `PanelNoDisponible` calls, so
+  // neither the rejection handling PR #61 added here nor that message can go
+  // missing from one control and not the other again.
   const salir = usarCierreDeSesion();
 
   return (
