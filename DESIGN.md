@@ -236,7 +236,7 @@ isolation — and the legal rules are the part that actually matters here.
 | Database | PostgreSQL |
 | Frontend | React + Vite, as an installable PWA (**see §5.1**) |
 | PDF | Server-side HTML → PDF |
-| Hosting | HostGator VPS, 2 vCPU / 4 GB (**see §10**) |
+| Hosting | DonWeb Cloud Server, 2 vCPU / 4 GB (**see §10**) |
 
 ### 5.1 Frontend
 
@@ -320,9 +320,13 @@ schemas — which is most of the code. The UX differences (huge touch targets
 and a single linear flow on the tablet; tables, search and keyboard use in the
 office) are handled with layouts and components, not with a second build.
 
-Route-level code splitting keeps the tablet from downloading the office panel
-bundle. If the two ever diverge enough to justify separate deployments, the
-split is a packaging change, not a rewrite.
+**Route-level code splitting is not built yet.** An earlier version of this
+document described it as done; `apps/web/src/rutas/rutas.tsx` imports every
+page eagerly, so today the tablet downloads the office panel along with its
+own screens. Deferred rather than dropped: a `React.lazy` boundary per
+role-gated route tree is a packaging change, and so is separating the
+deployments outright if the two areas ever diverge enough to justify it —
+neither is a rewrite.
 
 ---
 
@@ -753,10 +757,9 @@ datacentre, was already dismissed above as invisible in this workflow.
 - Whether provider backups are restore-tested, and where the offsite copy of
   the PDF archive will live regardless of the answer.
 
-**The DonWeb catalogue has not been checked here.** The HostGator table below
-was recorded in this document's own dated-check convention; an equivalent
-DonWeb check should be recorded beside it before committing, with current specs
-and prices rather than remembered ones.
+**Both catalogues are recorded here** in this document's own dated-check
+convention, with quoted specs and prices rather than remembered ones: DonWeb
+above, HostGator below.
 
 ### HostGator catalogue check (August 2026) — alternative, not chosen
 
@@ -869,13 +872,22 @@ visit.
 ## 13. Open questions
 
 1. Does the contract template need a personal-data clause covering storage and
-   international transfer, now that the server is outside Argentina? (§10)
+   processing? The international-transfer half of this question is answered in
+   §10: the server is in Argentina, confirmed against the provider's own page,
+   so the clause is no longer *required* on residency grounds — and the IP that
+   may geolocate as American is a routing detail, not the location of the data
+   (§10, *"One nuance that must not be misread"*). What stays open is art. 6:
+   whether the template itself should inform the customer of purpose,
+   responsible party and their access/rectification/suppression rights. Drafted
+   for review in `docs/borrador-clausula-datos-personales.md`. (§10)
 
 ### Resolved
 
 - Correcting a signed contract → **annul and re-sign**, never edit (§3).
 - Frontend stack → **React + Vite** as a PWA (§5.1).
-- Hosting → **HostGator VPS (Snappy 2000)**, not shared hosting (§10).
+- Hosting → **DonWeb Cloud Server** (2 vCPU / 4 GB / 20 GB SSD), not shared
+  hosting (§10). HostGator was the earlier answer and is kept there as the
+  alternative it was compared against.
 - Typos in the source contract (`ósea`, `El incumpliendo`, …) → **left
   verbatim** at the client's decision. The template transcribes the paper
   document as it is.

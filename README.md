@@ -106,14 +106,16 @@ API's port, and there is no CORS anywhere.
 
 Set `SEED_TECNICO_PASSWORD` (step 3, above) and seed the database — that
 creates the account the client's route guard actually admits into the signing
-flow, since `apps/web` implements only the técnico route tree. Log in with
-that account and the whole flow is reachable: the borrador form, the reading
-gate, signature capture, signing and delivery.
+flow, since `/` is gated to the `tecnico` role. Log in with that account and
+the whole flow is reachable: the borrador form, the reading gate, signature
+capture, signing and delivery.
 
-Logging in with the **admin** account instead correctly shows the *"no
-disponible todavía"* screen. That is not a bug — `apps/web`'s office panel is
-an explicit non-goal for this phase (`DESIGN.md`), so `admin` and `oficina`
-sessions land on a plain screen offering only logout, never a login error.
+Logging in with the **admin** account instead lands on `/panel`, the office
+panel: `rutaInicialPara` sends both `oficina` and `admin` there, and
+`apps/web/src/rutas/rutas.tsx` mounts the contract list and the contract
+detail (`/panel/contratos/:id`) behind a role guard for those two roles. The
+*"Todavía no hay un panel disponible para su rol"* screen is still in the
+tree, but only an unrecognized role reaches it now.
 `AuthController` still exposes only `login`, `refresh` and `logout`; there is
 no user-management UI yet, which is why both accounts are provisioned by the
 seed rather than created at runtime.
@@ -121,7 +123,7 @@ seed rather than created at runtime.
 ## Checks
 
 ```bash
-pnpm -r test            # 1063 tests: api 661, esquemas 105, web 297
+pnpm -r test            # unit suites: api, esquemas, web
 pnpm -r typecheck
 pnpm --filter @contratos/web build
 pnpm --filter @contratos/api test:integration   # needs the database up
