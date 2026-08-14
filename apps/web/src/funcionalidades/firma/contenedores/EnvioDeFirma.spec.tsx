@@ -13,6 +13,7 @@ import { ErrorDeApi } from "../../../datos/clienteHttp";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { guardarBorradorLocal, leerBorradorLocal, limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import { hayTrabajoEnCurso, limpiarTrabajoEnCurso } from "../../../pwa/trabajoEnCurso";
+import { vaciarTrabajoPendiente } from "../../../tests/vaciarTrabajoPendiente";
 import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
 import type { MedicionDeDesplazamiento } from "../../revision/logica/puertaDeLectura";
 import type { SuperficieDeFirma } from "../logica/superficieDeFirma";
@@ -306,6 +307,13 @@ describe("EnvioDeFirma", () => {
     // internal delays rely on real timers, and this test needs fake timers
     // active from BEFORE the toast mounts (its own 5s window starts at
     // mount, not from whenever the test later switches timer modes).
+    //
+    // With fake timers installed, this test must not touch `waitFor` or
+    // `findBy*` again: those poll on the REAL clock against a wall-clock
+    // budget and, worse, advance the fake clock behind the test's back. This
+    // test used to do exactly that and failed intermittently under CI load.
+    // `vaciarTrabajoPendiente` documents the whole race — read it before
+    // reintroducing any wall-clock wait below this line.
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     act(() => {
       emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
@@ -316,13 +324,26 @@ describe("EnvioDeFirma", () => {
     firmarEnLienzo(comodato as Element, MINIMO_PUNTOS_FIRMA);
     fireEvent.click(screen.getByRole("button", { name: "Firmar" }));
 
-    await vi.waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("firmado"));
+    // No `waitFor`/`findBy*` anywhere between here and the assertions, on
+    // purpose — see `vaciarTrabajoPendiente`. Signing resolves on the
+    // microtask queue (the injected `firmar` is a `mockResolvedValue`), so
+    // there is nothing to wait for in wall-clock terms: flushing is enough,
+    // and flushing cannot be starved by a busy machine.
+    await vaciarTrabajoPendiente();
+
+    // Asserted BEFORE advancing, so the "it disappeared" check below can
+    // never pass vacuously against a toast that never rendered at all.
+    expect(screen.getByRole("status")).toHaveTextContent("firmado");
 
     act(() => {
       vi.advanceTimersByTime(5_000);
     });
 
     expect(screen.queryByText(/firmado correctamente/)).not.toBeInTheDocument();
+    // The toast is the only thing that may expire. The `h1` behind it and the
+    // delivery screen alongside it are durable — auto-dismissal must not take
+    // either of them with it.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Contrato Nº 42 firmado");
     expect(screen.getByRole("button", { name: "Compartir documentos" })).toBeInTheDocument();
   });
 
