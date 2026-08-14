@@ -114,10 +114,6 @@ export function diasEnMs(dias: number): number {
   return dias * 24 * 60 * 60 * 1000;
 }
 
-export function minutosEnMs(minutos: number): number {
-  return minutos * 60 * 1000;
-}
-
 /** Shared by login and refresh so both answer with exactly the same shape. */
 export function sesionEmitida(datos: {
   tokenDeAcceso: string;
