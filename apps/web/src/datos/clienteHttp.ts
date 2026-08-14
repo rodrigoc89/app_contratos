@@ -1,6 +1,6 @@
 import type { CodigoDeError, CuerpoDeError } from "@contratos/esquemas";
 
-import { limpiarSesion, obtenerSesionActual } from "./sesion/estadoSesion";
+import { obtenerSesionActual } from "./sesion/estadoSesion";
 import { refrescarSesion } from "./sesion/refresco";
 
 /**
