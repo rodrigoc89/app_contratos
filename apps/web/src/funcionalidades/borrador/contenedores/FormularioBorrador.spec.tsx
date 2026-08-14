@@ -6,6 +6,7 @@ import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
 import { guardarBorradorLocal, leerBorradorLocal, limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { establecerSesion, limpiarSesion } from "../../../datos/sesion/estadoSesion";
+import { vaciarTrabajoPendiente } from "../../../tests/vaciarTrabajoPendiente";
 import { FormularioBorrador } from "./FormularioBorrador";
 
 /**
@@ -476,13 +477,22 @@ describe("FormularioBorrador", () => {
     const fetchSimulado = vi.fn().mockResolvedValue(respuestaJson({ id: "c1", estado: "borrador" }));
     vi.stubGlobal("fetch", fetchSimulado);
 
+    // Fake timers must be installed BEFORE the toast mounts — its 5s window
+    // starts at mount, not from whenever the test switches timer modes. That
+    // rules out `waitFor`/`findBy*` for the rest of this test: they poll on
+    // the REAL clock against a wall-clock budget and advance the fake clock
+    // behind the test's back. See `vaciarTrabajoPendiente` for the full race.
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     render(<FormularioBorrador />);
 
     completarComodatario();
     completarEquipos();
     fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
-    await vi.waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("c1"));
+    await vaciarTrabajoPendiente();
+
+    // Asserted BEFORE advancing, so the "it disappeared" check below can
+    // never pass vacuously against a toast that never rendered at all.
+    expect(screen.getByRole("status")).toHaveTextContent("c1");
 
     act(() => {
       vi.advanceTimersByTime(5_000);
