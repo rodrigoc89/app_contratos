@@ -61,4 +61,38 @@ describe("CabeceraDeSesion", () => {
 
     await waitFor(() => expect(navegar).toHaveBeenCalledWith("/login", { replace: true }));
   });
+
+  /**
+   * Leaving anyway is only half the contract. The click handler discards the
+   * promise with `void`, and `void` does not catch — it evaluates the operand
+   * and throws the value away, rejection handler still unattached. So a
+   * `try`/`finally` with no `catch` let "sin red" escape the component: in the
+   * browser that is an `unhandledrejection` on every logout with the network
+   * down, and here it is an error the test process exits 1 on while all 538
+   * assertions stay green.
+   *
+   * Node reports an escaped rejection on the tick after the microtask queue
+   * drains, so the listener stays attached one macrotask past the navigation.
+   */
+  it("keeps the failed revocation from escaping as an unhandled rejection", async () => {
+    cerrar.mockRejectedValue(new Error("sin red"));
+    const escapadas: unknown[] = [];
+    const anotarEscapada = (razon: unknown): void => {
+      escapadas.push(razon);
+    };
+    process.on("unhandledRejection", anotarEscapada);
+
+    try {
+      render(<CabeceraDeSesion nombreUsuario="oficina" />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Cerrar sesión" }));
+
+      await waitFor(() => expect(navegar).toHaveBeenCalledWith("/login", { replace: true }));
+      await new Promise((resolver) => setTimeout(resolver, 0));
+
+      expect(escapadas).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", anotarEscapada);
+    }
+  });
 });
