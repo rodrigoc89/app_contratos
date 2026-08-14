@@ -216,3 +216,71 @@ describe("EntregaDeDocumentos — se puede volver a enviar", () => {
     expect(await screen.findByText(/Adjuntalos manualmente por WhatsApp/)).toBeInTheDocument();
   });
 });
+
+/**
+ * The delivery screen was where the técnico flow ended — and it ended there
+ * for good: `/` is the only route a técnico ever mounts, so there was no
+ * navigation to undo and no way to start the next customer short of "Cerrar
+ * sesión". This container does not own the visit's lifecycle (only
+ * `InicioTecnico` can reset it), so all it owns here is the affordance and
+ * where it sits: *after* the share action, subordinate to it, because
+ * "Compartir de nuevo" is the one this screen exists for and leaving takes it
+ * away.
+ */
+describe("EntregaDeDocumentos — salir de la entrega", () => {
+  async function entregarUnaVez(onFinalizarVisita?: () => void): Promise<void> {
+    const entregar = vi
+      .fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>()
+      .mockResolvedValue({ via: "compartido" });
+    render(
+      <EntregaDeDocumentos
+        contrato={contratoSellado()}
+        entregar={entregar}
+        {...(onFinalizarVisita === undefined ? {} : { onFinalizarVisita })}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Compartir documentos" }));
+    await screen.findByRole("button", { name: "Compartir de nuevo" });
+  }
+
+  it("offers a way out once the documents are delivered, without taking the share-again action away", async () => {
+    await entregarUnaVez(() => {});
+
+    expect(screen.getByRole("button", { name: "Finalizar y empezar otro contrato" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compartir de nuevo" })).toBeInTheDocument();
+  });
+
+  /**
+   * An accidental tap costs the técnico the share-again action while the
+   * customer is still standing there, so the exit must not compete with it:
+   * the fill stays on sharing, same rule `FormularioEquipos` already applies
+   * to "Volver".
+   */
+  it("keeps the exit subordinate to sharing again — secondary, and last", async () => {
+    await entregarUnaVez(() => {});
+
+    const salir = screen.getByRole("button", { name: "Finalizar y empezar otro contrato" });
+    const compartir = screen.getByRole("button", { name: "Compartir de nuevo" });
+    expect(salir).toHaveClass("boton--secundario");
+    expect(compartir).not.toHaveClass("boton--secundario");
+    expect(compartir.compareDocumentPosition(salir) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("tells the visit's owner to finish when tapped — this container never resets anything itself", async () => {
+    const onFinalizarVisita = vi.fn();
+    await entregarUnaVez(onFinalizarVisita);
+
+    await userEvent.click(screen.getByRole("button", { name: "Finalizar y empezar otro contrato" }));
+
+    expect(onFinalizarVisita).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no exit before anything has been delivered — the customer's copy comes first", () => {
+    const entregar = vi
+      .fn<(contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>>()
+      .mockResolvedValue({ via: "compartido" });
+    render(<EntregaDeDocumentos contrato={contratoSellado()} entregar={entregar} onFinalizarVisita={() => {}} />);
+
+    expect(screen.queryByRole("button", { name: "Finalizar y empezar otro contrato" })).not.toBeInTheDocument();
+  });
+});

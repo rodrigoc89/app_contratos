@@ -44,6 +44,13 @@ export interface PropiedadesEnvioDeFirma {
   ) => Promise<DatosContratoDetalle>;
   /** Injection seam forwarded to `EntregaDeDocumentos` (PR15). Production leaves this unset. */
   readonly entregar?: (contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>;
+  /**
+   * Forwarded verbatim to `EntregaDeDocumentos`' own exit action. This
+   * container is only a pass-through for it: the visit's state lives one
+   * level up, in `InicioTecnico`, which is the only place that can reset it
+   * — same shape as `onCreado`/`onContinuarAFirma` on the draft side.
+   */
+  readonly onFinalizarVisita?: () => void;
 }
 
 /**
@@ -66,6 +73,7 @@ export function EnvioDeFirma({
   crearSuperficie,
   firmar,
   entregar,
+  onFinalizarVisita,
 }: PropiedadesEnvioDeFirma) {
   const [estado, establecerEstado] = useState<EstadoEnvio>({ tipo: "revisando" });
   // PR26 — design.md "Toast" category: whether the signing-confirmation
@@ -138,6 +146,7 @@ export function EnvioDeFirma({
         <EntregaDeDocumentos
           contrato={estado.contrato}
           {...(entregar === undefined ? {} : { entregar })}
+          {...(onFinalizarVisita === undefined ? {} : { onFinalizarVisita })}
         />
       </div>
     );

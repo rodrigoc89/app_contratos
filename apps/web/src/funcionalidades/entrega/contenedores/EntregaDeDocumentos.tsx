@@ -26,9 +26,22 @@ export interface PropiedadesEntregaDeDocumentos {
   readonly contrato: DatosContratoDetalle;
   /** Injection seam for tests. Production leaves this unset. */
   readonly entregar?: (contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>;
+  /**
+   * Fires when the technician is done with this customer and wants the next
+   * one. This container owns delivery, not the visit's lifecycle — only
+   * `InicioTecnico` can reset the flow — so all it does here is offer the
+   * action and report the tap; the reset itself belongs to whoever passed
+   * this. Unset means "no owner able to reset", and then no exit is offered
+   * at all rather than a button that does nothing.
+   */
+  readonly onFinalizarVisita?: () => void;
 }
 
-export function EntregaDeDocumentos({ contrato, entregar }: PropiedadesEntregaDeDocumentos) {
+export function EntregaDeDocumentos({
+  contrato,
+  entregar,
+  onFinalizarVisita,
+}: PropiedadesEntregaDeDocumentos) {
   const [estado, establecerEstado] = useState<EstadoEntrega>({ tipo: "inicial" });
   // PR26 — design.md "Toast" category: only "Documentos compartidos
   // correctamente." is a toast, never the download-fallback message.
@@ -93,6 +106,32 @@ export function EntregaDeDocumentos({ contrato, entregar }: PropiedadesEntregaDe
         <Boton type="button" onClick={() => void manejarCompartir()}>
           Compartir de nuevo
         </Boton>
+        {/*
+          Until now this screen was the end of the road: `/` is the only route
+          a técnico ever mounts, so there was nothing to navigate back to, and
+          the only escape was "Cerrar sesión" — which also throws away the
+          session and the local draft. A técnico who finished one customer
+          could not start the next one.
+
+          Leaving is safe: the contract was sealed before this component ever
+          rendered (DESIGN.md §6/§8) and the office panel can re-download the
+          PDFs whenever it needs to. So this is finishing, not cancelling, and
+          the copy says exactly that — plus where it lands, so it can never be
+          mistaken for logging out.
+
+          What it DOES cost is "Compartir de nuevo", right when "no me llegó"
+          is the most ordinary thing a customer can say. That is why it sits
+          last and wears `boton--secundario`: same rule `FormularioEquipos`
+          applies to "Volver" — the fill stays on the action this screen
+          exists for. Nothing here is destructive enough to be worth a
+          confirmation dialog on a tablet in a customer's doorway; being
+          visibly subordinate is the whole guard.
+        */}
+        {onFinalizarVisita !== undefined && (
+          <Boton type="button" className="boton--secundario" onClick={onFinalizarVisita}>
+            Finalizar y empezar otro contrato
+          </Boton>
+        )}
       </div>
     );
   }
