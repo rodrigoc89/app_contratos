@@ -46,12 +46,30 @@ export function VisorDeDocumento({ html, titulo, onCambiaEstado, crearObservador
     });
   }, [crearObservador]);
 
+  /*
+    `onCambiaEstado` is deliberately excluded from the dependency array below,
+    and the exclusion is load-bearing in both directions.
+
+    Why excluding it is *safe*: React runs the effect closure from the latest
+    render, so on a real state change the callback that fires is always the
+    one the parent passed most recently — never a stale capture. Excluding it
+    drops only the *re*-notification for a state the previous callback already
+    received, which carries no new information.
+
+    Why including it is *harmful*: `PasoFirmaDual` — the only production
+    caller — passes an inline arrow whose updater allocates a fresh object
+    (`{ ...previo, [documento]: estado }`), so React can never bail out of the
+    parent's re-render. Adding the dependency closes the cycle: effect →
+    parent setState → new callback identity → effect → … It is not a spurious
+    extra call, it is an unbounded render loop; with the dependency added the
+    test run hangs rather than fails.
+
+    Both halves are pinned by named tests in `VisorDeDocumento.spec.tsx`, so
+    this comment cannot quietly drift away from the behaviour it describes.
+  */
   useEffect(() => {
     onCambiaEstado?.(estado);
-    // `onCambiaEstado` is intentionally excluded from the dependency array:
-    // callers pass an inline arrow in the common case, and re-running this
-    // effect on every parent render (rather than only on a real state
-    // change) would make `onCambiaEstado` fire spuriously.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberate: see above. Adding `onCambiaEstado` here is an unbounded render loop, not a missing dependency.
   }, [estado]);
 
   const requiereConfirmacionExplicita =

@@ -28,7 +28,8 @@ export function Toast({ mensaje, onDescartar }: PropiedadesToast) {
   useEffect(() => {
     const temporizador = setTimeout(() => alDescartarRef.current(), DURACION_MS);
     return () => clearTimeout(temporizador);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // No suppression needed: the effect reaches `onDescartar` through
+    // `alDescartarRef`, so an empty dependency array is already exhaustive.
   }, []);
 
   return (
