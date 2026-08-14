@@ -872,7 +872,14 @@ visit.
 ## 13. Open questions
 
 1. Does the contract template need a personal-data clause covering storage and
-   international transfer, now that the server is outside Argentina? (§10)
+   processing? The international-transfer half of this question is answered in
+   §10: the server is in Argentina, confirmed against the provider's own page,
+   so the clause is no longer *required* on residency grounds — and the IP that
+   may geolocate as American is a routing detail, not the location of the data
+   (§10, *"One nuance that must not be misread"*). What stays open is art. 6:
+   whether the template itself should inform the customer of purpose,
+   responsible party and their access/rectification/suppression rights. Drafted
+   for review in `docs/borrador-clausula-datos-personales.md`. (§10)
 
 ### Resolved
 
