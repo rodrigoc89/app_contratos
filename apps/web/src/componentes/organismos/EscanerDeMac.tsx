@@ -6,6 +6,7 @@ import {
 } from "../../funcionalidades/borrador/infraestructura/camaraDeEscaneo";
 import {
   macDesdeCodigoEscaneado,
+  MENSAJE_SIN_MAC,
   type AbrirCamara,
   type ControladorDeCamara,
 } from "../../funcionalidades/borrador/logica/escanerDeMac";
@@ -82,11 +83,19 @@ export function EscanerDeMac({
     controladorRef.current = null;
     establecerEstado("cerrado");
     const mac = macDesdeCodigoEscaneado(crudo);
-    if (mac !== null) {
-      // Replaces, never appends (spec "Re-scan replaces, not appends") —
-      // this is a plain overwrite, there is no previous value in scope here.
-      onCambiar(mac);
+    if (mac === null) {
+      // The decode carried no MAC (wrong sticker, warranty QR). The field is
+      // still left untouched — but through the same `error` surface the camera
+      // failures use, so the técnico sees why the camera closed and keeps both
+      // exits (re-scan, manual entry) instead of facing silence. Nothing about
+      // the scanned code is rendered or logged (Ley 25.326).
+      establecerEstado("error");
+      establecerMensajeError(MENSAJE_SIN_MAC);
+      return;
     }
+    // Replaces, never appends (spec "Re-scan replaces, not appends") —
+    // this is a plain overwrite, there is no previous value in scope here.
+    onCambiar(mac);
   }
 
   function manejarErrorDeCamara(mensaje: string) {

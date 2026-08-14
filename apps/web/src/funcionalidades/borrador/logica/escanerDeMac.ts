@@ -71,6 +71,16 @@ const MENSAJES_DE_ERROR: Record<string, string> = {
   OverconstrainedError: "No se pudo iniciar la cámara con la configuración solicitada.",
 };
 
+/**
+ * Shown when a code decoded cleanly but carried no MAC at all
+ * (`macDesdeCodigoEscaneado` returned `null` — the wrong sticker, a warranty
+ * QR, a serial-only label). Not writing garbage into the field is correct;
+ * saying nothing is not, because a camera that closes with no visible result
+ * reads as a crash in a customer's house. Same register and same two exits as
+ * `MENSAJES_DE_ERROR` above: try again, or type it in.
+ */
+export const MENSAJE_SIN_MAC = "Ese código no contiene una MAC. Puede escanear otro o ingresarla manualmente.";
+
 /** Every branch keeps manual entry reachable — the message never dead-ends. */
 export function mensajeDeErrorDeCamara(motivo: unknown): string {
   const nombre = motivo instanceof Error ? motivo.name : "";
