@@ -21,6 +21,16 @@ generated/
 # CodeGraph index — per-checkout, never shared
 .codegraph/
 
+# Claude Code local state: `settings.local.json` (this machine's permissions)
+# and `worktrees/` (throwaway checkouts agents branch into). Both are
+# per-machine and neither belongs to anyone else.
+#
+# Note for later: project-level Claude config meant to be SHARED — a
+# `settings.json`, a `skills/` or `agents/` directory — would be swallowed by
+# this rule without warning. Adding one means un-ignoring it explicitly
+# (`!.claude/settings.json`), not deleting the line.
+.claude/
+
 # Sealed contract PDFs. `ALMACEN_DOCUMENTOS_RUTA` defaults to `var/documentos`
 # (apps/api/src/config/configuracion.ts), relative to wherever the API runs —
 # so signing anything locally, and running the integration suite, writes real
