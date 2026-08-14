@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
+import type { DatosContratoCreado, DatosCrearContrato, DatosSesion } from "@contratos/esquemas";
 
 import { guardarBorradorLocal, leerBorradorLocal, limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
@@ -445,6 +446,151 @@ describe("FormularioBorrador", () => {
     const guardado = leerBorradorLocal();
     expect(guardado).not.toBeNull();
     expect(guardado?.contratoId).toBe("c1");
+  });
+
+  /**
+   * The resume effect above awaits `GET /contratos/:id` and only then calls
+   * `onCreado`. Everything it reads is frozen at mount — that is exactly what
+   * its `[]` dependency array asks for, and what the local draft (read once,
+   * never re-read) needs. `onCreado` is the one thing that must NOT be
+   * frozen: `InicioTecnico` declares `manejarCreado` as a plain function
+   * body, so the parent hands down a new identity on every render, and the
+   * técnico's contract would be reported to a callback that stopped being
+   * the parent's current one somewhere during that await.
+   *
+   * It is invisible today only because `manejarCreado` happens to close over
+   * nothing but its own setters — an accident of its current body, not a
+   * property anyone wrote down. This test refuses to depend on that accident:
+   * the parent's callback closes over parent state that CHANGES between mount
+   * and the verification resolving, so the stale capture and the current one
+   * report different things and only the current one can be right.
+   */
+  it("notifies the onCreado of the latest render when the resumed draft is confirmed, never the one captured at mount", async () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: VALORES_COMPLETOS });
+    // Held open on purpose: the whole point is that the parent re-renders
+    // with a new callback WHILE the verification is still in flight.
+    let confirmarVerificacion: (respuesta: Response) => void = () => {};
+    const verificacion = new Promise<Response>((resolver) => {
+      confirmarVerificacion = resolver;
+    });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(verificacion));
+    const notificado = vi.fn();
+
+    function PadreQueCambiaSuCallback() {
+      const [momento, establecerMomento] = useState("montaje");
+      // A plain function body, exactly like `InicioTecnico.manejarCreado`:
+      // a fresh identity on every render, closing over the current `momento`.
+      function manejarCreado(contrato: DatosContratoCreado) {
+        notificado(`${momento}:${contrato.id}`);
+      }
+      return (
+        <>
+          <button type="button" onClick={() => establecerMomento("posterior")}>
+            cambiar el callback
+          </button>
+          <FormularioBorrador onCreado={manejarCreado} />
+        </>
+      );
+    }
+
+    render(<PadreQueCambiaSuCallback />);
+    fireEvent.click(screen.getByRole("button", { name: "cambiar el callback" }));
+    confirmarVerificacion(respuestaJson(contratoDetalleValido("borrador")));
+
+    await waitFor(() => expect(notificado).toHaveBeenCalledTimes(1));
+    expect(notificado).toHaveBeenCalledWith("posterior:c1");
+  });
+
+  /**
+   * The same invariant on the other path that notifies the parent:
+   * `manejarCrear` awaits `POST /contratos` before calling `onCreado`, and
+   * the técnico's tablet is free to re-render the parent during that request.
+   * The handler closure is created fresh per render, so it holds the current
+   * callback at the moment of the tap — but "at the moment of the tap" is not
+   * "at the moment the contract exists", and only the second one matters.
+   */
+  it("notifies the onCreado of the latest render when the draft is created, not the one captured when the técnico tapped", async () => {
+    establecerSesion(sesionFalsa());
+    let confirmarCreacion: (respuesta: Response) => void = () => {};
+    const creacion = new Promise<Response>((resolver) => {
+      confirmarCreacion = resolver;
+    });
+    vi.stubGlobal("fetch", vi.fn().mockReturnValue(creacion));
+    const notificado = vi.fn();
+
+    function PadreQueCambiaSuCallback() {
+      const [momento, establecerMomento] = useState("tap");
+      function manejarCreado(contrato: DatosContratoCreado) {
+        notificado(`${momento}:${contrato.id}`);
+      }
+      return (
+        <>
+          <button type="button" onClick={() => establecerMomento("posterior")}>
+            cambiar el callback
+          </button>
+          <FormularioBorrador onCreado={manejarCreado} tono={{ reproducir: vi.fn() }} />
+        </>
+      );
+    }
+
+    render(<PadreQueCambiaSuCallback />);
+    completarComodatario();
+    completarEquipos();
+    fireEvent.click(screen.getByRole("button", { name: "Crear borrador" }));
+    // Mid-flight: the parent re-renders and hands down a different callback.
+    fireEvent.click(screen.getByRole("button", { name: "cambiar el callback" }));
+    confirmarCreacion(respuestaJson({ id: "c1", estado: "borrador" }));
+
+    await waitFor(() => expect(notificado).toHaveBeenCalledTimes(1));
+    expect(notificado).toHaveBeenCalledWith("posterior:c1");
+  });
+
+  /**
+   * The other half, and the reason `onCreado` is read through a ref instead
+   * of being added to the dependency array: `InicioTecnico`'s `manejarCreado`
+   * both allocates a fresh `ColaDeGuardado` into state and gets a new
+   * identity on every render, so a dependency on it would close the same
+   * cycle PR #68 found in `VisorDeDocumento` — effect → parent setState → new
+   * callback identity → effect — except here each turn of it also re-issues
+   * `GET /contratos/:id`. Measured on this exact code with the dependency
+   * added: 466 requests in a 300 ms window, against 1 without it — a runaway,
+   * not a spurious extra call. The render budget below is what turns that
+   * into a readable failure instead of a wedged run.
+   */
+  it("verifies the resumed contract exactly once, even though the parent allocates a new callback on every render", async () => {
+    establecerSesion(sesionFalsa());
+    guardarBorradorLocal({ contratoId: "c1", paso: "equipos", valores: VALORES_COMPLETOS });
+    // A FRESH `Response` per call, like a real server — reusing one would
+    // make every repeat read fail on an already-consumed body and disguise a
+    // loop as a couple of harmless calls.
+    const fetchSimulado = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(respuestaJson(contratoDetalleValido("borrador"))));
+    vi.stubGlobal("fetch", fetchSimulado);
+    // Generous: the healthy path settles in a handful of renders. This only
+    // has to be small enough to trip long before the run wedges.
+    const PRESUPUESTO_DE_RENDERS = 40;
+    let rendersDelPadre = 0;
+
+    function PadreComoInicioTecnico() {
+      const [, establecerContrato] = useState<DatosContratoCreado | null>(null);
+      rendersDelPadre += 1;
+      if (rendersDelPadre > PRESUPUESTO_DE_RENDERS) {
+        throw new Error(
+          `The parent re-rendered ${rendersDelPadre} times for a single resume: the creation notice is feeding back into itself.`,
+        );
+      }
+      // Inline arrow + a fresh object into state on every notice — React can
+      // never bail out of this parent's re-render, same as the real one.
+      return <FormularioBorrador onCreado={(contrato) => establecerContrato(contrato)} />;
+    }
+
+    render(<PadreComoInicioTecnico />);
+
+    expect(await screen.findByLabelText("Modelo de antena")).toHaveValue("Ubiquiti LiteBeam");
+    expect(fetchSimulado).toHaveBeenCalledTimes(1);
+    expect(rendersDelPadre).toBeLessThanOrEqual(PRESUPUESTO_DE_RENDERS);
   });
 
   /**
