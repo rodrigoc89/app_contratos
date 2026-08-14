@@ -1,10 +1,19 @@
-import type { DatosSesion } from "@contratos/esquemas";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  MINIMO_PUNTOS_FIRMA,
+  type DatosContratoDetalle,
+  type DatosPrevisualizacion,
+  type DatosSesion,
+} from "@contratos/esquemas";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { hayTrabajoEnCurso, limpiarTrabajoEnCurso } from "../../../pwa/trabajoEnCurso";
-import { limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
+import { leerBorradorLocal, limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import { establecerSesion, limpiarSesion } from "../../../datos/sesion/estadoSesion";
+import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
+import type { MedicionDeDesplazamiento } from "../../revision/logica/puertaDeLectura";
+import type { SuperficieDeFirma } from "../../firma/logica/superficieDeFirma";
 import { InicioTecnico } from "./InicioTecnico";
 
 /**
@@ -48,7 +57,7 @@ function respuestaJson(cuerpo: unknown, estado = 200): Response {
   });
 }
 
-function previsualizacionValida() {
+function previsualizacionValida(): DatosPrevisualizacion {
   return {
     contratoId: "c1",
     plantillaVersion: "v1",
@@ -244,5 +253,172 @@ describe("InicioTecnico", () => {
       ).toBeInTheDocument(),
     );
     expect(screen.queryByTitle("Condiciones Generales de Uso")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Reported from a real device: once the documents were delivered, the whole
+ * técnico flow was a dead end. `/` is the ONE route this app mounts for a
+ * técnico (`rutas.tsx`), so there is no navigation to undo, and this
+ * container's three pieces of state were never cleared — `EnvioDeFirma`
+ * rendered forever. The only escape was "Cerrar sesión", which also throws
+ * away the local draft and the session. A técnico who finished one customer
+ * could not start the next one without logging back in.
+ *
+ * The contract is sealed long before this screen (DESIGN.md §6/§8) and the
+ * office panel can re-download the PDFs at any time, so leaving is finishing,
+ * never discarding — and that is what the copy has to say.
+ *
+ * What makes this more than a UI nicety: the next customer's form must come
+ * up EMPTY. That property is a chain, not a line of code — the form remounts
+ * (it was unmounted for the whole signing step), its `useState` initialiser
+ * re-reads the local draft, and the draft is gone because `EnvioDeFirma`
+ * cleared it when signing succeeded (DESIGN.md D8). Break any link and the
+ * previous customer's name, DNI and address greet the next one on a shared
+ * tablet: a Ley 25.326 incident, not a cosmetic bug. Hence a test that
+ * asserts the fields themselves, through the real containers, rather than
+ * merely that some form rendered.
+ */
+
+const PNG_DE_PRUEBA =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+function contratoSellado(): DatosContratoDetalle {
+  return {
+    id: "c1",
+    estado: "vigente",
+    numero: 42,
+    comodatario: {
+      nombreCompleto: "Ana López",
+      dni: "30.123.456",
+      domicilioCalle: "San Martín 123",
+      ciudad: "Santiago del Estero",
+      provincia: "Santiago del Estero",
+      whatsapp: "385 4123456",
+    },
+    equipos: { antenaModelo: "Ubiquiti LiteBeam", antenaMac: "AC:8B:A9:12:34:56", poe: true, canoMetros: 7.5 },
+    plazo: { meses: 12, fechaInicio: "2026-08-05", fechaVencimiento: "2027-08-05" },
+    fechaFirma: "2026-08-05",
+    plantillaVersionId: "v1",
+    documentos: [
+      { documento: "condiciones_generales", sha256: "a".repeat(64), enlace: "/contratos/c1/documentos/condiciones_generales" },
+      { documento: "comodato", sha256: "b".repeat(64), enlace: "/contratos/c1/documentos/comodato" },
+    ],
+    eventos: [{ tipo: "firmado", fecha: "2026-08-05", detalle: "Nº 42", usuario: null }],
+    equiposPendientesDeRestitucion: false,
+  };
+}
+
+/** Same shape as `EnvioDeFirma.spec.tsx`'s own fake — keyed by the iframe's `title`. */
+function observadorFalsoPorTitulo(): {
+  crearObservador: (iframe: HTMLIFrameElement) => ObservadorDeDocumento;
+  emitir: (titulo: string, medicion: MedicionDeDesplazamiento) => void;
+} {
+  const emisores = new Map<string, (medicion: MedicionDeDesplazamiento) => void>();
+  const pendientes = new Map<string, MedicionDeDesplazamiento[]>();
+  return {
+    crearObservador: (iframe) => ({
+      observar(alMedir) {
+        emisores.set(iframe.title, alMedir);
+        for (const medicion of pendientes.get(iframe.title) ?? []) {
+          alMedir(medicion);
+        }
+        pendientes.delete(iframe.title);
+        return () => {
+          emisores.delete(iframe.title);
+        };
+      },
+    }),
+    emitir(titulo, medicion) {
+      const emisor = emisores.get(titulo);
+      if (emisor !== undefined) {
+        emisor(medicion);
+        return;
+      }
+      const cola = pendientes.get(titulo) ?? [];
+      cola.push(medicion);
+      pendientes.set(titulo, cola);
+    },
+  };
+}
+
+function superficieFalsa(): () => SuperficieDeFirma {
+  return () => ({
+    dibujarSegmento() {},
+    limpiar() {},
+    aPngDataUri: () => PNG_DE_PRUEBA,
+  });
+}
+
+function firmarEnLienzo(lienzo: Element, cantidadDePuntos: number): void {
+  fireEvent.pointerDown(lienzo, { pointerId: 1, clientX: 0, clientY: 0, pointerType: "touch" });
+  for (let i = 1; i < cantidadDePuntos; i += 1) {
+    fireEvent.pointerMove(lienzo, { pointerId: 1, clientX: i * 2, clientY: 0, pointerType: "touch" });
+  }
+  fireEvent.pointerUp(lienzo, { pointerId: 1, clientX: cantidadDePuntos * 2, clientY: 0, pointerType: "touch" });
+}
+
+describe("InicioTecnico — la visita se puede terminar", () => {
+  afterEach(() => {
+    limpiarSesion();
+    limpiarTrabajoEnCurso();
+    limpiarBorradorLocal();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("comes back to a BLANK draft form after finishing the visit, carrying nothing from the previous customer", async () => {
+    establecerSesion(sesionFalsa());
+    vi.stubGlobal("fetch", fetchSimuladoCompleto());
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    const entregar = vi.fn().mockResolvedValue({ via: "compartido" });
+
+    render(
+      <InicioTecnico
+        firma={{
+          cargarPrevisualizacion: () => Promise.resolve(previsualizacionValida()),
+          crearObservador,
+          crearSuperficie: superficieFalsa(),
+          firmar: vi.fn().mockResolvedValue(contratoSellado()),
+          entregar,
+        }}
+      />,
+    );
+
+    // The whole visit, through the real containers: draft → review → both
+    // signatures → the sealed contract → delivery.
+    await crearBorrador();
+    fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+    await screen.findByTitle("Condiciones Generales de Uso");
+    await act(async () => {});
+
+    const usuario = userEvent.setup();
+    act(() => {
+      emitir("Condiciones Generales de Uso", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+      emitir("Contrato de Comodato", { scrollTop: 3000, clientHeight: 800, scrollHeight: 3000 });
+    });
+    const [condiciones, comodato] = screen.getAllByRole("img");
+    firmarEnLienzo(condiciones as Element, MINIMO_PUNTOS_FIRMA);
+    firmarEnLienzo(comodato as Element, MINIMO_PUNTOS_FIRMA);
+    await usuario.click(screen.getByRole("button", { name: "Firmar" }));
+
+    await screen.findByRole("heading", { level: 1 });
+    await usuario.click(screen.getByRole("button", { name: "Compartir documentos" }));
+    await screen.findByRole("button", { name: "Compartir de nuevo" });
+
+    await usuario.click(screen.getByRole("button", { name: "Finalizar y empezar otro contrato" }));
+
+    // Back on step one of a brand-new draft — and every field the previous
+    // customer filled in is empty. Anything else here is a Ley 25.326
+    // incident on a shared tablet, not a UI regression.
+    expect(await screen.findByLabelText("Nombre y apellido")).toHaveValue("");
+    expect(screen.getByLabelText("DNI")).toHaveValue("");
+    expect(screen.getByLabelText("Domicilio")).toHaveValue("");
+    expect(screen.getByLabelText("Ciudad")).toHaveValue("");
+    expect(screen.getByLabelText("WhatsApp")).toHaveValue("");
+    // Nothing left in storage either, so a reload cannot resurrect it.
+    expect(leerBorradorLocal()).toBeNull();
+    // The sealed contract's own screen is gone with it.
+    expect(screen.queryByRole("button", { name: "Compartir de nuevo" })).not.toBeInTheDocument();
   });
 });
