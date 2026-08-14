@@ -111,6 +111,42 @@ describe("EscanerDeMac", () => {
     expect(await screen.findByRole("button", { name: "Escanear código de la antena" })).toBeInTheDocument();
   });
 
+  it("tells the technician when the decoded code carries no MAC, instead of closing the camera in silence", async () => {
+    const { abrirCamara, controlador, decodificar } = controladorFalso();
+    const onCambiar = vi.fn();
+    render(
+      <EscanerDeMac valor="" onCambiar={onCambiar} comprobarDisponibilidad={DISPONIBLE} abrirCamara={abrirCamara} />,
+    );
+
+    await abrirEscaner();
+    act(() => decodificar("https://ui.com/soporte/garantia"));
+
+    // The field is still not written to — silence was the bug, not the guard.
+    expect(onCambiar).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/no contiene una MAC/i);
+    // Same exits as every other error state: manual entry, and a re-scan.
+    expect(screen.getByLabelText("Dirección MAC de la antena")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Escanear código de la antena" })).toBeInTheDocument();
+    expect(controlador.cerrar).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears the no-MAC warning when the technician scans again", async () => {
+    const { abrirCamara, decodificar } = controladorFalso();
+    const onCambiar = vi.fn();
+    render(
+      <EscanerDeMac valor="" onCambiar={onCambiar} comprobarDisponibilidad={DISPONIBLE} abrirCamara={abrirCamara} />,
+    );
+
+    await abrirEscaner();
+    act(() => decodificar("sin datos utiles"));
+    await screen.findByRole("alert");
+    await abrirEscaner();
+    act(() => decodificar("AC8BA9123456"));
+
+    expect(onCambiar).toHaveBeenCalledWith("AC:8B:A9:12:34:56");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("keeps the manual field reachable while the scanner is open and scanning", async () => {
     const { abrirCamara } = controladorFalso();
     render(
