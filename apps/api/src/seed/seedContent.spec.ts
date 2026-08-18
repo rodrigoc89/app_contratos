@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { inflateSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
@@ -22,8 +23,12 @@ import {
 } from "./placeholderSignaturePng";
 import {
   buildSeedContent,
+  PLACEHOLDER_SIGNATURE_PNG_PATH,
+  PROVISIONAL_SIGNATORY_VERSION,
   readComodanteSignatureDataUri,
   readComodanteSignaturePng,
+  SIGNATORY_ID,
+  SIGNATORY_VERSION,
 } from "./seedContent";
 
 /**
@@ -258,63 +263,120 @@ describe("committed contract templates", () => {
   });
 });
 
-describe("placeholder comodante signature", () => {
-  it("is a structurally valid, non-empty PNG whose image data really decodes", async () => {
-    const png = await readComodanteSignaturePng();
+/** Channels per PNG colour type, from the IHDR table in the spec. */
+const CANALES_POR_TIPO: Readonly<Record<number, number>> = {
+  0: 1, // greyscale
+  2: 3, // truecolour
+  3: 1, // indexed
+  4: 2, // greyscale with alpha
+  6: 4, // truecolour with alpha
+};
 
-    expect(png.length).toBeGreaterThan(0);
-    expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+interface PngLeido {
+  readonly ancho: number;
+  readonly alto: number;
+  readonly bits: number;
+  readonly tipoColor: number;
+  readonly pixeles: Buffer;
+  readonly bytesLeidos: number;
+}
 
-    // Walk the chunks: this proves the file is neither truncated nor padded.
-    const idat: Buffer[] = [];
-    let cabecera: { ancho: number; alto: number; bits: number } | null = null;
-    let posicion = 8;
+/**
+ * Walks the chunks and decompresses the image data.
+ *
+ * Deliberately not a PNG library: the point is to prove the committed file is
+ * neither truncated nor padded, and a real decoder repairs what it reads,
+ * which would hide exactly the corruption this is looking for.
+ */
+function leerPng(png: Buffer): PngLeido {
+  expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
 
-    while (posicion < png.length) {
-      const largo = png.readUInt32BE(posicion);
-      const tipo = png.subarray(posicion + 4, posicion + 8).toString("latin1");
-      const datos = png.subarray(posicion + 8, posicion + 8 + largo);
+  const idat: Buffer[] = [];
+  let cabecera: Omit<PngLeido, "pixeles" | "bytesLeidos"> | null = null;
+  let posicion = 8;
 
-      if (tipo === "IHDR") {
-        cabecera = {
-          ancho: datos.readUInt32BE(0),
-          alto: datos.readUInt32BE(4),
-          bits: datos.readUInt8(8),
-        };
-      }
-      if (tipo === "IDAT") {
-        idat.push(Buffer.from(datos));
-      }
+  while (posicion < png.length) {
+    const largo = png.readUInt32BE(posicion);
+    const tipo = png.subarray(posicion + 4, posicion + 8).toString("latin1");
+    const datos = png.subarray(posicion + 8, posicion + 8 + largo);
 
-      posicion += 12 + largo;
+    if (tipo === "IHDR") {
+      cabecera = {
+        ancho: datos.readUInt32BE(0),
+        alto: datos.readUInt32BE(4),
+        bits: datos.readUInt8(8),
+        tipoColor: datos.readUInt8(9),
+      };
+    }
+    if (tipo === "IDAT") {
+      idat.push(Buffer.from(datos));
     }
 
-    expect(posicion).toBe(png.length);
-    expect(cabecera).not.toBeNull();
-    expect(cabecera!.ancho).toBeGreaterThan(0);
-    expect(cabecera!.alto).toBeGreaterThan(0);
-    expect(idat.length).toBeGreaterThan(0);
+    posicion += 12 + largo;
+  }
 
-    // Actually decompress the pixels rather than trusting the header.
-    const pixeles = inflateSync(Buffer.concat(idat));
-    const bytesPorFila =
-      Math.ceil((cabecera!.ancho * cabecera!.bits) / 8) + 1; // + filter byte
+  expect(cabecera).not.toBeNull();
+  expect(idat.length).toBeGreaterThan(0);
 
-    expect(pixeles.length).toBe(bytesPorFila * cabecera!.alto);
-    // Not a blank rectangle: something was actually drawn.
-    expect(pixeles.some((byte) => byte !== 0)).toBe(true);
+  return {
+    ...cabecera!,
+    pixeles: inflateSync(Buffer.concat(idat)),
+    bytesLeidos: posicion,
+  };
+}
+
+function esperarPngIntegro(png: Buffer): PngLeido {
+  expect(png.length).toBeGreaterThan(0);
+
+  const leido = leerPng(png);
+
+  // Exactly consumed: nothing truncated, nothing appended.
+  expect(leido.bytesLeidos).toBe(png.length);
+  expect(leido.ancho).toBeGreaterThan(0);
+  expect(leido.alto).toBeGreaterThan(0);
+
+  const canales = CANALES_POR_TIPO[leido.tipoColor];
+  expect(canales, `unknown PNG colour type ${leido.tipoColor}`).toBeDefined();
+
+  // + 1 for each scanline's filter byte. Channel-aware on purpose: the
+  // placeholder is 1-bit indexed and the real signature is 8-bit RGBA, and a
+  // formula that assumed one channel silently passed only the former.
+  const bytesPorFila = Math.ceil((leido.ancho * leido.bits * canales!) / 8) + 1;
+
+  expect(leido.pixeles.length).toBe(bytesPorFila * leido.alto);
+  // Not a blank rectangle: something was actually drawn.
+  expect(leido.pixeles.some((byte) => byte !== 0)).toBe(true);
+
+  return leido;
+}
+
+describe("comodante signature", () => {
+  it("is a structurally valid, non-empty PNG whose image data really decodes", async () => {
+    esperarPngIntegro(await readComodanteSignaturePng());
   });
 
-  it("is exactly what the committed generator produces, so the bytes are reproducible", async () => {
-    expect(await readComodanteSignaturePng()).toEqual(
+  it("is the real signature, not the test placeholder", async () => {
+    expect(SIGNATORY_VERSION).not.toBe(PROVISIONAL_SIGNATORY_VERSION);
+    expect(SIGNATORY_ID).not.toContain(PROVISIONAL_SIGNATORY_VERSION);
+
+    // The bytes, not just the version string. `seedDatabase`'s production
+    // guard keys on the version alone, so a version bumped without swapping
+    // the file would stamp "FIRMA DE PRUEBA" on every contract while
+    // reporting itself as real — the one failure nothing downstream catches.
+    expect(await readComodanteSignaturePng()).not.toEqual(
       buildPlaceholderSignaturePng(),
     );
   });
 
-  it("says, in the image itself, that it is not a real signature", () => {
-    expect(PLACEHOLDER_SIGNATURE_LINES.join(" ")).toBe(
-      "FIRMA DE PRUEBA NO VALIDA",
-    );
+  it("fits the box the template draws it in", async () => {
+    const { ancho, alto } = esperarPngIntegro(await readComodanteSignaturePng());
+
+    // `.firma-imagen` is height 20mm, max-width 70mm, object-fit contain —
+    // a 3.5:1 box. Far off that and the signature renders letterboxed, small
+    // and off-centre, on a document nobody re-reads before signing.
+    expect(ancho).toBeGreaterThanOrEqual(600);
+    expect(ancho / alto).toBeGreaterThan(2.5);
+    expect(ancho / alto).toBeLessThan(4.5);
   });
 
   it("is offered to the templates as a data URI the HTML can carry inline", async () => {
@@ -326,6 +388,30 @@ describe("placeholder comodante signature", () => {
     expect(base64.length).toBeGreaterThan(0);
     expect(Buffer.from(base64, "base64")).toEqual(
       await readComodanteSignaturePng(),
+    );
+  });
+});
+
+/**
+ * Kept after the real signature landed, so local development and demos can
+ * seed a database without stamping a real person's handwriting onto throwaway
+ * contracts. Reaching it means pointing `SIGNATORY_VERSION` back at
+ * `PROVISIONAL_SIGNATORY_VERSION`, which `seedDatabase` refuses in production.
+ */
+describe("placeholder signature generator", () => {
+  it("still produces exactly the committed placeholder file, so the bytes are reproducible", async () => {
+    expect(await readFile(PLACEHOLDER_SIGNATURE_PNG_PATH)).toEqual(
+      buildPlaceholderSignaturePng(),
+    );
+  });
+
+  it("produces a structurally valid PNG", () => {
+    esperarPngIntegro(buildPlaceholderSignaturePng());
+  });
+
+  it("says, in the image itself, that it is not a real signature", () => {
+    expect(PLACEHOLDER_SIGNATURE_LINES.join(" ")).toBe(
+      "FIRMA DE PRUEBA NO VALIDA",
     );
   });
 });

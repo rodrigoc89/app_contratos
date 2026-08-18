@@ -30,7 +30,30 @@ export const COMODATO_HTML_PATH = join(
   "v1-comodato.html",
 );
 
+/**
+ * The comodante's real handwritten signature, extracted from a 300 dpi scan:
+ * black ink on transparency, cropped to the stroke and padded to the 3.5:1 box
+ * `.firma-imagen` draws it in.
+ *
+ * This file is a private individual's signature. It stays in this repository
+ * only because the repository is private, and it must never be copied into the
+ * web bundle or any publicly readable storage — see `FirmanteComodante`, which
+ * refuses to serialise the image for that reason.
+ */
 export const COMODANTE_SIGNATURE_PNG_PATH = join(
+  DIRECTORIO_FIRMAS,
+  "comodante-v1.png",
+);
+
+/**
+ * The generated "FIRMA DE PRUEBA / NO VALIDA" image.
+ *
+ * Kept after the real signature landed so local development and demos can seed
+ * a database without stamping a real person's handwriting onto throwaway
+ * contracts. Using it means pointing `SIGNATORY_VERSION` back at
+ * `PROVISIONAL_SIGNATORY_VERSION`, which `seedDatabase` refuses in production.
+ */
+export const PLACEHOLDER_SIGNATURE_PNG_PATH = join(
   DIRECTORIO_FIRMAS,
   "comodante-v0-prueba.png",
 );
@@ -58,12 +81,17 @@ export const TEMPLATE_VALID_FROM = "2026-08-01";
 export const PROVISIONAL_SIGNATORY_VERSION = "v0-prueba";
 
 /**
- * Typed as `string`, not as the literal, so that swapping in the real
- * signature is a one-line edit here and the production guard in
- * `seedDatabase` keeps type-checking as a real comparison.
+ * The signatory this seed publishes. The real signature was handed over and
+ * loaded in August 2026, so this is no longer the provisional one.
+ *
+ * Still typed as `string` rather than as the literal: the production guard in
+ * `seedDatabase` compares it against `PROVISIONAL_SIGNATORY_VERSION`, and
+ * narrowing it to `"v1"` would make that comparison a type error instead of a
+ * runtime check — silently deleting the guard the day someone points this back
+ * at the placeholder.
  */
-export const SIGNATORY_VERSION: string = PROVISIONAL_SIGNATORY_VERSION;
-export const SIGNATORY_ID = "firmante-comodante-v0-prueba";
+export const SIGNATORY_VERSION: string = "v1";
+export const SIGNATORY_ID = "firmante-comodante-v1";
 export const SIGNATORY_FULL_NAME = "SIEIRA GUILLERMO FEDERICO";
 export const SIGNATORY_DNI = "27.582.030";
 
