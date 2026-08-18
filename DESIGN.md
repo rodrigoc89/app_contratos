@@ -47,7 +47,7 @@ These were settled with the business owner and are not open for redesign:
 | Contract term | Signature date + **10 years** (120 months) | Set by the business |
 | Expiry date | **Derived**, never typed | It is the field that governs equipment restitution; a typo there is a legal problem |
 | Contract number (`Nº`) | Assigned by the server | Online-only removes the offline collision problem entirely |
-| Copy delivery | WhatsApp | Customers reliably have WhatsApp; many do not have email |
+| Copy delivery | **Sent by the office, by hand, outside this system** (§8) | Customers reliably have WhatsApp; many do not have email. The app never sends — revised 2026-08-18, replacing "the técnico shares from the tablet" |
 | Roles | Technician (field) + Office (back-office) | — |
 | Out of scope | Any integration with external provisioning or billing systems | Explicitly excluded by the owner |
 
@@ -163,10 +163,15 @@ per unrecovered installation.
 
 Every state change is an **append-only event**, never a mutation:
 
-`creado`, `firmado`, `entregado`, `dado_de_baja`, `equipos_restituidos`
+`creado`, `firmado`, `dado_de_baja`, `equipos_restituidos`
 
 Each event records actor, timestamp and payload. The contract's current state
 is a projection of its events.
+
+There is deliberately **no `entregado` event**. Handing the customer their
+copy happens outside this system entirely (§8), so nothing is in a position to
+record it honestly — and an event nobody writes is worse than an absent one,
+because a reader assumes its absence means "not yet delivered".
 
 ---
 
@@ -219,7 +224,6 @@ src/
     interface/       # HTTP controllers, DTOs, validation
   plantillas/        # versioned contract templates
   firmantes/         # comodante signatories + their signature assets
-  entrega/           # sealed-PDF download for the tablet to share (§8)
   identidad/         # users, roles, authentication
   shared/            # cross-cutting kernel
 ```
@@ -236,7 +240,7 @@ isolation — and the legal rules are the part that actually matters here.
 | Database | PostgreSQL |
 | Frontend | React + Vite, as an installable PWA (**see §5.1**) |
 | PDF | Server-side HTML → PDF |
-| Hosting | DonWeb Cloud Server, 2 vCPU / 4 GB (**see §10**) |
+| Hosting | HostGator VPS NVMe 4, 2 vCPU / 4 GB (**see §10**) |
 
 ### 5.1 Frontend
 
@@ -401,40 +405,66 @@ Losing the PDF archive is a business-ending event, not an incident.
 
 ---
 
-## 8. WhatsApp delivery
+## 8. Delivering the customer's copy
 
 The paper contract says *"firman las partes dos ejemplares"* — the customer is
 entitled to their copy.
 
-### The decision: the technician sends it, the app does not
+### The office sends it, the app does not — decided 2026-08-18
 
-**The WhatsApp Cloud API is not used, and this is not a deferral.** Automatic
-delivery would require a verified WhatsApp Business account, a pre-approved
-template message, and per-conversation pricing. IES.NET is not paying for it,
-so the app never sends anything to anyone.
+**Nothing in this system sends anything to a customer.** The técnico's visit
+ends at the signature. Afterwards the office opens the contract in the panel,
+taps **Descargar** on each sealed PDF and forwards them to the customer by
+whatever means it already uses. That last step happens outside this software
+and always did; what changed is that it is now the *only* path.
 
-Instead: the tablet fetches both sealed PDFs and hands them to the operating
-system's share sheet, where WhatsApp is one of the targets. The technician
-picks the customer's chat and sends — standing in the customer's house, with
-the customer watching. Where the share sheet is unavailable, the PDFs download
-to the tablet and the technician attaches them by hand.
+This replaces the original decision, which had the técnico hand the sealed
+PDFs to the tablet's OS share sheet during the visit — WhatsApp being one of
+its targets. **That step is deleted, not disabled**:
+`apps/web/src/funcionalidades/entrega`, its `navigator.share` call and its
+download fallback are gone from the codebase. Git history holds them if the
+decision is ever reversed; nothing in the running app does.
 
-This is better than the Cloud API in two ways, not merely cheaper. **The
-customer's phone number never leaves for a third-party processor**, which under
-Ley 25.326 is one less data controller to account for. And the technician sees
-the message leave, rather than trusting an asynchronous job to have run.
+The signing screen therefore states, in so many words, that the office sends
+the documents. The técnico is standing in front of the customer who is about
+to ask, and an app that removes the share button without saying who sends the
+copy leaves them with nothing to answer.
 
-### What this costs, accepted deliberately
+### The WhatsApp Cloud API is still not used, and this is still not a deferral
+
+Automatic delivery would require a verified WhatsApp Business account, a
+pre-approved template message, and per-conversation pricing. IES.NET is not
+paying for it. Removing the tablet's share step does not reopen this: the
+answer to "then let the server send it" is the same as it has always been.
+
+One property survives the change intact — **the customer's phone number never
+leaves for a third-party processor**, which under Ley 25.326 is one less data
+controller to account for.
+
+### What this costs, accepted deliberately — and it now costs more
 
 **There is no delivery record.** No target number, no timestamp, no provider
-message id — the system has no concept of a contract having been delivered. If
-a customer ever claims they never received their copy, the system cannot
-answer.
+message id, no `entregado` event ever written — the system has no concept of a
+contract having been delivered. If a customer claims they never received their
+copy, the system cannot answer.
 
-This was weighed and accepted: the **signed contract is the legal artifact**,
-and handing over a copy is a courtesy step around it. Revisit only if a real
-dispute makes the record worth building; do not add a delivery flag on
-speculation.
+That was already true and was already accepted, on the grounds that the
+**signed contract is the legal artifact** and handing over a copy is a
+courtesy step around it. It is worse now, and the difference is not academic.
+Delivery used to happen during the visit, by the person who had just watched
+the customer sign: the *técnico* knew it had happened, even though the system
+did not. Delivery now happens later, in the office, by someone who was not
+there — and **nothing in this system can tell that person which contracts they
+have already sent and which customers are still waiting.** Not a flag, not a
+list, not a filter, not a column on the search screen. That queue lives
+entirely outside the app, in whatever the office keeps by hand.
+
+This is recorded plainly rather than softened, so that the trade is visible
+when someone asks why an "unsent copies" screen does not exist. It is still
+not an argument for adding a delivery flag on speculation. Revisit when the
+office asks for one, or when a real dispute makes the record worth building —
+and expect the ask, because the gap now sits with the person doing the
+sending.
 
 ### Never do this
 
@@ -443,15 +473,16 @@ bans the number. That number is IES.NET's customer service line.
 
 ### Delivery rules
 
-- Delivery is **attempted during the visit**, from the tablet, by a person —
-  never by a background job.
-- Delivery failure must **never** roll back a signature, and must never be
-  presented as one. The contract is already legally complete at signing; a
-  share that fails offers a retry of the share, nothing more.
-- The share sheet **does** carry the PDFs themselves as attachments
-  (`navigator.share({ files })`), not a link to them. An earlier version of
-  this document claimed the manual path could only send a link; that was
-  wrong.
+- The app **never sends anything to a customer** — not from the tablet, not
+  from a background job, not from the panel. The panel downloads; a person
+  sends.
+- Signing is complete without delivery. Nothing about handing over a copy may
+  gate, delay or roll back a signature — including the técnico's way out of a
+  finished visit. The previous version offered that exit only after a
+  successful share, which stranded precisely the técnicos whose share had
+  failed; it is now unconditional on the signed-contract screen.
+- The office's download is authenticated (`GET :id/documentos/:tipo` behind a
+  bearer token), so it can never degrade into a public link to a sealed PDF.
 
 ---
 
@@ -459,8 +490,8 @@ bans the number. That number is IES.NET's customer service line.
 
 | Role | Capabilities |
 |---|---|
-| `tecnico` | Create drafts, capture signatures, deliver copies. Sees only their own contracts. |
-| `oficina` | Search all contracts, view PDFs, **annul contracts**, terminate contracts, record equipment restitution, resend copies. |
+| `tecnico` | Create drafts, capture signatures. Sees only their own contracts. **Delivers nothing** — the visit ends at the signature (§8). |
+| `oficina` | Search all contracts, view and download PDFs, **annul contracts**, terminate contracts, record equipment restitution. Downloading the sealed PDFs to send a customer their copy is office work, and the only such path (§8). |
 | `admin` | Manage users, publish template versions, manage the comodante signatory. **Also reads contracts: the list, the detail and the sealed PDFs — see below.** |
 
 No role can edit or delete a signed contract. That is enforced in the domain
@@ -520,26 +551,21 @@ was already lost at the list endpoint. What follows from this decision:
 
 ## 10. Hosting
 
-**Decided: a DonWeb Cloud Server, 2 vCPU / 4 GB RAM / 20 GB SSD** (August 2026).
+**Decided: a HostGator VPS NVMe 4, 2 vCPU / 4 GB RAM / 100 GB NVMe**
+(August 2026). **Not yet purchased.**
 
-This section originally decided on HostGator, chosen over DonWeb on price. It
-was reopened before anything was bought — two facts that comparison did not
-have turned out to be measurable, and both pushed the other way — and then
-settled on DonWeb. See "Provider decision" and the DonWeb catalogue check
-below.
+This section has been decided three times, and all three are kept below,
+because on a purchasing decision the reasoning outlives the answer. HostGator
+was the original choice on price. It was reopened before anything was bought
+and settled on DonWeb, on configurability, Argentine datacentres and the
+operator's years of familiarity with that provider. It has now been **reversed
+back to HostGator, on price, by the owner of the business.** See "Provider
+decision".
 
-The deciding argument was not in any table: **the operator has used DonWeb for
-years.** Knowing how a provider behaves when something breaks, and how its
-support answers, outweighs a price delta on a system whose downtime means a
-técnico standing in a customer's house unable to finish. Configurability and an
-Argentine provider made it defensible on the recorded criteria too, but that
-operational familiarity is the reason, and it is written here so it is not
-mistaken later for a purely economic choice.
-
-The one hard constraint behind that choice: shared web hosting (cPanel, aimed
-at PHP/WordPress) **cannot run NestJS** — a Node application needs its own
-long-lived process and a port to listen on. Any plan considered here must give
-root access to a real instance.
+The one hard constraint behind every version of this choice: shared web hosting
+(cPanel, aimed at PHP/WordPress) **cannot run NestJS** — a Node application
+needs its own long-lived process and a port to listen on. Any plan considered
+here must give root access to a real instance.
 
 ### Required capabilities (non-negotiable)
 
@@ -637,7 +663,11 @@ and the requirement drops to **2 vCPU / 2 GB RAM / 15 GB disk**. That is a
 real cost saving, paid for with a hand-built layout that will not match the
 paper original as closely.
 
-### DonWeb catalogue check (August 2026)
+### DonWeb catalogue check (August 2026) — alternative, not chosen
+
+**Everything in this subsection describes the option that was not taken.** It
+is kept as the record of what HostGator was measured against, including the
+residency finding that made it briefly the decision.
 
 Quoted directly in DonWeb's Cloud Server configurator. Unlike HostGator's fixed
 tiers, resources are chosen individually, which is what lets the measured
@@ -719,113 +749,125 @@ was worth revisiting before buying.
 
 ### Provider decision
 
-The original choice was HostGator on price. Two things changed, and neither was
-knowable when that comparison was made.
+Decided three times. All three rounds are recorded, because the second one
+overturned the first on facts, and the third overturned the second on price —
+and a reader who only sees the answer will re-run the analysis from scratch.
 
-**1. The disk requirement collapsed.** The sizing above dropped from 80 GB to
-20 GB on measured data. HostGator's line is fixed tiers — the entry tier ships
-100 GB whether or not it is wanted, so the saving cannot be taken. A provider
-that lets the instance be configured can be sized to what this system actually
-needs, and that is where the price comparison now lives. **This is the fact
-that reopened the decision.**
+**Round 1 — HostGator, on price.** The original comparison.
 
-**2. Data residency stopped being free.** The subsection below explains the
-legal position. The short version: a datacentre outside Argentina puts this
-system on Ley 25.326's international-transfer rules, and the mitigation is a
-consent clause in the contract the customer signs (drafted for review in
-`docs/borrador-clausula-datos-personales.md`). That clause is worth having
-regardless, but with a foreign datacentre the deployment *depends* on it, and
-on the AAIP adequacy position holding.
+**Round 2 — DonWeb.** Two facts the first comparison did not have turned out to
+be measurable, and both pushed the other way. *The disk requirement collapsed*:
+the sizing above dropped from 80 GB to 20 GB on measured data, and HostGator's
+fixed tiers ship 100 GB whether or not it is wanted, so the saving could not be
+taken. *Data residency*: an Argentine datacentre removed a dependency that a
+foreign one creates. The deciding argument was not in any table — the operator
+had used DonWeb for years, and knowing how a provider behaves when something
+breaks outweighs a price delta on a system whose downtime means a técnico
+standing in a customer's house unable to finish.
 
-**An Argentine datacentre removes that dependency entirely.** Nothing about
-this system needs to leave the country: the users are in Santiago del Estero,
-the customers are Argentine, and there is no foreign integration left now that
-the WhatsApp Cloud API is cancelled (§8). Latency, the usual argument for a US
-datacentre, was already dismissed above as invisible in this workflow.
+**Round 3 — back to HostGator. This is what governs.** The price gap in
+Argentine pesos was large enough that the owner of the business called it, and
+the residency consideration was explicitly set aside as his decision to make
+(see "Datacentre location" below). The 100 GB that could not be trimmed in
+round 2 is simply accepted: it is oversized against the measured 20 GB, and
+that is the cost of a fixed-tier catalogue.
 
-**What to confirm before buying, whichever provider wins:**
+Prepaying three years is where the money is: **$160.363,80 ARS for 36 months
+against $352.772,76** for a one-year prepay plus two renewals — a difference of
+roughly **$192.400 ARS** — and the longer term also buys a permanently better
+renewal rate. The catalogue below has the full table.
+
+**What to confirm at purchase:**
 
 - Root access to a real instance, not shared/cPanel — still the one hard
   constraint (a Node process needs its own port and lifetime).
 - **4 GB RAM.** Non-negotiable while Puppeteer renders the PDFs. The only way
   to 2 GB is §7's pdfmake/PDFKit alternative, paid for in fidelity to the paper
   original.
-- 2 vCPU, 20 GB disk.
-- Physical datacentre location, in writing — not the company's address.
-- Renewal price, not the promotional one, and whether a prepaid term is
-  cheaper.
-- Whether provider backups are restore-tested, and where the offsite copy of
-  the PDF archive will live regardless of the answer.
+- 2 vCPU. Disk arrives as 100 GB whether wanted or not.
+- The renewal price, not the promotional one — and note that on this catalogue
+  the renewal discount is itself tied to the term length.
+- Which regional HostGator entity sells to Argentina; pricing and support
+  differ between them.
+- Where the offsite copy of the PDF archive will live. Provider backup is not
+  that copy — see "Datacentre location" below.
 
 **Both catalogues are recorded here** in this document's own dated-check
 convention, with quoted specs and prices rather than remembered ones: DonWeb
 above, HostGator below.
 
-### HostGator catalogue check (August 2026) — alternative, not chosen
+### HostGator catalogue check (August 2026) — chosen
 
-Kept as the record of what was compared against. DonWeb was chosen; see above.
+HostGator's VPS line is fixed tiers, not build-to-order. Quoted from the
+provider's own plan grid and term selector in Argentine pesos, and **not
+converted to USD here on purpose**: the exchange rate at the time of writing
+was not verified, and an invented conversion inside a purchasing decision is
+worse than none. This replaces an earlier USD quote for a `Snappy`-branded
+line that this catalogue no longer shows.
 
-HostGator's VPS line is fixed tiers, not build-to-order. The entry tier
-already matches §10's sizing:
+| Plan | Specs | 3-yr promo | 3-yr total | Verdict |
+|---|---|---|---|---|
+| Shared / cPanel hosting | — | — | — | ❌ Cannot run NestJS |
+| VPS NVMe 2 | 1 vCPU / 2 GB DDR5 / 50 GB | $3.347,39/mo | $120.505,68 | ❌ 2 GB, and 1 vCPU makes a render block the API |
+| **VPS NVMe 4** | **2 vCPU / 4 GB DDR5 / 100 GB** | **$4.751,59/mo** | **$171.054,72** | ✅ Exactly §10's sizing |
+| VPS NVMe 8 | 4 vCPU / 8 GB DDR5 / 200 GB | $10.799,49/mo | $388.778,40 | Headroom, not needed today |
 
-| Plan | Specs | Verdict |
-|---|---|---|
-| Shared / cPanel hosting | — | ❌ Cannot run NestJS |
-| **Snappy 2000** | 2 vCPU / 4 GB RAM / 100 GB NVMe | ✅ Exactly the target sizing |
-| Snappy 4000 | 4 vCPU / 8 GB RAM / 200 GB NVMe | Headroom, not needed today |
+**Term selector for the VPS NVMe 4.** Its list price of $14.699,00/mo is
+exactly the $529.164,00 struck through in the grid divided over 36 months,
+which is what confirms the selector belongs to this plan and not another.
 
-**Would have been Snappy 2000.** Around USD 35/mo promotional, renewing near USD 54 —
-confirm both numbers at purchase, and confirm which regional HostGator entity
-sells to Argentina, since pricing and support differ between them.
+| Term | Per month | Term total | Renews at |
+|---|---|---|---|
+| 1 month | $14.699,00 | — | $14.699,00 |
+| 1 year (63% off) | $5.399,59 | $64.794,60 | $11.999,09 (18% off) |
+| 2 years (66% off) | $4.904,59 | $117.709,20 | $10.899,09 (25% off) |
+| **3 years (69% off)** | **$4.454,59** | **$160.363,80** | **$9.899,09 (32% off)** |
 
-Confirmed capabilities: full root access, dedicated IP, AMD EPYC hardware,
-free Let's Encrypt TLS.
+**The two captures disagree on the three-year rate.** The plan grid shows 67%
+off at $4.751,59/mo; the term selector shows 69% off at $4.454,59/mo. That is
+about $297 a month and roughly $10.691 over the term. Confirm the figure that
+actually appears at checkout rather than either of these.
 
-**Do not buy the cPanel add-on.** It is roughly USD 12/mo and this deployment
-has no use for it: the server is provisioned over SSH, and cPanel on the box
-would only add an attack surface and a background service competing for the
-RAM that Chromium needs.
+**Renewal pricing is the real cost**, and on this catalogue it is unusually
+consequential: the promotional rate applies to the first term only, but the
+*renewal* discount is also tied to the term length. Three years buys both the
+lowest promotional rate and a renewal 32% below list instead of 18%.
 
-**Renewal pricing is the real cost.** The promotional rate applies to the
-first term only. Budget against the renewal figure, and check whether a longer
-prepaid term is cheaper than monthly — that is usually where the saving
-against DonWeb actually is or is not.
+Capabilities per the plan cards: full root access, 1 dedicated IP, unlimited
+transfer, free migration, NVMe storage, DDR5 RAM.
 
-### Consequence of a foreign datacentre
+**Do not buy the cPanel add-on.** Every card offers it. This deployment has no
+use for it, and it is actively harmful here: the server is provisioned over
+SSH, `deploy/nginx.conf` is hand-written with non-default tuning that a panel
+would regenerate away, and the panel itself is a background service competing
+for the RAM Chromium needs.
 
-Written when HostGator, whose datacentres are in the United States, was the
-decision. **It no longer governs**: DonWeb's Cloud Server nodes are in
-Argentina, confirmed against the provider's own page (see the catalogue check
-above), so no international transfer takes place. Kept because the reasoning is
-what made an Argentine datacentre worth paying attention to, and because it
-applies again the day any part of this system is hosted abroad. Two things
-followed.
+### Datacentre location
+
+The plan cards say *"Servidores en la nube en América Latina"*. That is
+marketing copy, not a datacentre address, and an earlier version of this
+section recorded HostGator's datacentres as being in the United States. **The
+physical location has not been confirmed in writing.**
+
+**This was raised and set aside.** The owner of the business — Guillermo Seira,
+in whose name the server is bought, and therefore the party responsible for the
+data — decided that the data-residency question is not to gate this
+deployment. That is his decision to make, it is recorded here as his, and it is
+not re-argued in this document. The earlier analysis is preserved in
+`docs/borrador-clausula-datos-personales.md` and in the DonWeb subsection above
+for whoever wants to reopen it.
+
+Two consequences remain, and neither of them is a legal one:
 
 **Latency** is not a problem. Signing is a handful of requests and the office
 panel is low-traffic; a few hundred milliseconds is invisible in this
 workflow.
 
-**Data residency deserves one deliberate decision.** These contracts are the
-personal data of Argentine customers — name, DNI, home address — under Ley
-25.326, whose default rule is that personal data may not be transferred to a
-country without an adequate level of protection, as declared by the AAIP. The
-United States has historically not been on that list; a joint declaration in
-November 2025 announced recognition of the US as adequate, but what governs is
-the formal AAIP instrument, so this should be checked at deploy time rather
-than assumed.
-
-This is not a blocker, and the mitigation is cheap. Ley 25.326 admits the
-transfer with the data subject's consent or under the AAIP's model contractual
-clauses — and this system already has the customer signing a document. **Add a
-clause to the template covering storage and international transfer**, which is
-good practice regardless of where the server ends up. Publish it as a new
-template version (§4), so contracts signed before and after remain
-distinguishable.
-
-**Backup caveat.** Provider-level backup protects against disk failure, not
-against an account problem. Keep an independent copy of the database and the
-PDF archive outside HostGator entirely — and given the residency point above,
-an Argentine location for that copy is the better default.
+**Backup placement.** Provider-level backup protects against disk failure, not
+against an account problem — if the account goes, the server and its backups go
+with it. The independent copy of the database and the PDF archive must live
+outside HostGator entirely. This is the one item on the checklist that is
+unaffected by anything above: it was true for DonWeb and it is true here.
 
 ### Operational guardrails
 
@@ -859,35 +901,39 @@ carrying paper.
 
 **Phase 2 — Office panel.**
 Search, contract detail, termination with reason, equipment restitution,
-unreturned-equipment report, resend copy.
+unreturned-equipment report, **Descargar** on each sealed PDF — which, since
+§8, is how every customer copy leaves this system, not merely how a lost one
+is replaced.
 
-**There is no automatic-WhatsApp-delivery phase.** An earlier version of this
-document planned one, and listed Meta business verification as the project's
-longest-lead item. Both are cancelled — see §8. Delivery ships complete in
-Phase 1: the technician shares the sealed PDFs from the tablet during the
-visit.
+**There is no delivery phase, automatic or manual.** An earlier version of
+this document planned an automatic-WhatsApp one and listed Meta business
+verification as the project's longest-lead item; both were cancelled. A later
+version shipped delivery inside Phase 1, with the técnico sharing the sealed
+PDFs from the tablet during the visit; that was removed too — see §8, *decided
+2026-08-18*. Phase 1 ends at the signature and Phase 2's **Descargar** is the
+whole of what this software contributes to getting a customer their copy. A
+person outside the system does the rest.
 
 ---
 
 ## 13. Open questions
 
 1. Does the contract template need a personal-data clause covering storage and
-   processing? The international-transfer half of this question is answered in
-   §10: the server is in Argentina, confirmed against the provider's own page,
-   so the clause is no longer *required* on residency grounds — and the IP that
-   may geolocate as American is a routing detail, not the location of the data
-   (§10, *"One nuance that must not be misread"*). What stays open is art. 6:
-   whether the template itself should inform the customer of purpose,
-   responsible party and their access/rectification/suppression rights. Drafted
-   for review in `docs/borrador-clausula-datos-personales.md`. (§10)
+   processing? **Set aside by the owner**, who decided it is not to gate the
+   deployment (§10, *"Datacentre location"*). The draft is kept in
+   `docs/borrador-clausula-datos-personales.md` because the question is his to
+   reopen, not because anything is waiting on it. One timing constraint is
+   worth recording if it ever is reopened: a signed contract cannot be edited
+   (§3), so the clause would ship as a new template version (§4) and every
+   contract signed before that version stays without it permanently. (§10)
 
 ### Resolved
 
 - Correcting a signed contract → **annul and re-sign**, never edit (§3).
 - Frontend stack → **React + Vite** as a PWA (§5.1).
-- Hosting → **DonWeb Cloud Server** (2 vCPU / 4 GB / 20 GB SSD), not shared
-  hosting (§10). HostGator was the earlier answer and is kept there as the
-  alternative it was compared against.
+- Hosting → **HostGator VPS NVMe 4** (2 vCPU / 4 GB / 100 GB NVMe), not
+  shared hosting (§10). Decided three times; DonWeb was the intermediate
+  answer and is kept there as the alternative it was compared against.
 - Typos in the source contract (`ósea`, `El incumpliendo`, …) → **left
   verbatim** at the client's decision. The template transcribes the paper
   document as it is.
