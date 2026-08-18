@@ -16,6 +16,17 @@ export interface SuperficieDeFirma {
   dibujarSegmento(a: Punto, b: Punto): void;
   /** Erases every pixel drawn so far. */
   limpiar(): void;
-  /** `data:image/png;base64,…` — must match `EsquemaImagenFirmaPng` (`@contratos/esquemas`). */
-  aPngDataUri(): string;
+  /**
+   * `data:image/png;base64,…` — must match `EsquemaImagenFirmaPng`
+   * (`@contratos/esquemas`).
+   *
+   * Takes the captured strokes rather than exporting whatever is currently on
+   * the visible canvas. The visible canvas is `height: 40vh` on hardware of
+   * unknown size, so exporting it made the printed signature's size and
+   * stroke weight a function of the tablet's viewport — see
+   * `logica/imagenDeFirma.ts` for the measurements. `trazos` is read only for
+   * its coordinates and is never modified: it is the forensic record
+   * (DESIGN.md, "Signature capture"), and the image is derived from it.
+   */
+  aPngDataUri(trazos: ReadonlyArray<ReadonlyArray<Punto>>): string;
 }
