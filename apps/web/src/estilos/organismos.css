@@ -294,7 +294,7 @@
   padding: var(--espacio-4);
 }
 
-/* --- firma / entrega / panel layout -------------------------------------- */
+/* --- firma / panel layout ------------------------------------------------ */
 
 .paso-firma {
   padding: var(--espacio-4);
@@ -306,10 +306,6 @@
 
 .envio-firma__resultado,
 .envio-firma__error {
-  padding: var(--espacio-4);
-}
-
-.entrega-documentos {
   padding: var(--espacio-4);
 }
 
@@ -453,4 +449,10 @@
   border-bottom: 2px solid var(--color-primario);
   font-size: var(--fuente-grande);
   font-weight: 700;
+}
+
+/* Who sends the customer their copy — the answer the técnico needs while the
+   customer is still in front of them. Sits between the number and the exit. */
+.envio-firma__proximo-paso {
+  margin: 0 0 var(--espacio-4);
 }

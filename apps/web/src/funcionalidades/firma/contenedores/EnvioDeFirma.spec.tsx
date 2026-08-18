@@ -185,6 +185,7 @@ describe("EnvioDeFirma", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={firmar}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();
@@ -212,6 +213,7 @@ describe("EnvioDeFirma", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={firmar}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();
@@ -236,6 +238,7 @@ describe("EnvioDeFirma", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={firmar}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();
@@ -255,10 +258,22 @@ describe("EnvioDeFirma", () => {
     expect(leerBorradorLocal()).toBeNull();
   });
 
-  it("mounts the delivery screen once signing succeeds (PR15's own composition job, DESIGN.md D11)", async () => {
+  /**
+   * This reverses a decision PR15 wrote into `EntregaDeDocumentos.spec.tsx`
+   * as "offers no exit before anything has been delivered — the customer's
+   * copy comes first". Delivery does not happen here any more (DESIGN.md §8,
+   * decided 2026-08-18): the office sends the documents, so there is no step
+   * left for the técnico to complete and nothing left to gate the exit on.
+   *
+   * That gate was also a trap. It lived inside the delivered branch alone, so
+   * a técnico who never tapped share, who cancelled the OS share sheet, or
+   * whose share AND download both failed was left with "Cerrar sesión" — the
+   * one action that also throws away the session — as the only way off this
+   * screen. The exit is now a property of having signed, nothing else.
+   */
+  it("offers the exit as soon as the contract is signed, with no delivery step to complete first", async () => {
     const { crearObservador, emitir } = observadorFalsoPorTitulo();
     const firmar = vi.fn().mockResolvedValue(contratoSellado());
-    const entregar = vi.fn();
 
     render(
       <EnvioDeFirma
@@ -268,7 +283,7 @@ describe("EnvioDeFirma", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={firmar}
-        entregar={entregar}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();
@@ -276,18 +291,72 @@ describe("EnvioDeFirma", () => {
     await firmarAmbosDocumentos(emitir);
 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("firmado"));
-    expect(screen.getByRole("button", { name: "Compartir documentos" })).toBeInTheDocument();
-    // Nothing is fetched or shared until the technician actually taps it.
-    expect(entregar).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Finalizar y empezar otro contrato" })).toBeInTheDocument();
+    // The técnico shares nothing from the tablet any more — the whole
+    // delivery affordance is gone, not merely hidden behind a condition.
+    expect(screen.queryByRole("button", { name: "Compartir documentos" })).not.toBeInTheDocument();
   });
 
   /**
-   * PR26 — design.md "Toast" category: the signing confirmation becomes an
-   * auto-dismissing, dismissible toast, but `EntregaDeDocumentos` (mounted
-   * alongside it since PR15) must stay reachable throughout — dismissing or
-   * auto-hiding the toast must never unmount the delivery screen.
+   * The técnico is standing in front of the customer, who is about to ask
+   * where their copy is. Removing the share action without saying who sends
+   * the documents would leave them with no answer.
    */
-  it("auto-dismisses the signing-confirmation toast after ~5s while EntregaDeDocumentos stays mounted", async () => {
+  it("says the office sends the documents, so the técnico can answer the customer standing next to them", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+
+    render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={vi.fn().mockResolvedValue(contratoSellado())}
+        onFinalizarVisita={() => {}}
+      />,
+    );
+    await esperarPasoListo();
+
+    await firmarAmbosDocumentos(emitir);
+
+    expect(
+      await screen.findByText("Los documentos firmados los envía la oficina. No tenés que hacer nada más."),
+    ).toBeInTheDocument();
+  });
+
+  it("reports the tap to the visit's owner — this container never resets the visit itself", async () => {
+    const { crearObservador, emitir } = observadorFalsoPorTitulo();
+    const onFinalizarVisita = vi.fn();
+
+    render(
+      <EnvioDeFirma
+        contratoId="c1"
+        crearCola={() => colaFalsa()}
+        cargarPrevisualizacion={() => Promise.resolve(previsualizacionValida())}
+        crearObservador={crearObservador}
+        crearSuperficie={superficieFalsa()}
+        firmar={vi.fn().mockResolvedValue(contratoSellado())}
+        onFinalizarVisita={onFinalizarVisita}
+      />,
+    );
+    await esperarPasoListo();
+
+    await firmarAmbosDocumentos(emitir);
+
+    const usuario = userEvent.setup();
+    await usuario.click(await screen.findByRole("button", { name: "Finalizar y empezar otro contrato" }));
+
+    expect(onFinalizarVisita).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * PR26 — design.md "Toast" category: the signing confirmation is an
+   * auto-dismissing, dismissible toast, but everything the técnico needs
+   * after it expires must outlive it — the heading, the line naming who
+   * sends the documents, and the exit.
+   */
+  it("auto-dismisses the signing-confirmation toast while the heading, the copy and the exit stay put", async () => {
     const { crearObservador, emitir } = observadorFalsoPorTitulo();
     const firmar = vi.fn().mockResolvedValue(contratoSellado());
 
@@ -299,6 +368,7 @@ describe("EnvioDeFirma", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={firmar}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();
@@ -340,11 +410,14 @@ describe("EnvioDeFirma", () => {
     });
 
     expect(screen.queryByText(/firmado correctamente/)).not.toBeInTheDocument();
-    // The toast is the only thing that may expire. The `h1` behind it and the
-    // delivery screen alongside it are durable — auto-dismissal must not take
-    // either of them with it.
+    // The toast is the only thing that may expire. The `h1` behind it, the
+    // line naming who sends the documents and the exit are all durable —
+    // auto-dismissal must not take any of them with it.
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Contrato Nº 42 firmado");
-    expect(screen.getByRole("button", { name: "Compartir documentos" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Los documentos firmados los envía la oficina. No tenés que hacer nada más."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Finalizar y empezar otro contrato" })).toBeInTheDocument();
   });
 
   /**
@@ -365,6 +438,7 @@ describe("EnvioDeFirma", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={firmar}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();
@@ -398,6 +472,7 @@ describe("EnvioDeFirma", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={firmar}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();
@@ -437,6 +512,7 @@ describe("EnvioDeFirma", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={firmar}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();
@@ -493,6 +569,7 @@ describe("EnvioDeFirma — la confirmación sobrevive al toast", () => {
         crearObservador={crearObservador}
         crearSuperficie={superficieFalsa()}
         firmar={vi.fn().mockResolvedValue(contrato)}
+        onFinalizarVisita={() => {}}
       />,
     );
     await esperarPasoListo();

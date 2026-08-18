@@ -3,16 +3,19 @@ import type { DatosDocumentoDisponible } from "@contratos/esquemas";
 import { clienteHttpBlob } from "./clienteHttp";
 
 /**
- * Fetching a sealed PDF and handing it to the browser, shared by the two
- * features that need it: the técnico's delivery flow
- * (`funcionalidades/entrega`) and the office panel's contract detail
- * (`funcionalidades/contratos`).
+ * Fetching a sealed PDF and handing it to the browser. This was extracted to
+ * be shared with the técnico's delivery flow; that flow is gone (DESIGN.md
+ * §8, decided 2026-08-18) and the office panel's contract detail
+ * (`funcionalidades/contratos`) is now the only caller — and, since the
+ * office is what sends the customer their copy, the only path by which a
+ * customer's copy ever leaves this system.
  *
- * Extracted rather than copied. The `URL.revokeObjectURL` below is paired
- * with its `createObjectURL` through a `try`/`finally` so the pairing holds
- * even when writing the download throws — that pairing is a carried-forward
- * design requirement, proven in `entregaDeDocumentos.spec.ts`. A second copy
- * of it is a second place for it to be forgotten.
+ * The `URL.revokeObjectURL` below is paired with its `createObjectURL`
+ * through a `try`/`finally` so the pairing holds even when writing the
+ * download throws — a carried-forward design requirement from the delivery
+ * slice's threat matrix. It used to be proven through `entregarDocumentos`;
+ * `descargaDeArchivo.spec.ts` now proves it here, against this module
+ * directly, so removing the caller could not quietly remove the proof.
  *
  * The endpoint is authenticated, so a plain `<a href>` would answer 401: the
  * browser sends no `Authorization` header. Every download therefore goes
