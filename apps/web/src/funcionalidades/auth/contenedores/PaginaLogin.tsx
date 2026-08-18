@@ -45,6 +45,14 @@ export function PaginaLogin() {
   const [contrasena, establecerContrasena] = useState("");
   const [error, establecerError] = useState<string | null>(null);
   const [enviando, establecerEnviando] = useState(false);
+  /**
+   * Hidden by default, and deliberately NOT reset when a login is rejected: a
+   * rejected login is the one moment the técnico most needs to read what they
+   * typed, and hiding it again would take away the evidence of the typo they
+   * are about to fix. The técnico opted in, holds the tablet, and the state
+   * dies with the screen — a successful login navigates away and unmounts it.
+   */
+  const [contrasenaVisible, establecerContrasenaVisible] = useState(false);
 
   async function manejarEnvio(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
@@ -84,13 +92,35 @@ export function PaginaLogin() {
       {motivo !== null && <p role="status">{MENSAJE_POR_MOTIVO[motivo]}</p>}
       <Etiqueta htmlFor="nombreUsuario">Usuario</Etiqueta>
       <CampoTexto id="nombreUsuario" value={nombreUsuario} onCambiar={establecerNombreUsuario} />
-      <Etiqueta htmlFor="contrasena">Contraseña</Etiqueta>
-      <CampoTexto
-        id="contrasena"
-        type="password"
-        value={contrasena}
-        onCambiar={establecerContrasena}
-      />
+      {/*
+        Wrapped so the toggle is not a direct child of `.formulario`, whose
+        `> .boton` rule reserves 24px of air above the step's PRIMARY action.
+        Same shape as `EscanerDeMac`: field, then its own button beside it in
+        normal flow. `Boton` already carries the guarded 48px touch target.
+      */}
+      <div>
+        <Etiqueta htmlFor="contrasena">Contraseña</Etiqueta>
+        <CampoTexto
+          id="contrasena"
+          type={contrasenaVisible ? "text" : "password"}
+          value={contrasena}
+          onCambiar={establecerContrasena}
+        />
+        {/*
+          The label carries the state, so there is no `aria-pressed` here and
+          no modifier class — unlike the estado filter chips, whose labels
+          name a filter and therefore cannot change. Announcing "Ocultar
+          contraseña, presionado" would state the same fact twice, in opposite
+          directions. There is no icon set in this app, so this is text.
+        */}
+        <Boton
+          type="button"
+          className="boton--secundario"
+          onClick={() => establecerContrasenaVisible((visible) => !visible)}
+        >
+          {contrasenaVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+        </Boton>
+      </div>
       {error !== null && <p role="alert">{error}</p>}
       <Boton type="submit" disabled={enviando}>
         Ingresar
