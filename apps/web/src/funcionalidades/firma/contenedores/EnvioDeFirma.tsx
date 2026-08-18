@@ -13,8 +13,6 @@ import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { mensajeDeError, type MensajeDeError } from "../../../errores/mensajeDeError";
 import { marcarTrabajoEnCurso } from "../../../pwa/trabajoEnCurso";
-import { EntregaDeDocumentos } from "../../entrega/contenedores/EntregaDeDocumentos";
-import type { ResultadoEntrega } from "../../entrega/logica/entregaDeDocumentos";
 import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
 import type { SuperficieDeFirma } from "../logica/superficieDeFirma";
 import { firmarContrato } from "../logica/resultadoDeFirma";
@@ -42,15 +40,20 @@ export interface PropiedadesEnvioDeFirma {
     contratoId: string,
     firmas: readonly DatosFirmaCapturada[],
   ) => Promise<DatosContratoDetalle>;
-  /** Injection seam forwarded to `EntregaDeDocumentos` (PR15). Production leaves this unset. */
-  readonly entregar?: (contrato: DatosContratoDetalle) => Promise<ResultadoEntrega>;
   /**
-   * Forwarded verbatim to `EntregaDeDocumentos`' own exit action. This
-   * container is only a pass-through for it: the visit's state lives one
-   * level up, in `InicioTecnico`, which is the only place that can reset it
-   * — same shape as `onCreado`/`onContinuarAFirma` on the draft side.
+   * Fires when the técnico is done with this customer and wants the next
+   * one. This container owns signing, not the visit's lifecycle: the state
+   * that keeps this screen mounted lives one level up, in `InicioTecnico`,
+   * which is the only place that can reset it — same shape as
+   * `onCreado`/`onContinuarAFirma` on the draft side.
+   *
+   * Required, not optional, and that is the whole point. While it was
+   * optional the completion screen had to guard every render of the exit
+   * against a missing owner, and a guard is exactly what stranded técnicos
+   * here before (see the "firmado" branch below). A caller that cannot reset
+   * the visit must not be able to mount this screen at all.
    */
-  readonly onFinalizarVisita?: () => void;
+  readonly onFinalizarVisita: () => void;
 }
 
 /**
@@ -72,14 +75,12 @@ export function EnvioDeFirma({
   crearObservador,
   crearSuperficie,
   firmar,
-  entregar,
   onFinalizarVisita,
 }: PropiedadesEnvioDeFirma) {
   const [estado, establecerEstado] = useState<EstadoEnvio>({ tipo: "revisando" });
   // PR26 — design.md "Toast" category: whether the signing-confirmation
-  // toast is still showing. `EntregaDeDocumentos` below is unaffected by
-  // this — it was already always rendered alongside the confirmation, not
-  // gated by it.
+  // toast is still showing. Nothing else on the completion screen is gated by
+  // it; the toast may expire, the rest of that screen may not.
   const [avisoFirmaVisible, establecerAvisoFirmaVisible] = useState(true);
   const ejecutarFirma = firmar ?? firmarContrato;
 
@@ -143,11 +144,36 @@ export function EnvioDeFirma({
         {avisoFirmaVisible && (
           <Toast mensaje={mensaje} onDescartar={() => establecerAvisoFirmaVisible(false)} />
         )}
-        <EntregaDeDocumentos
-          contrato={estado.contrato}
-          {...(entregar === undefined ? {} : { entregar })}
-          {...(onFinalizarVisita === undefined ? {} : { onFinalizarVisita })}
-        />
+        {/*
+          The técnico used to hand the documents over from the tablet, so this
+          screen never had to say who would. It does now (DESIGN.md §8,
+          decided 2026-08-18): the office sends them, by its own means, from
+          the office panel's Descargar action. The técnico is standing in
+          front of the customer who is about to ask where their copy is, and
+          "no lo sé" is not an answer this screen may force them into.
+        */}
+        <p className="envio-firma__proximo-paso">
+          Los documentos firmados los envía la oficina. No tenés que hacer nada más.
+        </p>
+        {/*
+          Unconditional, and that is the fix. `/` is the only route the
+          técnico flow mounts (`rutas/rutas.tsx`), so there is nothing to
+          navigate back to: without this button the only way off this screen
+          is "Cerrar sesión", which also throws away the session. The exit
+          used to live inside the delivery screen's *delivered* branch, which
+          meant a técnico who never tapped share, who cancelled the OS share
+          sheet, or whose share AND download both failed never saw it at all —
+          precisely the people most stuck.
+
+          Leaving is finishing, not cancelling: the contract was sealed before
+          this branch rendered (DESIGN.md §6/§8) and the office panel can
+          re-download the PDFs whenever it needs to. Nothing here is
+          destructive, so no confirmation dialog stands between a técnico on a
+          tablet and the next customer.
+        */}
+        <Boton type="button" onClick={onFinalizarVisita}>
+          Finalizar y empezar otro contrato
+        </Boton>
       </div>
     );
   }

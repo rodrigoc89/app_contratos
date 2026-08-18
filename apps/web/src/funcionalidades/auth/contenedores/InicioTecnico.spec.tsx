@@ -265,6 +265,14 @@ describe("InicioTecnico", () => {
  * away the local draft and the session. A técnico who finished one customer
  * could not start the next one without logging back in.
  *
+ * The first fix only half-worked: the exit was offered inside the delivery
+ * screen's *delivered* branch, so a técnico who never tapped share, who
+ * cancelled the OS share sheet, or whose share and download both failed was
+ * back in the same dead end. Delivery from the tablet is gone entirely now
+ * (DESIGN.md §8, decided 2026-08-18) and the exit hangs off signing itself,
+ * which is why this test walks straight from the signature to the next
+ * contract with no delivery interaction in between.
+ *
  * The contract is sealed long before this screen (DESIGN.md §6/§8) and the
  * office panel can re-download the PDFs at any time, so leaving is finishing,
  * never discarding — and that is what the copy has to say.
@@ -367,11 +375,10 @@ describe("InicioTecnico — la visita se puede terminar", () => {
     vi.useRealTimers();
   });
 
-  it("comes back to a BLANK draft form after finishing the visit, carrying nothing from the previous customer", async () => {
+  it("starts another contract straight after signing, with no delivery interaction, on a BLANK draft form", async () => {
     establecerSesion(sesionFalsa());
     vi.stubGlobal("fetch", fetchSimuladoCompleto());
     const { crearObservador, emitir } = observadorFalsoPorTitulo();
-    const entregar = vi.fn().mockResolvedValue({ via: "compartido" });
 
     render(
       <InicioTecnico
@@ -380,13 +387,13 @@ describe("InicioTecnico — la visita se puede terminar", () => {
           crearObservador,
           crearSuperficie: superficieFalsa(),
           firmar: vi.fn().mockResolvedValue(contratoSellado()),
-          entregar,
         }}
       />,
     );
 
     // The whole visit, through the real containers: draft → review → both
-    // signatures → the sealed contract → delivery.
+    // signatures → the sealed contract. That is the end of it; the office
+    // sends the documents afterwards.
     await crearBorrador();
     fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
     await screen.findByTitle("Condiciones Generales de Uso");
@@ -403,9 +410,8 @@ describe("InicioTecnico — la visita se puede terminar", () => {
     await usuario.click(screen.getByRole("button", { name: "Firmar" }));
 
     await screen.findByRole("heading", { level: 1 });
-    await usuario.click(screen.getByRole("button", { name: "Compartir documentos" }));
-    await screen.findByRole("button", { name: "Compartir de nuevo" });
-
+    // Straight from the signature to the exit. Nothing was shared, downloaded
+    // or dismissed first — the exit has no precondition left at all.
     await usuario.click(screen.getByRole("button", { name: "Finalizar y empezar otro contrato" }));
 
     // Back on step one of a brand-new draft — and every field the previous
@@ -419,6 +425,9 @@ describe("InicioTecnico — la visita se puede terminar", () => {
     // Nothing left in storage either, so a reload cannot resurrect it.
     expect(leerBorradorLocal()).toBeNull();
     // The sealed contract's own screen is gone with it.
-    expect(screen.queryByRole("button", { name: "Compartir de nuevo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1, name: /firmado/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Finalizar y empezar otro contrato" }),
+    ).not.toBeInTheDocument();
   });
 });

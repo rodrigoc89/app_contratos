@@ -169,6 +169,73 @@ describe("PaginaLogin", () => {
 });
 
 /**
+ * The password is long and awkward to type blind on a tablet held in someone
+ * else's house, so the técnico can reveal it while typing. There is no icon
+ * set in this app (no library, no `.svg`, no `<svg>` anywhere in `src`), so
+ * the control is a plain text button beside the field — the same shape
+ * `EscanerDeMac` and `BarraDeBusqueda` already use.
+ */
+describe("PaginaLogin — mostrar u ocultar la contraseña", () => {
+  it("hides the password until it is asked for", () => {
+    renderizar();
+
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("type", "password");
+    expect(screen.getByRole("button", { name: "Mostrar contraseña" })).toBeInTheDocument();
+  });
+
+  it("reveals the typed password, and hides it again", () => {
+    renderizar();
+    fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "unaLarguísima" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("Contraseña")).toHaveValue("unaLarguísima");
+
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar contraseña" }));
+
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("type", "password");
+  });
+
+  /**
+   * A `<button>` inside a `<form>` submits it by default, and this one sits
+   * inside the login form. Revealing the password must never be a login
+   * attempt — least of all a half-typed one against a rate-limited endpoint.
+   */
+  it("does not submit the form", () => {
+    const fetchSimulado = vi.fn();
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    renderizar();
+    fireEvent.change(screen.getByLabelText("Usuario"), { target: { value: "tecnico1" } });
+    fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "correcta" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+
+    expect(fetchSimulado).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the password visible after a rejected login — that is when the typo has to be readable", async () => {
+    const fetchSimulado = vi.fn().mockResolvedValue(
+      respuestaJson(
+        { error: { codigo: "credenciales_invalidas", mensaje: "Usuario o contraseña incorrectos." } },
+        401,
+      ),
+    );
+    vi.stubGlobal("fetch", fetchSimulado);
+
+    renderizar();
+    fireEvent.change(screen.getByLabelText("Usuario"), { target: { value: "tecnico1" } });
+    fireEvent.change(screen.getByLabelText("Contraseña"), { target: { value: "incorrecta" } });
+    fireEvent.click(screen.getByRole("button", { name: "Mostrar contraseña" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ingresar" }));
+
+    await screen.findByText("Usuario o contraseña incorrectos.");
+    expect(screen.getByLabelText("Contraseña")).toHaveAttribute("type", "text");
+  });
+});
+
+/**
  * The first screen a técnico sees had no heading at all — the form opened on
  * a bare "Usuario" label. Same defect as both draft steps, same fix.
  */

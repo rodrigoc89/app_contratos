@@ -25,9 +25,12 @@ function superficieFalsa(): {
   superficie: SuperficieDeFirma;
   segmentos: ReadonlyArray<readonly [Punto, Punto]>;
   vecesLimpiada: () => number;
+  /** What the last `aPngDataUri` call was asked to render. */
+  trazosExportados: () => ReadonlyArray<ReadonlyArray<Punto>> | null;
 } {
   const segmentos: Array<readonly [Punto, Punto]> = [];
   let limpiezas = 0;
+  let exportados: ReadonlyArray<ReadonlyArray<Punto>> | null = null;
   return {
     superficie: {
       dibujarSegmento(a, b) {
@@ -36,12 +39,14 @@ function superficieFalsa(): {
       limpiar() {
         limpiezas += 1;
       },
-      aPngDataUri() {
+      aPngDataUri(trazos) {
+        exportados = trazos;
         return PNG_DE_PRUEBA;
       },
     },
     segmentos,
     vecesLimpiada: () => limpiezas,
+    trazosExportados: () => exportados,
   };
 }
 
@@ -210,6 +215,34 @@ describe("LienzoDeFirma", () => {
 
     expect(ultimoCambio?.imagenPng).toBe(PNG_DE_PRUEBA);
     expect(EsquemaImagenFirmaPng.safeParse(ultimoCambio?.imagenPng).success).toBe(true);
+  });
+
+  /**
+   * The printed signature used to be the visible canvas exported whole, so
+   * its size and stroke weight were whatever the tablet's viewport made them
+   * — `.lienzo-de-firma__lienzo` is `height: 40vh`. The surface is handed the
+   * captured strokes instead and re-draws them at the size the PDF prints
+   * at; this proves the wiring, not the pixels.
+   */
+  it("exports from the captured strokes, not from whatever the viewport made the canvas", () => {
+    const { superficie, trazosExportados } = superficieFalsa();
+    // `onCambia` is what makes the export happen at all: `notificarCambio`
+    // calls it optionally, and an optional call never evaluates its argument.
+    render(
+      <LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficie} onCambia={() => {}} />,
+    );
+    const lienzo = screen.getByRole("img", { name: "Firma" });
+
+    fireEvent.pointerDown(lienzo, { pointerId: 1, clientX: 4, clientY: 8, pointerType: "touch" });
+    fireEvent.pointerMove(lienzo, { pointerId: 1, clientX: 40, clientY: 8, pointerType: "touch" });
+    fireEvent.pointerUp(lienzo, { pointerId: 1, clientX: 40, clientY: 8, pointerType: "touch" });
+
+    expect(trazosExportados()?.map((trazo) => trazo.map(({ x, y }) => ({ x, y })))).toEqual([
+      [
+        { x: 4, y: 8 },
+        { x: 40, y: 8 },
+      ],
+    ]);
   });
 
   it("borrar discards every stroke and clears the surface — scenario: clear and re-capture", async () => {

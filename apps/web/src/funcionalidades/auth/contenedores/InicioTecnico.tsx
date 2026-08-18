@@ -31,17 +31,19 @@ import { EnvioDeFirma, type PropiedadesEnvioDeFirma } from "../../firma/contened
  * render). No other layer sits above both `FormularioBorrador` and
  * `EnvioDeFirma` at once, so this is the only place that can own it.
  *
- * MAC scanning (D6) and document delivery (D11) land in later slices.
+ * MAC scanning (D6) lands in a later slice. Document delivery from the tablet
+ * was removed instead of shipped (DESIGN.md §8, decided 2026-08-18) — the
+ * office sends the documents, so the visit ends at the signature.
  */
 export interface PropiedadesInicioTecnico {
   /**
    * Injection seams forwarded verbatim to `EnvioDeFirma` — its own DOM and
    * network ports (canvas surface, iframe observer, previsualización,
-   * `POST :id/firmar`, delivery). Grouped into ONE optional prop instead of
-   * re-declaring five, so this container keeps a no-prop production surface:
-   * `rutas.tsx` renders `<InicioTecnico />` and nothing in the app ever
+   * `POST :id/firmar`). Grouped into ONE optional prop instead of
+   * re-declaring four, so this container keeps a no-prop production surface:
+   * `rutas/rutas.tsx` renders `<InicioTecnico />` and nothing in the app ever
    * passes this. It exists so a test can drive a whole visit — draft through
-   * delivery — against the real containers.
+   * signature — against the real containers.
    */
   readonly firma?: Omit<PropiedadesEnvioDeFirma, "contratoId" | "crearCola" | "onFinalizarVisita">;
 }
@@ -58,12 +60,12 @@ export function InicioTecnico({ firma }: PropiedadesInicioTecnico = {}) {
 
   /*
     The técnico finished with this customer and wants the next one. Nothing
-    is lost by leaving: the contract was sealed before the delivery screen
-    ever rendered (DESIGN.md §6/§8) and the office panel can re-download the
-    PDFs at any time. This container is the only place that CAN do this — `/`
-    is the single route the técnico flow mounts (`rutas.tsx`), so there is no
-    navigation to undo, and these three pieces of state are exactly what kept
-    `EnvioDeFirma` on screen forever once they were set.
+    is lost by leaving: the contract was already sealed (DESIGN.md §6/§8) and
+    the office panel can re-download the PDFs at any time. This container is
+    the only place that CAN do this — `/` is the single route the técnico flow
+    mounts (`rutas/rutas.tsx`), so there is no navigation to undo, and these
+    three pieces of state are exactly what kept `EnvioDeFirma` on screen
+    forever once they were set.
 
     Why the next customer's form comes up EMPTY, which is the part that
     matters legally (Ley 25.326 — a name, a DNI and an address on a shared

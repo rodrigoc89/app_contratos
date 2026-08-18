@@ -12,7 +12,11 @@ import { Boton } from "../atomos/Boton";
 /** What `LienzoDeFirma` hands back after every stroke, clear or undo. */
 export interface DatosLienzoDeFirma {
   readonly captura: CapturaDeFirma;
-  /** `SuperficieDeFirma.aPngDataUri()` — unmodified, PR13/14 assemble the `firmar` body from it. */
+  /**
+   * `SuperficieDeFirma.aPngDataUri(trazos)` — unmodified, PR13/14 assemble
+   * the `firmar` body from it. Rendered from `captura`'s strokes at the size
+   * the PDF prints at, never the visible canvas exported whole.
+   */
   readonly imagenPng: string;
 }
 
@@ -82,9 +86,13 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
 
   function notificarCambio() {
     const superficie = superficieRef.current;
+    // The strokes, not the visible bitmap: the surface re-draws them at the
+    // size the PDF prints at (`logica/imagenDeFirma.ts`). `trazos()` already
+    // hands back a copy, and nothing downstream writes to it — the array on
+    // `captura` stays the forensic record it is.
     onCambia?.({
       captura: capturaRef.current,
-      imagenPng: superficie === null ? "" : superficie.aPngDataUri(),
+      imagenPng: superficie === null ? "" : superficie.aPngDataUri(capturaRef.current.trazos()),
     });
   }
 
