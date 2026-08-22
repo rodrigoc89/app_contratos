@@ -169,8 +169,12 @@ libcairo2            libglib2.0-0        libxi6
 ```
 
 Spanish-text rendering additionally needs `fonts-dejavu-core` and
-`fonts-liberation` plus a `fc-cache -f -v` refresh (DESIGN.md §10) — both are
-in `provision.sh`'s own package list, not just this fallback reference.
+`fonts-liberation` plus a `fc-cache -f -v` refresh (DESIGN.md §10) — all three,
+`fontconfig` included, are in `provision.sh`'s own package list, not just this
+fallback reference. `fontconfig` is listed explicitly even though
+`--install-deps` pulls it in transitively (via `libpango-1.0-0`): relying on
+that would mean relying on the stability of the very list D1 calls unstable,
+and `fc-cache` would then fail mid-run, after PostgreSQL is already installed.
 
 ## Seed fail-closed gate (D3)
 

@@ -160,6 +160,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install fontconfig and poppler-utils
+        # `verificarRender.integration.spec.ts` runs the three-layer render
+        # verdict (design.md D2) against the real `fc-match`, `pdffonts` and
+        # `pdftotext`. It is written to stay correct when a tool is absent —
+        # which means that without this step, whether the verdict is exercised
+        # at all here depends on whatever the runner image happens to ship,
+        # and losing a tool would drop the coverage silently rather than
+        # failing. Installed explicitly so the spec can require all three.
+        run: sudo apt-get update && sudo apt-get install -y fontconfig poppler-utils
+
       - name: Restore the Puppeteer browser cache
         uses: actions/cache@v4
         with:

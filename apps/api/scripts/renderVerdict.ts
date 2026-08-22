@@ -64,9 +64,39 @@ export const REQUESTED_FONT_FAMILIES: readonly FontFamilyRequest[] = [
   { primary: "Liberation Sans", fallback: "DejaVu Sans" },
 ];
 
+const ALL_LAYERS: readonly RenderVerdictLayer[] = [
+  "family-resolution",
+  "glyph-embedding",
+  "text-round-trip",
+];
+
+/**
+ * A verdict over a subset of the layers is not a verdict. `[].every()` is
+ * `true`, so without this an empty or partial layer set reports `pass: true`
+ * — a render nobody checked, indistinguishable from a render that is fine.
+ * Each layer proves one thing the others cannot (see this module's header),
+ * so a missing one is a hole, not a smaller verdict. `verificarRestauracion.ts`
+ * refuses the same way when it verifies zero documents.
+ *
+ * This is a programming error in the caller, not a host condition, so it
+ * throws rather than returning a failing verdict: the driver already turns a
+ * thrown error into a non-zero exit with the message attached.
+ */
 export function buildRenderVerdict(
   layers: readonly LayerVerdict[],
 ): RenderVerdict {
+  const present = layers.map((verdict) => verdict.layer);
+  const missing = ALL_LAYERS.filter((layer) => !present.includes(layer));
+  const duplicated = [
+    ...new Set(present.filter((layer, index) => present.indexOf(layer) !== index)),
+  ];
+
+  if (missing.length > 0 || duplicated.length > 0) {
+    throw new Error(
+      `a render verdict must carry each of the three layers exactly once — missing: [${missing.join(", ")}], duplicated: [${duplicated.join(", ")}]`,
+    );
+  }
+
   return {
     pass: layers.every((layer) => layer.pass),
     layers,
@@ -91,6 +121,23 @@ export interface FcMatchResult {
 export function evaluateFamilyResolution(
   results: readonly FcMatchResult[],
 ): LayerVerdict {
+  // The header above warns that a verdict probing only the serif face passes
+  // while every heading still renders as tofu. `[].every()` is `true`, so
+  // that warning would otherwise describe a hole this function leaves open:
+  // an unprobed family has to fail, exactly like a substituted one.
+  const sinProbar = REQUESTED_FONT_FAMILIES.filter(
+    (wanted) =>
+      !results.some((result) => result.family.primary === wanted.primary),
+  );
+
+  if (sinProbar.length > 0) {
+    return {
+      layer: "family-resolution",
+      pass: false,
+      reason: `${sinProbar.length} of ${REQUESTED_FONT_FAMILIES.length} requested families were never probed: ${sinProbar.map((family) => `"${family.primary}"`).join(", ")}`,
+    };
+  }
+
   const findings = results.map(classifyFamilyResolution);
 
   return {
