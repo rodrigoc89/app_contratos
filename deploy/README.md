@@ -926,6 +926,42 @@ future backup.
 the only artifacts under `deploy/` with no spec, and they are the ones that
 actually run.
 
+### Proving the dump really runs first
+
+`contract-archive-backup` spec.md asks for the ordering to be "verifiable by
+observing step completion order". `backup.spec.ts` asserts the order of the
+`--dry-run` plan strings, which describes the script rather than running it:
+swap the two calls in `main()`, leave the plan text alone, and that assertion
+still passes.
+
+`backup.integration.spec.ts` observes a real run instead. It puts thin shims
+for `pg_dump` and `cp` on `$PATH` that record a marker and then `exec` the
+real binary, so a real `pg_dump` runs against the real Postgres 17 and a real
+`cp` copies the tree, while the order becomes visible:
+
+```
+pg_dump:start  pg_dump:end  cp:start  cp:end
+```
+
+The dump must be **finished** before the copy has started — that is what makes
+an orphan PDF the only reachable inconsistency, and a row pointing at a
+missing file unreachable. Verified by swapping the two calls: the new spec
+goes red and reports the observed order, while all 63 dry-run specs stay
+green.
+
+It runs separately from the dry-run harness, the same split `apps/api` uses:
+
+```sh
+docker compose up -d postgres
+pnpm --filter @contratos/deploy test:integration
+```
+
+`pg_dump` must match the server's major version — it refuses to dump a newer
+server — so CI adds the same PGDG repository `provision.sh` adds on the VPS
+and installs `postgresql-client-17`. A missing `pg_dump` fails the spec by
+name rather than skipping it: a backup suite that quietly stops exercising
+`pg_dump` proves nothing.
+
 ## shellcheck
 
 `eslint` does not read shell, so until this landed the roughly 2000 lines of
