@@ -22,7 +22,8 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 | Order | Script | What it does | Status |
 |---|---|---|---|
 | 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | Done |
-| 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5) | **This PR** |
+| 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5); the `publish` step calls `publicar-assets.sh` (D4, row 2a) | Done |
+| 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | **This PR** |
 | 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) | PR6 |
 
 `provision.sh` assumes `/opt/contratos` is (or will become) the git checkout
@@ -283,6 +284,114 @@ the variables `$ENV_FILE` must already carry, documented in `.env.example`
 limiter attribute every técnico's request to `127.0.0.1`, collapsing them
 into one shared quota; production must set it to `true`.
 
+## Asset publish (D4)
+
+**Answer first:** `deploy/publicar-assets.sh` moves a `vite build` output
+(`apps/web/dist`, never `apps/api` — the API has no `dist/` and is not
+involved here) into `deploy/nginx.conf`'s `root` (`/var/www/contratos`) in
+exactly this order, and only this order:
+
+```
+1. copy hashed assets, icons, manifest.webmanifest   (additive — no --delete)
+2. swap index.html into place                        (atomic)
+3. swap sw.js into place                              (LAST)
+4. write .releases/<timestamp>.files
+5. prune manifests beyond the 2 newest, and any asset only they reference
+```
+
+```
+deploy/publicar-assets.sh              # apply
+deploy/publicar-assets.sh --dry-run   # preview the plan, no writes, no VPS
+```
+
+Called from `deploy.sh`'s `[plan:publish]` step (D5, above) — but it is
+independently testable: its own `--dry-run` plan is what
+`publicar-assets.spec.ts` exercises, exactly like `provision.sh` and
+`deploy.sh` (D8). `deploy.sh`'s plan only names this script by path; nothing
+about that dry-run test required this script to exist before it did.
+
+### Why `sw.js` publishes last — the mechanism, not just the rule
+
+This is the part that is easy to state as a rule and easy to get wrong for
+the wrong reason, so here is the actual failure it prevents.
+
+`vite build` (via `vite-plugin-pwa`, `apps/web/src/pwa/configuracionPwa.ts`)
+generates `sw.js` with a workbox **precache manifest**: a list of every app
+shell file the service worker should cache, each entry carrying a
+`revision` — a hash workbox uses to decide whether it already has the
+current bytes for that URL. `index.html` is one of those entries.
+
+Picture publishing `sw.js` **first**, before `index.html` is swapped:
+
+1. `sw.js` now on disk already advertises the **new** revision hash for
+   `index.html`.
+2. A browser tab installs this new worker (or a técnico opens the PWA for
+   the first time and its worker installs immediately). Workbox's install
+   step fetches `index.html` to populate the precache — but `index.html` on
+   disk is still the **old** file, because step 2 of the publish order
+   (the atomic swap) has not run yet.
+3. Workbox stores those OLD bytes, keyed under the NEW revision hash it
+   already had from `sw.js`.
+4. From workbox's point of view, that revision is now satisfied. It never
+   re-fetches `index.html` for that revision again — that is the entire
+   point of a revisioned precache entry, and it is exactly what makes this
+   failure permanent instead of self-correcting.
+
+That client is now stuck serving the OLD app shell forever, under a
+revision hash that claims to be current. There is no reload, no retry, no
+next-deploy fix: the only way out is a técnico (or a support engineer
+walking them through it) manually clearing site data on the tablet — in
+the middle of, or right before, a customer visit. This is not a race that
+resolves itself; it is a poisoned cache entry with no expiry.
+
+Publishing `index.html` before `sw.js` closes this off structurally: any
+worker that installs against the new `sw.js` can only ever find the NEW
+`index.html` already sitting at the path it fetches. There is no window in
+which the two files it correlates by hash can disagree.
+
+**Why an in-flight session survives the swap regardless.**
+`configuracionPwa.ts` sets `skipWaiting: false`, `clientsClaim: false`,
+`registerType: "prompt"` (see that file's own header comment, D9) — a tab
+with an already-activated worker keeps running its current precache and
+does not adopt the new one until the técnico explicitly accepts the update
+prompt. The additive asset copy (step 1) plus the 2-release retention
+policy (below) covers what that activated-worker guarantee does not: a
+first visit whose worker has not activated yet, and a hard/shift-reload
+that bypasses the service worker entirely — both would otherwise 404 on a
+hashed asset the currently-loaded shell still references, if that asset
+had already been deleted by a newer deploy.
+
+### 2-release retention policy
+
+Every real (non-`--dry-run`) run writes `.releases/<timestamp>.files` —
+every file path that release published, relative to `apps/web/dist`. After
+writing its own manifest, the script keeps only the **2 newest** manifests
+(this release's own, plus the immediately previous one) and, for every
+older manifest, deletes both the manifest itself and any file it lists
+that no retained manifest also lists — an asset only an already-superseded
+release ever referenced.
+
+Retaining 2, not 1, is deliberate: it gives the previous release's assets
+one full deploy cycle of grace after the newest one lands, covering a tab
+whose service worker has not yet adopted the new precache (per D9's
+`skipWaiting: false` above) and still has in-flight requests for the
+previous shell's hashed bundle names. Pruning runs on **every** real
+publish, so a release stays retained only through the deploy immediately
+after it supersedes — it is not a fixed time window, it is a fixed
+release-count window.
+
+**Not solved by this script, named explicitly:** the API restart inside
+`deploy.sh`'s own `stop`→…→`start` sequence still drops any
+`POST /contratos/:id/firmar` request in flight at the moment
+`systemctl stop` runs. A signature submission mid-flight when a deploy
+starts is lost from the técnico's point of view — a real drain would need
+a second `contratos-api` instance to shift traffic to while the first
+restarts, and a 4 GB VPS (`state.yaml`) cannot host a second instance
+alongside Postgres, Chromium's render queue, and the OS. No mitigation is
+implemented here; it stays operator scheduling — deploy outside técnico
+visit hours. Recorded here, not invented as a fix task 5.10 does not ask
+for.
+
 ## Still-open items, and exactly where they resolve
 
 Two questions design.md left open are **not** blocked on any task in this
@@ -311,6 +420,29 @@ Puppeteer browser download as the real `contratos` user, `prisma migrate
 deploy` against production data, or a real `GET /salud` round trip through
 nginx. All of that remains unverifiable until the host exists.
 
+`publicar-assets.sh --dry-run` proves its plan (the copy → swap-index →
+swap-sw order) and the 2-release retention arithmetic for real, against
+scratch `BUILD_DIR`/`WEB_ROOT` directories — no VPS needed
+(`publicar-assets.spec.ts`, tasks 5.6-5.7). Three things it cannot prove
+until the host exists:
+
+- **A real vN→vN+1 deploy.** The spec fabricates a `vite build` output by
+  hand; it never runs a real `vite build` against a real previous release
+  already sitting at `/var/www/contratos`, nor a real `deploy.sh` invoking
+  it as its `[plan:publish]` step.
+- **The post-restart `/salud` failure path colliding with a publish.**
+  Whether an asset swap that completes right as `contratos-api` fails to
+  restart leaves the previous release's assets intact for the rollback
+  recipe (`deploy.sh`'s `print_rollback_recipe`) is untested — the fixture
+  tests never exercise `deploy.sh` and `publicar-assets.sh` together.
+- **Asset-swap ordering under live traffic.** The poisoned-precache
+  mechanism above is argued from how workbox's revisioned precache and
+  `configuracionPwa.ts`'s `skipWaiting: false` behave, and from the publish
+  order the script enforces — it is not observed against a real browser
+  tab holding an open comodato session across a real deploy. That
+  observation needs the VPS, a real técnico device, and a live signing
+  session in progress.
+
 ## Checklist (post-VPS, not yet actionable)
 
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
@@ -321,10 +453,14 @@ nginx. All of that remains unverifiable until the host exists.
 - [ ] `TAG=<first tag> FIRST_DEPLOY=true deploy/deploy.sh` completes the full stop→…→start sequence and reports `GET /salud` healthy
 - [ ] A subsequent `TAG=<next tag> deploy/deploy.sh` (no `FIRST_DEPLOY`) redeploys successfully with both seed passwords already rotated out of `/etc/contratos/api.env`
 - [ ] A deliberately broken `/etc/contratos/api.env` (missing `DATABASE_URL`) is refused before the service stops, and the previous version is still serving traffic afterward
+- [ ] During a real `TAG=<next tag> deploy/deploy.sh`, a tablet with the PWA open on the previous release keeps loading every hashed asset it references throughout the publish step (no mid-visit 404)
+- [ ] After that same deploy, a tab that has NOT yet accepted the update prompt still functions on the previous shell, and a tab that reloads receives the new shell cleanly — never a mismatched `index.html`/`sw.js` pair
+- [ ] `ls /var/www/contratos/.releases` shows at most 2 manifests after two consecutive real deploys, and the previous release's hashed assets are gone only after the deploy that supersedes them a second time
 
 ## Next step
 
-This PR (PR4) added `deploy.sh` (row 2 of the install-order table, D5) — the
-script that stops the service, runs the seed fail-closed gate from PR3 via
-`prisma:seed`, and starts it back up. PR5 adds `publicar-assets.sh` (D4), the
-script `deploy.sh`'s `[plan:publish]` step calls by path.
+This PR (PR5) added `publicar-assets.sh` (row 2a of the install-order table,
+D4) — the script `deploy.sh`'s `[plan:publish]` step calls by path: additive
+asset copy, then the atomic `index.html`/`sw.js` swap, then the 2-release
+retention prune. PR6 adds `tls-bootstrap.sh` (D6), the HTTP-only bootstrap
+conf that lets nginx start before a certificate exists.
