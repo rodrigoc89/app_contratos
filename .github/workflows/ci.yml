@@ -117,6 +117,20 @@ jobs:
         # was quietly downgraded rather than fixed.
         run: pnpm lint
 
+      - name: Install shellcheck
+        # Installed explicitly rather than relying on the runner image: the
+        # image ships it today, but a check whose presence is incidental is
+        # a check that can disappear without anything going red.
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Shellcheck the deploy scripts
+        # Runs the same `lint:shell` script a developer runs, so there is one
+        # definition of what "shellcheck passes" means. eslint does not read
+        # shell, so before this step roughly 2000 lines of bash across seven
+        # scripts — the ones that stop the service, publish the site and
+        # prune the backups — had no linter over them at all.
+        run: pnpm --filter @contratos/deploy lint:shell
+
   integration:
     name: Integration tests (Postgres and Chromium)
     runs-on: ubuntu-24.04

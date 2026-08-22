@@ -183,6 +183,13 @@ check_encryption_recipient_set() {
         exit 1
       fi
       ;;
+    *)
+      # This is a guard: with no default branch, an unrecognised tool makes
+      # it validate nothing and let the run continue — a check that passes
+      # by not running.
+      echo "backup.sh: unknown encryption tool '$ENCRYPTION_TOOL' — refusing rather than skipping the recipient check" >&2
+      exit 1
+      ;;
   esac
 }
 

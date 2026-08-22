@@ -340,7 +340,10 @@ main() {
 
   local previous_ref
   previous_ref="$(git -C "$APP_DIR" rev-parse HEAD)"
-  local dump_file="$PRE_MIGRATION_DUMP_DIR/pre-migration-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  # Assigned separately from `local`: `local x="$(cmd)"` takes `local`'s own
+  # exit status, so a failing command substitution goes unnoticed (SC2155).
+  local dump_file
+  dump_file="$PRE_MIGRATION_DUMP_DIR/pre-migration-$(date -u +%Y%m%dT%H%M%SZ).dump"
 
   do_dump "$dump_file"
   do_checkout

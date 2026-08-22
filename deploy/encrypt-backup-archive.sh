@@ -93,6 +93,14 @@ case "$ENCRYPTION_TOOL" in
     fi
     gpg --batch --yes --trust-model always --recipient "$GPG_RECIPIENT" --output "$OUTPUT_FILE" --encrypt "$INPUT_FILE"
     ;;
+  *)
+    # Unreachable while resolve_encryption_tool only ever emits age or gpg —
+    # and that is exactly why it is worth stating. Without this branch a
+    # third value encrypts nothing, falls through to the success log below,
+    # and exits 0 having produced no output file at all.
+    echo "encrypt-backup-archive.sh: unknown encryption tool '$ENCRYPTION_TOOL' — refusing to report success without encrypting anything" >&2
+    exit 1
+    ;;
 esac
 
 log "encrypt-backup-archive.sh: encrypted '$INPUT_FILE' -> '$OUTPUT_FILE' using $ENCRYPTION_TOOL"
