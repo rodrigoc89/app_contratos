@@ -926,19 +926,51 @@ describe("contract endpoints (integration)", () => {
  * actor arriving from the token rather than the body.
  */
 describe("post-signature transitions", () => {
-  async function contratoVigente(): Promise<string> {
+  /**
+   * A contract is signed at whatever the wall clock says, and the domain
+   * refuses a baja or an anulación dated before that signature. So the date
+   * the signature landed on comes back alongside the id, and every date sent
+   * below is measured from it. A literal date here is a fuse: it works until
+   * the clock walks past it, and then the suite fails on a morning when
+   * nobody touched the code.
+   */
+  async function contratoVigente(): Promise<{ id: string; firma: string }> {
     const id = await crearBorrador();
-    await firmar(id).then((r) => expect(r.status).toBe(200));
-    return id;
+    const firmado = await firmar(id);
+    expect(firmado.status).toBe(200);
+
+    return { id, firma: firmado.body.fechaFirma };
   }
 
+  /**
+   * An ISO date `dias` days from `fecha`, negative to go backwards. The order
+   * between two transitions is written through it — `fechaDesplazada(baja,
+   * -1)` rather than a second literal that merely happens to fall earlier —
+   * so the relationship survives an edit to either one.
+   */
+  function fechaDesplazada(fecha: string, dias: number): string {
+    const desplazada = new Date(`${fecha}T00:00:00Z`);
+    desplazada.setUTCDate(desplazada.getUTCDate() + dias);
+
+    return desplazada.toISOString().slice(0, 10);
+  }
+
+  /**
+   * A month after the signature: a plausible date to end an agreement on, and
+   * what every case below uses when the date itself is not what is under test.
+   */
+  const DIAS_HASTA_LA_BAJA = 30;
+
   it("lets the office terminate a contract, recording reason, date and actor", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
 
     const respuesta = await api()
       .post(`/contratos/${id}/baja`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "Baja solicitada por el abonado", fecha: "2027-03-10" })
+      .send({
+        motivo: "Baja solicitada por el abonado",
+        fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA),
+      })
       .expect(200);
 
     expect(respuesta.body.estado).toBe("dado_de_baja");
@@ -946,12 +978,15 @@ describe("post-signature transitions", () => {
   });
 
   it("lets the office annul a contract, which leaves no equipment pending", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
 
     const respuesta = await api()
       .post(`/contratos/${id}/anulacion`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "DNI mal cargado", fecha: "2026-08-20" })
+      .send({
+        motivo: "DNI mal cargado",
+        fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA),
+      })
       .expect(200);
 
     expect(respuesta.body.estado).toBe("anulado");
@@ -959,17 +994,21 @@ describe("post-signature transitions", () => {
   });
 
   it("lets the office close the outstanding-equipment report", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
+    const baja = fechaDesplazada(firma, DIAS_HASTA_LA_BAJA);
+
     await api()
       .post(`/contratos/${id}/baja`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .send({ motivo: "Deuda", fecha: baja })
       .expect(200);
 
     const respuesta = await api()
       .post(`/contratos/${id}/restitucion`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ fecha: "2027-04-01" })
+      // Three weeks later, the way equipment actually comes back: some time
+      // after the agreement ended, never on the same afternoon.
+      .send({ fecha: fechaDesplazada(baja, 21) })
       .expect(200);
 
     expect(respuesta.body.equiposPendientesDeRestitucion).toBe(false);
@@ -983,12 +1022,17 @@ describe("post-signature transitions", () => {
   it.each(["baja", "anulacion", "restitucion"] as const)(
     "refuses %s to an administrator, who reads contracts but never changes them",
     async (transicion) => {
-      const id = await contratoVigente();
+      const { id, firma } = await contratoVigente();
 
       await api()
         .post(`/contratos/${id}/${transicion}`)
         .set("Authorization", `Bearer ${sesion.admin}`)
-        .send({ motivo: "Da igual", fecha: "2027-03-10" })
+        // A body the role gate never gets far enough to read, sent valid all
+        // the same: a 403 earned by a malformed request proves nothing.
+        .send({
+          motivo: "Da igual",
+          fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA),
+        })
         .expect(403);
     },
   );
@@ -996,12 +1040,15 @@ describe("post-signature transitions", () => {
   it.each(["baja", "anulacion", "restitucion"] as const)(
     "refuses %s to a técnico, whose job is creating and signing",
     async (transicion) => {
-      const id = await contratoVigente();
+      const { id, firma } = await contratoVigente();
 
       await api()
         .post(`/contratos/${id}/${transicion}`)
         .set("Authorization", `Bearer ${sesion.tecnico}`)
-        .send({ motivo: "Da igual", fecha: "2027-03-10" })
+        .send({
+          motivo: "Da igual",
+          fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA),
+        })
         .expect(403);
     },
   );
@@ -1012,12 +1059,18 @@ describe("post-signature transitions", () => {
    * would let a caller believe it had been recorded.
    */
   it("refuses a request that tries to name its own author", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
 
     const respuesta = await api()
       .post(`/contratos/${id}/baja`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "Deuda", fecha: "2027-03-10", usuarioId: "otro-usuario" })
+      // `usuarioId` is the only thing wrong here — everything else, the date
+      // included, would have been accepted.
+      .send({
+        motivo: "Deuda",
+        fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA),
+        usuarioId: "otro-usuario",
+      })
       .expect(400);
 
     expect(respuesta.body.error.codigo).toBe("validacion");
@@ -1034,12 +1087,12 @@ describe("post-signature transitions", () => {
    * anything the caller sent.
    */
   it("stamps the event with the id from the caller's token", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
 
     await api()
       .post(`/contratos/${id}/baja`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .send({ motivo: "Deuda", fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA) })
       .expect(200);
 
     const eventos = await prisma.eventoContrato.findMany({
@@ -1064,12 +1117,12 @@ describe("post-signature transitions", () => {
    * this only passes if the id actually round-tripped through `usuarios`.
    */
   it("answers the transition with the actor named, never with the raw id", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
 
     const respuesta = await api()
       .post(`/contratos/${id}/baja`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .send({ motivo: "Deuda", fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA) })
       .expect(200);
 
     const eventos = (respuesta.body as DatosContratoDetalle).eventos;
@@ -1089,11 +1142,11 @@ describe("post-signature transitions", () => {
    * the history still name `oficina1`.
    */
   it("names the actor from the record, not from whoever is reading it", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
     await api()
       .post(`/contratos/${id}/baja`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .send({ motivo: "Deuda", fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA) })
       .expect(200);
 
     const respuesta = await api()
@@ -1107,18 +1160,26 @@ describe("post-signature transitions", () => {
   });
 
   it("refuses a termination with no reason, naming the field", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
 
     const respuesta = await api()
       .post(`/contratos/${id}/baja`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "   ", fecha: "2027-03-10" })
+      // `motivo` is the only thing wrong here, so the field the answer names
+      // can only be that one.
+      .send({ motivo: "   ", fecha: fechaDesplazada(firma, DIAS_HASTA_LA_BAJA) })
       .expect(400);
 
     expect(Object.keys(respuesta.body.error.campos)).toContain("motivo");
   });
 
-  /** A draft was never in force, so there is nothing to end: 409, not 400. */
+  /**
+   * A draft was never in force, so there is nothing to end: 409, not 400.
+   *
+   * The only literal date left in this file, and the only one that cannot
+   * drift: a draft has no `fechaFirma` for the date to be measured against,
+   * so `darDeBaja` refuses it on the state and never reads the field at all.
+   */
   it("answers 409 when the contract is not in a state that allows the transition", async () => {
     const id = await crearBorrador();
 
@@ -1137,17 +1198,22 @@ describe("post-signature transitions", () => {
    * different date works — so 400, never 409.
    */
   it("answers 400, not 409, for a restitution dated before the termination", async () => {
-    const id = await contratoVigente();
+    const { id, firma } = await contratoVigente();
+    const baja = fechaDesplazada(firma, DIAS_HASTA_LA_BAJA);
+
     await api()
       .post(`/contratos/${id}/baja`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ motivo: "Deuda", fecha: "2027-03-10" })
+      .send({ motivo: "Deuda", fecha: baja })
       .expect(200);
 
     await api()
       .post(`/contratos/${id}/restitucion`)
       .set("Authorization", `Bearer ${sesion.oficina}`)
-      .send({ fecha: "2027-03-09" })
+      // The day before the baja, and still well after the signature: the one
+      // thing wrong with this request is the order of the two dates, which is
+      // exactly the distinction under test.
+      .send({ fecha: fechaDesplazada(baja, -1) })
       .expect(400);
   });
 });
