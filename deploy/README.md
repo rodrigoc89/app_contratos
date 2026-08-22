@@ -926,6 +926,38 @@ future backup.
 the only artifacts under `deploy/` with no spec, and they are the ones that
 actually run.
 
+## shellcheck
+
+`eslint` does not read shell, so until this landed the roughly 2000 lines of
+bash under `deploy/` — the scripts that stop the service, publish the site and
+prune the backups — had no linter over them at all. Every `.sh` here is now
+checked in CI:
+
+```sh
+pnpm --filter @contratos/deploy lint:shell
+```
+
+CI runs that exact script, so there is one definition of what "shellcheck
+passes" means, and it installs shellcheck explicitly rather than relying on the
+runner image shipping it — a check whose presence is incidental is a check that
+can disappear without anything going red. That step is a no-op today — the
+`ubuntu-24.04` image already ships shellcheck 0.9.0 — which is the point: it
+stops being one the day the image stops shipping it.
+
+**CI's version is the authority.** It takes whatever the distro packages
+(0.9.0 at the time of writing); a newer shellcheck run locally may report
+findings CI does not, or the reverse. Nothing here is pinned, so treat a
+local-only finding as worth fixing rather than as a CI defect.
+
+Run at default settings. `--enable=all` adds two style families this codebase
+deliberately does not follow (`SC2250`, braces around every variable reference,
+521 hits; `SC2292`, `[[ ]]` over the POSIX `[ ]`, 85 hits) and they are not
+worth the noise. What the first run actually found was small and worth fixing:
+one `local x="$(cmd)"` masking a command substitution's exit status, and three
+tool-dispatch `case` statements with no `*)` branch — including one inside a
+*guard*, where an unrecognised value made it validate nothing and let the run
+continue.
+
 ## Still-open items, and exactly where it resolves
 
 One question design.md left open is **not** blocked on any task in this

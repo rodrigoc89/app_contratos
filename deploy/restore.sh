@@ -202,6 +202,10 @@ do_decrypt() {
     gpg)
       gpg --batch --yes --output "$decrypted_file" --decrypt "$encrypted_file"
       ;;
+    *)
+      echo "restore.sh: unknown decryption tool '$DECRYPTION_TOOL' — refusing rather than continuing with nothing decrypted" >&2
+      exit 1
+      ;;
   esac
 }
 

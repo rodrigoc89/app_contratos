@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Idempotent bash provisioning and deploy scripts for the HostGator VPS. Every guard, ordering rule, and prune policy is asserted by a Vitest execFile spec against --dry-run output (design.md D8) — no VPS needed to prove the script logic itself.",
+  "description": "Idempotent bash provisioning and deploy scripts for the HostGator VPS. Every guard, ordering rule, and prune policy is asserted by a Vitest execFile spec against --dry-run output (design.md D8) \u2014 no VPS needed to prove the script logic itself.",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint:shell": "shellcheck *.sh"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
