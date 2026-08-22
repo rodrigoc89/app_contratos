@@ -669,6 +669,23 @@ needed: a mocked `rclone` binary treats a local scratch directory as the
 "remote," so the listing, sorting, and deletion logic itself runs
 unmocked — only the network transport is a stub.
 
+The prune only ever considers — and only ever deletes — files whose names
+end in `.tar.enc`, this script's own artifacts. `rclone lsjson` lists
+everything at the remote path, so without that filter a file an operator
+keeps in the same bucket would both count toward the 30 and be deleted as an
+"old backup".
+
+`RETENTION_REMOTE_COUNT` must be at least 1 and the run refuses anything
+lower. At 0 nothing is retained, so every offsite artifact — including the
+one that run just pushed — lands in the pruned set, and the remote copy is
+the only one that survives losing this host. `RETENTION_LOCAL_COUNT=0` is
+allowed, because "offsite only, keep nothing on the box" is a real policy
+and the artifact it deletes is already at the remote by then.
+
+A remote that cannot be listed fails the run rather than reading as a remote
+holding no backups — an unreachable offsite store must never look like
+"nothing to prune" and report success.
+
 `deploy/backup.sh --prune-only` re-runs retention pruning alone, without
 taking a new backup — useful after a retention-count change, or to clean up
 a remote left over-quota by a partially failed push. It needs only
