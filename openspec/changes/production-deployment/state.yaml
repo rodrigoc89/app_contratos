@@ -11,9 +11,12 @@ createdAt: 2026-08-22
 updatedAt: 2026-08-22
 lastPhaseCompleted: tasks
 # apply is IN PROGRESS: PR1 batch (Phase 1 + Phase 1B, tasks 1.1-1.6 and
-# 1B.1-1B.2) is done on branch feat/pd-01-env-provisioning. Task 1B.3 (open
-# PR #1) is deliberately NOT done — publishing was not authorized for this
-# run. See sdd/production-deployment/apply-progress (Engram) and
+# 1B.1-1B.2) is done on branch feat/pd-01-env-provisioning; PR #1 opened as
+# https://github.com/rodrigoc89/app_contratos/pull/78 (1B.3 now done). PR2
+# batch (Phase 2 + Phase 2B, tasks 2.1-2.5 and 2B.1-2B.2) is done on branch
+# feat/pd-02-render-verdict (base: feat/pd-01-env-provisioning / PR #78).
+# Task 2B.3 (open PR #2) is deliberately NOT done — the orchestrator opens
+# it. See sdd/production-deployment/apply-progress (Engram) and
 # apply-progress.md for the full record, including one factual correction to
 # tasks.md 1.1's premise (`.env.example` already existed; RED failed on the
 # real completeness gap instead).
@@ -75,16 +78,16 @@ artifacts:
   specs: done
   design: done
   tasks: done
-  applyProgress: in_progress # first batch written: sdd/production-deployment/apply-progress + apply-progress.md
+  applyProgress: in_progress # PR1 + PR2 batches written: sdd/production-deployment/apply-progress + apply-progress.md
   verifyReport: missing
 
 taskProgress:
   total: 73 # 58 original tasks unchanged in content/RED-GREEN pairing/order + 15 net new close-out tasks (8 PRs need 8 close-outs)
-  completed: 8 # 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1B.1, 1B.2 — PR1's own scope minus 1B.3 (PR open, not authorized this run)
-  pending: 65
+  completed: 16 # 1.1-1.6, 1B.1-1B.3 (PR1, incl. PR #78 opened) + 2.1-2.5, 2B.1-2B.2 (PR2, 2B.3 excluded — orchestrator opens it)
+  pending: 57
   allComplete: false
 
-nextRecommended: apply # continue with PR1's 1B.3 (PR open) only once publishing is authorized; otherwise next sdd-apply batch is PR2 (Phase 2 + 2B)
+nextRecommended: apply # PR2's own 2B.3 (open PR #2) is the orchestrator's job; next sdd-apply batch is PR3 (Phase 3: seed fail-closed gate, D3) on a new branch off feat/pd-02-render-verdict
 blockedReasons: []
 
 # External sequencing dependencies recorded by the proposal. These are NOT

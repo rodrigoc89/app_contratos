@@ -162,20 +162,20 @@ per the chained-pr skill's per-PR requirement.
 
 - [x] 1B.1 `deploy/README.md`: install order (`provision.sh` → `deploy.sh` → `tls-bootstrap.sh`), the apt fallback list (audit/offline reference only, per D1's rejected-primary-mechanism decision — verified against Puppeteer's current troubleshooting docs via context7: **36 packages**, not the planning docs' approximate "37"), and cross-reference where the two still-open items resolve (`age` availability in PR7/8.3; the restore drill in PR8/9.8).
 - [x] 1B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the PR1 diff; record results. All three green — see apply-progress for full output.
-- [ ] 1B.3 Open PR #1 targeting the tracker/feature branch (feature-branch-chain, draft/no-merge tracker). Evidence: focused test command output, `provision.sh --dry-run` result, rollback boundary from the Work Units table. **Excluded from this apply run by explicit instruction — not authorized to publish.**
+- [x] 1B.3 Open PR #1 targeting the tracker/feature branch (feature-branch-chain, draft/no-merge tracker). Evidence: focused test command output, `provision.sh --dry-run` result, rollback boundary from the Work Units table. Opened as PR #78, open and green.
 
 ## Phase 2 — PR2: render verdict (D2)
 
-- [ ] 2.1 RED: `apps/api/scripts/renderVerdict.spec.ts` — fixtures for `fc-match`/`pdffonts`/`pdftotext` stdout (present/fallback/missing per layer) assert the parser returns pass/fail + reason per layer. Must fail — module does not exist.
-- [ ] 2.2 GREEN: create `apps/api/scripts/renderVerdict.ts` (pure parser, three layers: family resolution, glyph embedding, text round-trip) and `apps/api/scripts/verificarRender.ts` (jiti driver: renders a probe doc via `GeneradorDeDocumentosPuppeteer`, runs the three tools, feeds stdout to the parser).
-- [ ] 2.3 Read the contract template's CSS to record the exact font family requested (open question) and hardcode it as the `fc-match` argument in `verificarRender.ts`, with a comment naming the source line.
-- [ ] 2.4 Add `verify:render` script to `apps/api/package.json`.
-- [ ] 2.5 Exercise the real render + verdict in the existing `integration` job (`pnpm --filter @contratos/api test:integration`, Chromium present in CI). Real host fonts remain unverifiable pre-VPS — note this explicitly, do not claim otherwise.
+- [x] 2.1 RED: `apps/api/scripts/renderVerdict.spec.ts` — fixtures for `fc-match`/`pdffonts`/`pdftotext` stdout (present/fallback/missing per layer) assert the parser returns pass/fail + reason per layer. Must fail — module does not exist. Confirmed: `Cannot find module './renderVerdict' imported from '.../apps/api/scripts/renderVerdict.spec.ts'`.
+- [x] 2.2 GREEN: create `apps/api/scripts/renderVerdict.ts` (pure parser, three layers: family resolution, glyph embedding, text round-trip) and `apps/api/scripts/verificarRender.ts` (jiti driver: renders a probe doc via `GeneradorDeDocumentosPuppeteer`, runs the three tools, feeds stdout to the parser).
+- [x] 2.3 Read the contract template's CSS to record the exact font family requested (open question) and hardcode it as the `fc-match` argument in `verificarRender.ts`, with a comment naming the source line. Both families (`Liberation Serif` line 25, `Liberation Sans` line 34) recorded in `REQUESTED_FONT_FAMILIES` (renderVerdict.ts), source-commented, imported by the driver.
+- [x] 2.4 Add `verify:render` script to `apps/api/package.json`.
+- [x] 2.5 Exercise the real render + verdict in the existing `integration` job (`pnpm --filter @contratos/api test:integration`, Chromium present in CI). Real host fonts remain unverifiable pre-VPS — note this explicitly, do not claim otherwise.
 
 ## Phase 2B — PR2 close out
 
-- [ ] 2B.1 `deploy/README.md`: render verdict section — the three-layer check (family resolution, glyph embedding, text round-trip), the hardcoded font family from 2.3 with its source comment, and the explicit caveat that real host fonts remain unverifiable pre-VPS (2.5).
-- [ ] 2B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results.
+- [x] 2B.1 `deploy/README.md`: render verdict section — the three-layer check (family resolution, glyph embedding, text round-trip), the hardcoded font family from 2.3 with its source comment, and the explicit caveat that real host fonts remain unverifiable pre-VPS (2.5).
+- [x] 2B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results. All three green — see apply-progress for full output.
 - [ ] 2B.3 Open PR #2 targeting PR #1's branch (feature-branch-chain). Evidence: focused test command output, `verify:render` integration result (real render probe, Chromium present in CI), rollback boundary from the Work Units table.
 
 ## Phase 4 — PR3: seed fail-closed gate (D3)
