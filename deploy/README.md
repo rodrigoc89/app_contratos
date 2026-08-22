@@ -11,7 +11,7 @@ chain.
 ## Quick path
 
 1. Provision the host once, as root: `sudo deploy/provision.sh`
-2. Deploy the application: `deploy/deploy.sh` *(lands in PR4 — not yet in this repository)*
+2. Deploy the application: `TAG=v1.2.3 deploy/deploy.sh`
 3. Bootstrap TLS: `deploy/tls-bootstrap.sh` *(lands in PR6 — not yet in this repository)*
 
 Every script supports `--dry-run` and needs no VPS to preview: its Vitest
@@ -21,8 +21,8 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 
 | Order | Script | What it does | Status |
 |---|---|---|---|
-| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | **This PR** |
-| 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5) | PR4 |
+| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | Done |
+| 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5) | **This PR** |
 | 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) | PR6 |
 
 `provision.sh` assumes `/opt/contratos` is (or will become) the git checkout
@@ -190,6 +190,34 @@ account already exists. That distinction is the entire point:
 | `already-present` | The account already exists (from an earlier seed run) | **Never throws** — nothing needed to happen, so nothing did |
 | `created` | The password was set and the account did not exist yet | Seeds normally |
 
+### How `NODE_ENV=production` actually reaches the seed
+
+Every row of that table depends on `NODE_ENV` being `production` in the
+seed's own process, and nothing sets it for you. `prisma:seed` runs outside
+systemd, so it inherits nothing from the unit's `EnvironmentFile=`;
+`deploy.sh`'s `load_env_file_into_environment` exports an explicit whitelist
+and `run_as_service_user` passes an explicit `--preserve-env` list, neither
+of which carries it; and `dotenv/config` in `prisma/seed.ts` loads
+`apps/api/.env`, which does not exist on this server — the configuration
+lives in `/etc/contratos/api.env`. Writing `NODE_ENV=production` into that
+file changes nothing for the seed.
+
+`deploy.sh` therefore states it in the command itself (`seed_command`), which
+is why `--dry-run` prints the assignment as part of the plan. It is not read
+from `$ENV_FILE` on purpose: a value taken from there fails open again the
+first time an operator leaves the line out, and the guards this protects are
+exactly the ones that must never fail open.
+
+**Running the seed by hand.** The recovery path below does not go through
+`deploy.sh`, so nothing sets it for you there either — set it explicitly:
+
+```sh
+cd /opt/contratos/apps/api && NODE_ENV=production pnpm prisma:seed
+```
+
+Without it, the seed reports success while every gate in this section is
+inert, including the refusal to seed with the placeholder signature.
+
 **Why this lives in the application, not in `deploy.sh` (design.md D3).** A
 guard grepping the env file inside `deploy.sh` protects only deploys that go
 through that script. The recovery path an operator actually reaches for
@@ -216,6 +244,77 @@ feature — it is an outage generator wearing a security justification.
 both passwords out, then reseeds in production and asserts no throw — the
 scenario above, exercised directly.
 
+## Deploy sequence (D5)
+
+**Answer first:** `deploy/deploy.sh` gets a git tag onto the server and into
+service in this order, and only this order:
+
+```
+stop → dump → checkout → install → migrate → seed → publish → start
+```
+
+```
+sudo TAG=v1.2.3 deploy/deploy.sh
+deploy/deploy.sh --dry-run   # preview the plan and run every guard, no root
+```
+
+`deploy.sh` is the single most dangerous script in this repository: its real
+job is to stop the running production service. Every check that can refuse
+runs **before** that happens — an outage for nothing is worse than no deploy
+at all. Three guards run first, unconditionally, in both `--dry-run` and a
+real deploy:
+
+| Order | Guard | Refuses when | Why it must come first |
+|---|---|---|---|
+| 1 | Git repository selection (threat matrix, **Applicable**) | `$APP_DIR` is missing, is not a git checkout, or its `git rev-parse --show-toplevel` disagrees with `$APP_DIR` itself, or it has no `$GIT_REMOTE_NAME` remote configured | `deploy.sh` always runs `git -C "$APP_DIR"`, never bare `git` reading cwd — this guard additionally refuses to fall back to whatever repository the operator happens to be standing in when `$APP_DIR` itself is not a valid target |
+| 2 | Commit state (threat matrix, **Applicable**) | `git -C "$APP_DIR" status --porcelain` is non-empty | A hot-fixed server worktree must never be silently discarded. The guard only *reads* `git status` — `deploy.sh` never calls `git reset --hard` or any `--force` flag anywhere, so there is nothing in the script that could discard the uncommitted change even if this check were bypassed |
+| 3 | Required configuration (deployment-configuration spec.md) | `$ENV_FILE` is missing, or `DATABASE_URL`/`JWT_SECRET` is absent or empty in it | The app itself needs both to boot at all; failing here, before the stop, means the previous version keeps running instead of going down for a config typo |
+
+Only after all three pass does `deploy.sh` stop the service and run the rest
+of the sequence: dump the database (`pg_dump -Fc`, local, pre-migration —
+distinct from `backup.sh`'s encrypted offsite copies in PR7/D7), check out
+the tag, install dependencies and build the web app as the unprivileged
+`contratos` user (installing the Chromium browser itself here, per D1 — the
+same reason `.github/workflows/ci.yml` runs that command explicitly), run
+pending Prisma migrations (deploy-time only — the systemd unit has no
+`ExecStartPre=` on purpose, so a crash-loop restart never re-runs a
+migration), seed the database (fails closed per D3, above), publish the web
+assets (`publicar-assets.sh`, D4 — lands in PR5; `deploy.sh`'s own plan only
+names this step, it does not require the script to exist yet), then start
+the service and poll `GET /salud` with retries. A failed health check prints
+a rollback recipe to stderr and exits non-zero — `deploy.sh` never attempts
+an automatic rollback on its own.
+
+### The env-var preflight, and the seed-password design decision
+
+`deploy.sh` reads `$ENV_FILE` (default `/etc/contratos/api.env`, the same
+file `contratos-api.service`'s `EnvironmentFile=` points at) without
+sourcing it, the same "supplying the environment is the operator's job"
+posture `configuracion.ts` documents for the application itself.
+`DATABASE_URL` and `JWT_SECRET` are always required. **`SEED_ADMIN_PASSWORD`
+and `SEED_TECNICO_PASSWORD` are required only when `FIRST_DEPLOY=true` is
+set explicitly.**
+
+This is a deliberate design decision, not an oversight: the
+deployment-configuration spec asks for seed credentials to be required "when
+seeding", and `deploy.sh` always runs the seed step, so an unconditional
+requirement would directly break the seed fail-closed gate's own regression
+guard (above) — the operator rotating both seed passwords out of
+`$ENV_FILE` once the accounts already exist, so that a routine redeploy
+still succeeds. Set `FIRST_DEPLOY=true` only for the very first deploy, when
+the admin/técnico accounts do not exist yet; leave it unset on every later
+one. `seedDatabase.ts`'s own D3 gate remains the actual guarantee either
+way — this preflight is only a convenience that turns a foreseeable failure
+into a pre-stop refusal instead of a mid-deploy one.
+
+### `CONFIAR_EN_PROXY` in production
+
+`deploy.sh` does not set or check `CONFIAR_EN_PROXY` itself — it is one of
+the variables `$ENV_FILE` must already carry, documented in `.env.example`
+(task 1.2). Leaving it `false` behind nginx's reverse proxy makes the rate
+limiter attribute every técnico's request to `127.0.0.1`, collapsing them
+into one shared quota; production must set it to `true`.
+
 ## Still-open items, and exactly where they resolve
 
 Two questions design.md left open are **not** blocked on any task in this
@@ -235,6 +334,15 @@ the *syntax*. Neither proves the host converges correctly. That gap closes
 once the VPS exists (`state.yaml`'s `vps-purchase` external dependency);
 until then it is a documented limitation, not a silent one.
 
+`deploy.sh --dry-run` proves its plan and its three guards for real, against
+a fabricated temp git repo — no VPS needed for any of that (`deploy.spec.ts`,
+tasks 5.1-5.4). It proves **nothing** about the steps a real deploy actually
+performs: `pg_dump` against a live PostgreSQL instance, `systemctl
+stop`/`start` against a real `contratos-api` unit, `pnpm install` and the
+Puppeteer browser download as the real `contratos` user, `prisma migrate
+deploy` against production data, or a real `GET /salud` round trip through
+nginx. All of that remains unverifiable until the host exists.
+
 ## Checklist (post-VPS, not yet actionable)
 
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
@@ -242,10 +350,13 @@ until then it is a documented limitation, not a silent one.
 - [ ] Headless Chromium launches with `--no-sandbox --disable-setuid-sandbox` and no missing-library error
 - [ ] `pnpm --filter @contratos/api verify:render` prints `Veredicto final: APROBADO` (all three layers, see "Render verdict" above)
 - [ ] `free -h` shows the 2 GB swapfile active, and it survives a reboot
+- [ ] `TAG=<first tag> FIRST_DEPLOY=true deploy/deploy.sh` completes the full stop→…→start sequence and reports `GET /salud` healthy
+- [ ] A subsequent `TAG=<next tag> deploy/deploy.sh` (no `FIRST_DEPLOY`) redeploys successfully with both seed passwords already rotated out of `/etc/contratos/api.env`
+- [ ] A deliberately broken `/etc/contratos/api.env` (missing `DATABASE_URL`) is refused before the service stops, and the previous version is still serving traffic afterward
 
 ## Next step
 
-This PR (PR3) added the seed fail-closed gate (D3, above) — live application
-code, distinct in risk from the deploy/publish scripts that follow. PR4 adds
-`deploy.sh` (row 2 of the install-order table), the script that calls this
-gate via `prisma:seed`.
+This PR (PR4) added `deploy.sh` (row 2 of the install-order table, D5) — the
+script that stops the service, runs the seed fail-closed gate from PR3 via
+`prisma:seed`, and starts it back up. PR5 adds `publicar-assets.sh` (D4), the
+script `deploy.sh`'s `[plan:publish]` step calls by path.
