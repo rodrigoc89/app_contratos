@@ -12,7 +12,7 @@ chain.
 
 1. Provision the host once, as root: `sudo deploy/provision.sh`
 2. Deploy the application: `TAG=v1.2.3 deploy/deploy.sh`
-3. Bootstrap TLS: `deploy/tls-bootstrap.sh` *(lands in PR6 — not yet in this repository)*
+3. Bootstrap TLS: `sudo CONTRATOS_HOST=contratos.example.com deploy/tls-bootstrap.sh`
 
 Every script supports `--dry-run` and needs no VPS to preview: its Vitest
 spec `execFile`s it against a scratch temp directory (design.md D8).
@@ -23,8 +23,8 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 |---|---|---|---|
 | 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | Done |
 | 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5); the `publish` step calls `publicar-assets.sh` (D4, row 2a) | Done |
-| 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | **This PR** |
-| 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) | PR6 |
+| 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | Done |
+| 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) — see "TLS bootstrap" below | **This PR** |
 
 `provision.sh` assumes `/opt/contratos` is (or will become) the git checkout
 `deploy.sh` operates on — see "`.cache/` and the git-exclude step" below for
@@ -392,6 +392,88 @@ implemented here; it stays operator scheduling — deploy outside técnico
 visit hours. Recorded here, not invented as a fix task 5.10 does not ask
 for.
 
+## TLS bootstrap (D6)
+
+`deploy/nginx.conf:55-56` reads a certificate from
+`/etc/letsencrypt/live/__CONTRATOS_HOST__/{fullchain,privkey}.pem` — paths
+that do not exist until a certificate has been issued. Installing that file
+as-is on a fresh host makes nginx refuse to start: the chicken-and-egg
+`tls-bootstrap.sh` exists to break.
+
+### Why an HTTP-only conf goes first
+
+```
+install nginx-bootstrap.conf (port 80: ACME location + 503 catch-all)
+  → nginx -t → reload                        ← nginx is now serving, no cert needed
+  → certbot certonly --webroot               ← cert now exists
+  → render deploy/nginx.conf, install it
+  → nginx -t                                 ← HARD GATE, see below
+  → reload
+  → install the renewal deploy hook
+```
+
+`deploy/nginx-bootstrap.conf` answers the ACME challenge at
+`/.well-known/acme-challenge/` and returns **`503`** for everything else —
+not a `301` redirect to `https`. An origin with no certificate has nothing
+to redirect *to*; a redirect there is a dead end that also hides which
+state the host is in from whoever is looking. `503` says it plainly. This
+file is installed as-is, never rendered: only `deploy/nginx.conf` is a
+template.
+
+### The `__CONTRATOS_HOST__` / `__WEB_ROOT__` template, and its guard
+
+Task 6.1 replaced `deploy/nginx.conf`'s literal `contratos.iesnet.com.ar`
+(`server_name`, both `ssl_certificate*` paths) and `/var/www/contratos`
+(`root`) with `__CONTRATOS_HOST__` / `__WEB_ROOT__`. `tls-bootstrap.sh`
+substitutes both via `sed` into a scratch file, then greps that output for
+any surviving `__[A-Za-z0-9_]+__` pattern — **before touching nginx at
+all**, in both `--dry-run` and a real run:
+
+- An empty or unset `$CONTRATOS_HOST` is caught by its own explicit guard
+  (there is no sensible default — a wrong-but-present one would silently
+  render the wrong host into a live TLS certificate request).
+- A surviving literal token is caught by the grep guard even when
+  `$CONTRATOS_HOST`/`$WEB_ROOT` are both set correctly — this is what
+  catches **template drift**: a future edit to `deploy/nginx.conf` that
+  introduces a new `__TOKEN__` this script does not yet know how to
+  substitute must still refuse loudly, not render a broken conf and
+  install it.
+
+Neither guard needs root, nginx, or a VPS — both run in CI today
+(`tls-bootstrap.spec.ts`, tasks 6.2/6.3).
+
+### `nginx -t` as a hard gate — nginx must never end a run unable to start
+
+After certbot succeeds and the rendered `deploy/nginx.conf` is copied into
+`/etc/nginx/sites-available/contratos`, the symlink at
+`/etc/nginx/sites-enabled/contratos` is repointed to it and `nginx -t` runs
+**against that file** before anything reloads:
+
+- **Pass** → reload. `contratos` is now served over TLS.
+- **Fail** → the symlink is repointed **back** to the bootstrap conf
+  (already proven valid by the earlier `nginx -t` in the sequence above),
+  nginx reloads on that, and the script exits `1`. The host is left
+  serving a `503` from a conf already known to pass its own test — never
+  left with no valid config to reload at all.
+
+A TLS script that fails halfway and leaves nginx dead has turned a
+certificate problem into a total outage. This rollback path is the reason
+the bootstrap conf stays on disk permanently, not just during first-issue.
+
+### Renewal: certbot renews, nginx has to be told
+
+Certbot's own packaged systemd timer renews the certificate on its
+schedule — that part needs no help. What it does not do on its own is make
+nginx *serve* the renewed file: nginx keeps whatever certificate it loaded
+into memory at its last reload, even after the on-disk file is current.
+`deploy/renewal-hook-nginx.sh`, installed at
+`/etc/letsencrypt/renewal-hooks/deploy/10-reload-nginx.sh`, is the missing
+piece — certbot runs every executable in that directory automatically
+after a **successful** renewal only, so the hook is simply
+`nginx -t && systemctl reload nginx`: test first, reload only if the test
+passes, so a renewed certificate is never paired with a reload of a config
+that cannot even start.
+
 ## Still-open items, and exactly where they resolve
 
 Two questions design.md left open are **not** blocked on any task in this
@@ -443,6 +525,30 @@ until the host exists:
   observation needs the VPS, a real técnico device, and a live signing
   session in progress.
 
+`tls-bootstrap.sh --dry-run` proves the render+placeholder guard for real
+(no VPS needed — `tls-bootstrap.spec.ts`, tasks 6.2/6.3) and proves, by
+directive-order review, that the HTTP-only bootstrap conf and its own
+`nginx -t` come before `certbot certonly`, and that the full
+`deploy/nginx.conf` template is not installed until after. It proves
+**nothing** about:
+
+- **Real ACME issuance.** `certbot certonly --webroot` needs a
+  DNS-resolvable domain answering on port 80 from the public internet —
+  Let's Encrypt's validation servers have to reach `$CONTRATOS_HOST`, which
+  no CI environment can offer. Blocked on the `domain-dns` external
+  dependency (`state.yaml`), not on any task in this PR.
+- **A forced-renewal drill.** That `certbot renew --force-renewal` actually
+  swaps the served certificate — checked via
+  `openssl s_client -connect <host>:443 -servername <host> </dev/null 2>/dev/null | openssl x509 -noout -dates`
+  before and after — needs a real certificate already issued for a real
+  domain, then a real reload triggered by `renewal-hook-nginx.sh`.
+- **`nginx -t` on a real install.** `deploy/nginx.conf` has never been fed
+  to a real `nginx -t` — every ordering claim above is a directive-order
+  review against the file's own line numbers, not an execution result.
+  Whether `nginx.conf:41`'s `/var/www/certbot` ACME location and
+  `nginx.conf:55-56`'s certificate paths are themselves syntactically
+  correct is unverified until a real nginx parses them.
+
 ## Checklist (post-VPS, not yet actionable)
 
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
@@ -456,11 +562,16 @@ until the host exists:
 - [ ] During a real `TAG=<next tag> deploy/deploy.sh`, a tablet with the PWA open on the previous release keeps loading every hashed asset it references throughout the publish step (no mid-visit 404)
 - [ ] After that same deploy, a tab that has NOT yet accepted the update prompt still functions on the previous shell, and a tab that reloads receives the new shell cleanly — never a mismatched `index.html`/`sw.js` pair
 - [ ] `ls /var/www/contratos/.releases` shows at most 2 manifests after two consecutive real deploys, and the previous release's hashed assets are gone only after the deploy that supersedes them a second time
+- [ ] `sudo CONTRATOS_HOST=<real hostname> deploy/tls-bootstrap.sh` completes the full sequence and `curl -I https://<real hostname>/salud` returns a response over TLS
+- [ ] `nginx -t` reports `syntax is ok` / `test is successful` against the real, rendered `/etc/nginx/sites-available/contratos` — the first time this file has ever been parsed by a real nginx
+- [ ] `certbot renew --force-renewal --cert-name <real hostname>` followed by `openssl s_client -connect <real hostname>:443 -servername <real hostname> </dev/null 2>/dev/null | openssl x509 -noout -dates` shows a **new** `notBefore`, proving `renewal-hook-nginx.sh` actually reloaded nginx and not just that certbot wrote a new file to disk
+- [ ] A deliberately broken rendered conf (temporarily corrupt `/etc/nginx/sites-available/contratos` by hand, then re-run `tls-bootstrap.sh`) exercises the hard-gate rollback: `nginx -t` fails, the symlink repoints back to the bootstrap conf, nginx reloads successfully, and the script still exits `1`
 
 ## Next step
 
-This PR (PR5) added `publicar-assets.sh` (row 2a of the install-order table,
-D4) — the script `deploy.sh`'s `[plan:publish]` step calls by path: additive
-asset copy, then the atomic `index.html`/`sw.js` swap, then the 2-release
-retention prune. PR6 adds `tls-bootstrap.sh` (D6), the HTTP-only bootstrap
-conf that lets nginx start before a certificate exists.
+This PR (PR6) added `tls-bootstrap.sh` and `deploy/nginx-bootstrap.conf`
+(row 3 of the install-order table, D6) — the HTTP-only bootstrap conf that
+lets nginx start before a certificate exists, `nginx -t` as a hard gate
+that never leaves nginx unable to start, and `renewal-hook-nginx.sh` so a
+certbot renewal actually reaches a running nginx. PR7 adds `backup.sh`
+(D7): database-before-PDFs backup ordering and encryption at rest.
