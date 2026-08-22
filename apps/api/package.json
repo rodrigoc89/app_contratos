@@ -15,6 +15,7 @@
     "prisma:seed": "jiti prisma/seed.ts",
     "backfill:nombre-busqueda": "jiti prisma/backfill/nombreDeBusqueda.ts",
     "verify:render": "jiti scripts/verificarRender.ts",
+    "verify:restore": "jiti prisma/restauracion/verificarRestauracion.ts",
     "prisma:firma-de-prueba": "jiti prisma/firmas/generatePlaceholderSignature.ts"
   },
   "devDependencies": {
