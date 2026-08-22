@@ -403,6 +403,15 @@ older manifest, deletes both the manifest itself and any file it lists
 that no retained manifest also lists — an asset only an already-superseded
 release ever referenced.
 
+`RETENTION_COUNT` overrides the number, and the script refuses anything
+below 1 in its preflight. The release being published is itself one of the
+retained releases, so `RETENTION_COUNT=0` — a plausible thing to write
+meaning "keep no old releases" — would prune the manifest the run had just
+written and delete every file it lists, `index.html` and `sw.js` included,
+leaving the web root empty while still exiting 0 and reporting `published`.
+Verified before the guard existed. 1 is the floor: it keeps the current
+release and nothing else.
+
 Retaining 2, not 1, is deliberate: it gives the previous release's assets
 one full deploy cycle of grace after the newest one lands, covering a tab
 whose service worker has not yet adopted the new precache (per D9's
