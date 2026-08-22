@@ -501,6 +501,29 @@ A TLS script that fails halfway and leaves nginx dead has turned a
 certificate problem into a total outage. This rollback path is the reason
 the bootstrap conf stays on disk permanently, not just during first-issue.
 
+### certbot is installed by this script, and only by this script
+
+`provision.sh` does not install certbot and no other script in `deploy/`
+does either, so `tls-bootstrap.sh` installs it alongside nginx. Without that,
+the run gets as far as installing the bootstrap conf and reloading nginx and
+then dies on `certbot: command not found`, inside the one script whose whole
+job is breaking a chicken-and-egg. The **apt package** specifically — not a
+snap or a pip install — is also what ships the systemd renewal timer the
+next section depends on.
+
+`CERTBOT_EMAIL` is optional but worth setting. Without it the script
+registers with `--register-unsafely-without-email` and says so in a `[warn]`
+line: renewal is automatic, so the address only matters once renewal has
+already been failing quietly — which is exactly when an expiry warning is
+the only thing left between the site working and the site going dark.
+
+`CERTBOT_WEBROOT` is overridable, but `nginx-bootstrap.conf` is installed
+as-is and carries the ACME `root` as a literal, so the two must agree. The
+script reads the path out of that conf and refuses a mismatch before
+touching nginx — otherwise certbot writes the challenge where nginx does not
+look for it, and issuance fails on a 404 with both paths looking
+individually correct.
+
 ### Renewal: certbot renews, nginx has to be told
 
 Certbot's own packaged systemd timer renews the certificate on its
