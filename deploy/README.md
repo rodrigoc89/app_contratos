@@ -940,7 +940,14 @@ pnpm --filter @contratos/deploy lint:shell
 CI runs that exact script, so there is one definition of what "shellcheck
 passes" means, and it installs shellcheck explicitly rather than relying on the
 runner image shipping it — a check whose presence is incidental is a check that
-can disappear without anything going red.
+can disappear without anything going red. That step is a no-op today — the
+`ubuntu-24.04` image already ships shellcheck 0.9.0 — which is the point: it
+stops being one the day the image stops shipping it.
+
+**CI's version is the authority.** It takes whatever the distro packages
+(0.9.0 at the time of writing); a newer shellcheck run locally may report
+findings CI does not, or the reverse. Nothing here is pinned, so treat a
+local-only finding as worth fixing rather than as a CI defect.
 
 Run at default settings. `--enable=all` adds two style families this codebase
 deliberately does not follow (`SC2250`, braces around every variable reference,
