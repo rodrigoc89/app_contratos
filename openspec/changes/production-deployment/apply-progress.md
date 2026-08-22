@@ -1,16 +1,11 @@
 # Apply progress: production-deployment
 
+Cumulative record across three apply batches. 23/73 tasks complete.
+
 **Batch 1 — PR1 (Phase 1 + Phase 1B), tasks 1.1-1.6 and 1B.1-1B.2.**
 Branch: `feat/pd-01-env-provisioning` (base: `feat/production-deployment`,
-which branches `master` at `efed42d`). Task 1B.3 (open PR #1) was
-**deliberately not done in this batch** — publishing was not authorized for
-that run. **Update (Batch 2):** 1B.3 is now done — PR #1 was opened as
-[#78](https://github.com/rodrigoc89/app_contratos/pull/78), open and green;
-`tasks.md` and `state.yaml` are updated accordingly.
-
-**Batch 2 — PR2 (Phase 2 + Phase 2B), tasks 2.1-2.5 and 2B.1-2B.2.** Branch:
-`feat/pd-02-render-verdict` (base: `feat/pd-01-env-provisioning`, PR #78).
-Full record below, after Batch 1's.
+which branches `master` at `efed42d`). Task 1B.3 (open PR #1) — opened as
+PR #78, open and green (done between apply batches, by the orchestrator).
 
 ## Deviation from the stated ground truth (task 1.1)
 
@@ -225,195 +220,132 @@ files yet — no other PR in the chain has landed. The one exception is
 and is untouched by a revert of this branch's commits (only the additions
 this batch made are reverted).
 
-## Next recommended (Batch 1, superseded — see Batch 2 below)
-
-Continue `sdd-apply` with PR2 (Phase 2 + Phase 2B: render verdict, D2), on a
-new branch off `feat/pd-01-env-provisioning` per the feature-branch-chain
-strategy — or, if the user authorizes publishing, complete 1B.3 (open PR #1)
-first.
-
 ---
 
-# Batch 2 — PR2 (Phase 2 + Phase 2B: render verdict, D2)
+# Batch 2 — PR2 (Phase 2 + Phase 2B), tasks 2.1-2.5 and 2B.1-2B.3
 
-**Branch:** `feat/pd-02-render-verdict`, off `feat/pd-01-env-provisioning`
-(PR #78, open and green), per the feature-branch-chain strategy. Task 2B.3
-(open PR #2) is **deliberately not done in this batch** — the orchestrator
-opens it.
+Branch: `feat/pd-02-render-verdict` (base: `feat/pd-01-env-provisioning`,
+PR #78). Render verdict (design.md D2): a three-layer check — `fc-match`
+(family resolves to itself, not a silent fontconfig substitute), `pdffonts`
+(a real known-good font is embedded), `pdftotext` (the `ToUnicode` map
+round-trips `ñ á é í ó ú Ñ`, though this alone never proves rasterization).
+Strict TDD throughout: RED confirmed for the right reason before every
+GREEN. Full task-by-task record, RED transcripts, and design judgment calls
+are in `sdd/production-deployment/apply-progress` (Engram, obs 559) — this
+local file condenses it since the Engram observation is the fuller source
+for this batch (a filesystem-sync gap between batches, corrected in
+Batch 3).
 
-## TDD Cycle Evidence (Strict TDD active)
+**Files**: `apps/api/scripts/renderVerdict.ts` (286 lines, pure parser,
+zero I/O) + `.spec.ts` (186 lines, 13 tests); `apps/api/scripts/verificarRender.ts`
+(311 lines, jiti driver — real Chromium render + `fc-match`/`pdffonts`/`pdftotext`)
++ `.integration.spec.ts` (101 lines); `verify:render` script added to
+`apps/api/package.json`; `vitest.config.ts`/`vitest.integration.config.ts`
+`include` extended to `scripts/**`; `tsconfig.json` `include` extended to
+`scripts/**/*.ts`; `deploy/README.md` render-verdict subsection.
 
-| Task | RED | GREEN | REFACTOR |
-|---|---|---|---|
-| 2.1-2.2 (`renderVerdict.ts` — pure parser) | `renderVerdict.spec.ts` written first; run failed with `Cannot find module './renderVerdict' imported from '.../apps/api/scripts/renderVerdict.spec.ts'` — the module genuinely did not exist, confirmed for the right reason | `renderVerdict.ts` created; full run: 775/775 passing (13 new tests) | None needed — first implementation matched the design cleanly |
-| 2.2 (`verificarRender.ts` — driver) | No RED spec of its own (task text specifies GREEN only for this file; its behaviour is proven by 2.5's real integration spec, itself RED-confirmed by module-not-found before this file existed) | `verificarRender.ts` created; typechecks clean, manual `pnpm run verify:render` smoke-run against real `fc-match`/`pdffonts`/`pdftotext` on this machine produced `Veredicto final: APROBADO` | None needed |
-| 2.5 (`verificarRender.integration.spec.ts`) | Written against the not-yet-created `verificarRender.ts` export — same "module does not exist" RED class as 2.1, confirmed by construction (the driver file did not exist until this same batch's GREEN step) | `pnpm --filter @contratos/api test:integration`: 138/138 passing (1 new test) | None needed |
+**2B.3 (open PR #2)** — opened as **two PRs**, not one, between apply
+batches: **PR #80** (`renderVerdict.ts`, the pure parser) and **PR #81**
+(`verificarRender.ts`, the jiti driver, base `feat/pd-02b-verdict-driver`,
+targeting PR #80's branch). Both open and green. The chain is now **9 PRs
+total**, not 8 — see `tasks.md`'s note on the 2B.3 checkbox and
+`state.yaml`'s `phases.apply` comment for the full renumbering record.
 
-## Work Unit Evidence
+**Diff size**: ~978 changed lines (87 insertions + 7 deletions on tracked
+files, plus 884 new-file lines) against a ~330-410 estimate — ~2.4-3x over,
+reported honestly, no scope cut. All four gates green at the time:
+`pnpm test` (1475 tests across all workspaces), `pnpm typecheck` (4/4),
+`pnpm lint` (0 errors/warnings), `pnpm --filter @contratos/api test:integration`
+(138/138).
 
-| Evidence | Value |
-|---|---|
-| Focused test command and exact result | `pnpm --filter @contratos/api test -- scripts/renderVerdict.spec.ts` → RED: `Cannot find module './renderVerdict'`; after GREEN, full `pnpm --filter @contratos/api test` → 775/775 passing |
-| Runtime harness command/scenario and exact result | `pnpm --filter @contratos/api test:integration` → 138/138 passing, including the new `verificarRender.integration.spec.ts` (real Chromium render + real `fc-match`/`pdffonts`/`pdftotext` on this machine, all three tools present, all three layers APROBADA) |
-| Rollback boundary | `git revert` this branch (`feat/pd-02-render-verdict`) against its base (`feat/pd-01-env-provisioning`). Every file is new or a narrow, additive config edit (`vitest.config.ts`/`vitest.integration.config.ts` include-pattern additions, `tsconfig.json` include addition, one `package.json` script line, a new `deploy/README.md` subsection). Nothing downstream in the chain depends on any of it yet — PR3 (seed gate) has not started. |
+# Batch 3 — PR3 (Phase 4 + Phase 4B), tasks 4.1-4.5 and 4B.1-4B.2
 
-## Tool availability, checked directly on this machine
-
-| Tool | Present | Version |
-|---|---|---|
-| `fc-match` | yes | fontconfig 2.17.1 |
-| `pdffonts` | yes | poppler 26.01.0 |
-| `pdftotext` | yes | poppler 26.01.0 |
-
-All three were present, so the integration test exercised every layer as a
-real pass, not a "tool missing" branch. The driver's tool-missing path
-(`esHerramientaDisponible` + `veredictoHerramientaFaltante` in
-`verificarRender.ts`) exists and is exercised by the integration spec's own
-conditional assertions (it asserts the honest "missing" branch whenever a
-given tool is absent), but on THIS run every branch taken was the "present"
-one — stated plainly, not implied to be the only path that exists.
+Branch: `feat/pd-03-seed-fail-closed` (base: `feat/pd-02b-verdict-driver`,
+PR #81). Seed fail-closed gate (design.md D3): production refuses to finish
+seeding when the `admin` or `tecnico` account resolves to `"omitido"` (its
+password variable was never set), and — the load-bearing regression
+guard — never refuses when an account resolves to `"already-present"`, so a
+routine redeploy that correctly rotates passwords out of the environment
+file after the accounts already exist never breaks. Strict TDD: RED
+confirmed for the right reason before GREEN.
 
 ## Task-by-task record
 
-### 2.1 — RED: `apps/api/scripts/renderVerdict.spec.ts`
+### 4.1 / 4.2 — RED: `apps/api/src/seed/seedDatabase.spec.ts`
 
-Before writing the spec, `apps/api/vitest.config.ts`'s `include` had to be
-extended from `["src/**/*.spec.ts"]` to also include
-`"scripts/**/*.spec.ts"` — otherwise the new spec would never be discovered
-at all (a "no test files found" false negative, not a real RED). Confirmed
-RED for the right reason:
-
-```
-FAIL  scripts/renderVerdict.spec.ts [ scripts/renderVerdict.spec.ts ]
-Error: Cannot find module './renderVerdict' imported from
-'/home/rodrigo/work/app_contratos/apps/api/scripts/renderVerdict.spec.ts'
-```
-
-13 tests across 4 `describe` blocks: `REQUESTED_FONT_FAMILIES` (1),
-`evaluateFamilyResolution` (3: present/fallback/missing), `evaluateGlyphEmbedding`
-(3: present/fallback/missing), `evaluateTextRoundTrip` (4: present/fallback/
-missing + a mojibake-not-absence case), `buildRenderVerdict` (2).
-
-### 2.2 — GREEN: `renderVerdict.ts` + `verificarRender.ts`
-
-**`renderVerdict.ts`** (pure parser, 286 lines): three exported evaluators
-(`evaluateFamilyResolution`, `evaluateGlyphEmbedding`, `evaluateTextRoundTrip`)
-plus `buildRenderVerdict` to aggregate. No process spawning, filesystem, or
-network — fixture-tested only, per design.md D2's explicit split.
-
-Design decisions made while implementing, not in the original task text:
-
-- **Layer 1 is strict per-family**: the returned family must equal the
-  requested family exactly. A substitution to the documented DejaVu fallback
-  still fails this layer, because layer 1's specific job is proving
-  `fonts-liberation` itself resolved — not that *some* acceptable font
-  resolved (task 2.3's explicit instruction: "fc-match returned a font is
-  NOT a pass").
-- **Layers 2-3 are lenient across the whole known-good set**: either
-  Liberation or its documented DejaVu fallback passes, because
-  `provision.sh` installs both on purpose and either landing in the PDF is
-  real proof glyph embedding/text extraction work. This asymmetry (layer 1
-  strict, layers 2-3 lenient) is deliberate and documented in both the code
-  comments and `deploy/README.md` — it is the one place this implementation
-  makes a judgment call the task text did not fully specify.
-- **`pdffonts`' fixed-width table is parsed via the dashed separator line's
-  column offsets**, not a hardcoded token-count split — `pdffonts`' "type"
-  column can itself contain multiple words (e.g. "CID TrueType"), which
-  breaks any parse that assumes N whitespace-separated tokens per row.
-  Verified against real captured `pdffonts` output on this machine before
-  writing the parser.
-
-**`verificarRender.ts`** (jiti driver, 311 lines): renders one probe
-`comodato` PDF through the REAL committed templates (`buildSeedContent()` —
-the same function `seedDatabase.ts` uses — reads the actual
-`v1-comodato.html`/`v1-condiciones-generales.html` files), with synthetic,
-clearly-not-real customer/equipment/signature data (a 1x1 PNG fixture, the
-same one `GeneradorDeDocumentosPuppeteer.integration.spec.ts` already uses —
-never the real comodante signature). Runs `fc-match -f '%{family}\n'`,
-`pdffonts`, `pdftotext` against the produced PDF; a missing tool produces an
-honest "not installed on PATH" `LayerVerdict`, never a silent skip or faked
-stdout. CLI entry point prints Spanish operator-facing output (matching
-`configuracion.ts`/`seedDatabase.ts`'s convention) and sets
-`process.exitCode = 1` on any failing layer.
-
-Manual smoke-run against the real pipeline on this machine, before writing
-the integration spec:
+Two new cases added to a new `describe("seedDatabase — production seed gate
+over admin/técnico accounts (D3)")` block: `nodeEnv: "production"` with
+`tecnico`/`administrador` resolving `action: "omitido"` must throw. Both
+confirmed RED for the right reason — the promise resolved instead of
+rejecting, because "omitido" only returned silently before this change:
 
 ```
-=== Verificación de render (design.md D2) ===
-Capa "resolución de familia (fc-match)": APROBADA
-  "Liberation Serif" resolved to itself; "Liberation Sans" resolved to itself
-Capa "incrustación de glifos (pdffonts)": APROBADA
-  "BAAAAA+LiberationSerif" is embedded (...); "AAAAAA+LiberationSans-Bold" is embedded (...)
-Capa "ida y vuelta de texto (pdftotext)": APROBADA
-  all required accented characters (ñ á é í ó ú Ñ) round-tripped correctly
-Veredicto final: APROBADO
+AssertionError: promise resolved "{ …(4) }" instead of rejecting
+  administrador: null, tecnico: { action: "omitido", nombreUsuario: "tecnico" }
+  (and the symmetric admin case)
 ```
 
-### 2.3 — Font families, resolved
+776 tests passed, 2 failed — exactly the 2 new RED cases; no pre-existing
+test regressed.
 
-Both declared families recorded, verbatim, in `REQUESTED_FONT_FAMILIES`
-(`renderVerdict.ts`), with a comment naming the exact source lines:
+### 4.3 — RED (pass trivially, then stay green): the load-bearing case
 
-```
-apps/api/prisma/plantillas/v1-comodato.html (identical in v1-condiciones-generales.html)
-  line 25: font-family: "Liberation Serif", "DejaVu Serif", serif;
-  line 34: font-family: "Liberation Sans", "DejaVu Sans", sans-serif;
-```
+Same file: seeds both `admin` and `tecnico` once (development, with
+passwords) so both accounts exist, then reseeds in **production** with both
+passwords omitted (simulating rotation out of the environment file after
+the accounts already exist) and asserts `seedDatabase` does **not** throw
+and both resolve `"already-present"`. Passed trivially before 4.4 (no throw
+existed yet anywhere except the provisional-signature guard); the real
+assertion is that it **stays** green after 4.4 — confirmed in the full run
+below.
 
-This is the single source of truth `verificarRender.ts` imports from — the
-family names are declared exactly once in the codebase, not duplicated
-between the parser and the driver.
+### 4.4 — GREEN: `apps/api/src/seed/seedDatabase.ts`
 
-### 2.4 — `verify:render` script
+Restructured the function body to compute `plantilla`, `firmante`,
+`administrador`, `tecnico` into local variables (order unchanged versus the
+original inline return), then added a gate: when `nodeEnv === "production"`
+and `administrador`/`tecnico` is non-null with `action === "omitido"`, throw
+an `Error` naming the account and its env var, mirroring the file's
+existing `ATENCION` warning text and the provisional-signature guard's
+Spanish, operator-facing, actionable style (names the env var to set and the
+command to re-run). All 3 RED tests turned GREEN; full suite unaffected
+(778/778, up from 776 — the 2 new throw-path tests plus the always-passing
+4.3 case).
 
-Added `"verify:render": "jiti scripts/verificarRender.ts"` to
-`apps/api/package.json`, next to the existing `backfill:nombre-busqueda`
-entry, matching its exact shape.
+**Design note, not a deviation**: the gate fires *after* `plantilla` and
+`firmante` are already written (as directed in the task text — "after the
+`administrador`/`tecnico` results are computed"), unlike the
+provisional-signature guard, which fires before any write. This is safe
+here because template/signatory writes are idempotent by version (already
+tested); a subsequent successful seed run finds them present and skips
+them. It would not be safe for the provisional signature (writing the fake
+signature is itself the harm), which is exactly why that guard stayed
+first.
 
-### 2.5 — Real integration exercise
+### 4.5 — Confirm `seedTecnico.spec.ts` / `seedAdministrador.spec.ts` unmodified
 
-`apps/api/vitest.integration.config.ts`'s `include` needed the same
-extension as the unit config (`"scripts/**/*.integration.spec.ts"` added)
-for the new integration spec to be discovered at all. New file:
-`apps/api/scripts/verificarRender.integration.spec.ts` (101 lines) — checks
-tool availability independently, then asserts the driver's verdict is
-internally consistent with that availability for every layer (a real pass
-when a tool is present, the driver's honest "missing" reason when it is
-not), so the test is correct regardless of which tools the machine running
-it happens to have. Full `pnpm --filter @contratos/api test:integration`
-run: 138/138 passing, no regressions in the 12 pre-existing integration spec
-files.
+Confirmed: `git diff --stat` against both files returns empty — neither was
+touched. Both suites pass unmodified: `seedAdministrador.spec.ts` (9 tests),
+`seedTecnico.spec.ts` (11 tests). The gate lands at the right layer — these
+specs exercise `sembrarCuenta` directly, not `seedDatabase`'s new gate.
 
-**Explicit pre-VPS caveat** (also in `deploy/README.md`): this test proves
-the pipeline is wired correctly on whatever host runs it (this dev machine,
-CI). It does **not** prove anything about the eventual production VPS's
-actual installed fonts — that is only verified by running `verify:render`
-there, after `provision.sh`, post-VPS-purchase. Real host fonts remain
-unverifiable pre-VPS.
+### 4B.1 — `deploy/README.md`
 
-### 2B.1 — `deploy/README.md`
+New "Seed fail-closed gate (D3)" section (English, matching the rest of the
+file): an "answer first" summary table (`omitido` → throws, `already-present`
+→ never throws, `created` → seeds normally), why the gate lives in the
+application and not `deploy.sh` (the hand-run recovery path `pnpm --filter
+@contratos/api prisma:seed` never goes through `deploy.sh`), and the
+redeploy-regression narrative that makes `already-present` never throwing
+load-bearing. "Next step" paragraph updated to point at PR4 (`deploy.sh`).
 
-New "Render verdict" subsection under the existing "Chromium and fonts (D1,
-D2)" heading: the three-layer table (proves/does-not-prove per layer,
-matching design.md D2's own table), the two font families with their exact
-source-line comment, the layer-1-strict/layers-2-3-lenient asymmetry
-explained, the relationship to `seedContent.spec.ts`'s source-level check
-(complementary, not duplicated — explicitly stated so the next reader does
-not wonder why both exist), the rejected golden-image alternative, and the
-pre-VPS caveat. Also updated the pre-existing checklist item (was "A probe
-PDF renders `ñ á é í ó ú Ñ`…", not connected to any command; now points at
-`verify:render`'s exact expected output) and the "Next step" pointer (was
-"PR2 adds…", future tense; now states PR2 is done and names PR3 next).
-
-### 2B.2 — Full verification run
+### 4B.2 — Full verification run
 
 ```
 $ pnpm test
-deploy test:            Test Files  1 passed (1)   Tests    4 passed (4)
-packages/esquemas test: Test Files  5 passed (5)   Tests  125 passed (125)
-apps/api test:          Test Files 58 passed (58)  Tests  775 passed (775)
-apps/web test:          Test Files 72 passed (72)  Tests  571 passed (571)
+deploy test:   Test Files 1 passed (1)    Tests   4 passed (4)
+apps/api test: Test Files 58 passed (58)  Tests 778 passed (778)
+apps/web test: Test Files 72 passed (72)  Tests 571 passed (571)
 exit code: 0
 
 $ pnpm typecheck
@@ -424,68 +356,44 @@ apps/web typecheck: Done
 exit code: 0
 
 $ pnpm lint
+$ eslint . --max-warnings 0
 (no output — 0 errors, 0 warnings)
-exit code: 0
-
-$ pnpm --filter @contratos/api test:integration
-Test Files  12 passed (12)
-Tests  138 passed (138)
 exit code: 0
 ```
 
-No fixes were required to get any of the four green this time (PR1 needed
-one — the `eslint.config.mjs` `allowDefaultProject` addition — this batch's
-three `include`-pattern/one-line-`include` config edits did not surface any
-new lint or type findings).
+No fixes were required to get any gate green this batch (unlike PR1's
+ESLint `allowDefaultProject` fix).
 
 ## Diff size
 
-PR2's own estimate (per `tasks.md`'s Review Workload Forecast) was
-**~330-410 lines**. Actual:
+PR3's own estimate (`tasks.md`'s Review Workload Forecast) was
+**~190-220 lines**.
 
 ```
- apps/api/package.json                 |  1 +
- apps/api/tsconfig.json                |  2 +-
- apps/api/vitest.config.ts             | 11 ++++-
- apps/api/vitest.integration.config.ts |  9 ++++-
- deploy/README.md                      | 71 +++++++++++++++++++++++++++++++++--
- 5 files changed, 87 insertions(+), 7 deletions(-)
-
- new: apps/api/scripts/renderVerdict.spec.ts               186 lines
- new: apps/api/scripts/renderVerdict.ts                    286 lines
- new: apps/api/scripts/verificarRender.integration.spec.ts 101 lines
- new: apps/api/scripts/verificarRender.ts                  311 lines
+ apps/api/src/seed/seedDatabase.spec.ts | 94 ++++++++++++++++++++++++
+ apps/api/src/seed/seedDatabase.ts      | 81 ++++++++++++++-----------
+ deploy/README.md                       | 47 +++++++++++++--
+ 3 files changed, 190 insertions(+), 32 deletions(-)
 ```
 
-Total changed lines: **~978** (87 insertions + 7 deletions from tracked-file
-diffs, plus 884 of new-file lines). This runs **well past** the ~330-410
-estimate — roughly 2.4-3x over, a meaningfully worse ratio than PR1's
-~1.3-1.6x overage. Stated plainly, not padded, and no scope was cut to force
-it under the line, per explicit instruction. The largest contributors are
-`verificarRender.ts` (311 lines — most of it is unavoidable domain-object
-wiring: `EntradaGeneracion` needs a `Comodatario`, `Equipos`, `Plazo`, two
-`FirmaCapturada`s and a `FirmanteComodante`, each going through its own
-validating `crear()`, the same shape the pre-existing integration spec's own
-`entrada()` helper already has) and `renderVerdict.ts` (286 lines, roughly
-half of it JSDoc explaining what each layer proves and does not prove — this
-codebase's established documentation-heavy convention, per PR1's
-`provision.sh`/`deploy/README.md` precedent). No task in this batch's scope
-was thinned or skipped to hit a number; the honest floor for three
-independently-testable layers, their driver, and their tests came out
-higher than the pre-implementation estimate.
+Total changed lines: **222** (190 insertions + 32 deletions) — the closest
+an actual has landed to its estimate across all three batches so far (PR1
+ran ~1.3-1.6x over, PR2 ran ~2.4-3x over). No task was thinned or skipped.
 
 ## Rollback boundary
 
-`git revert` this branch (`feat/pd-02-render-verdict`) against its base
-(`feat/pd-01-env-provisioning`). Every changed file is either new or a
-narrow, additive edit (an `include` array gaining one more glob, one new
-`package.json` script line, one new README subsection plus two one-line
-pointer updates). Nothing downstream in the chain depends on any of it yet —
-PR3 has not started.
+`git revert` this branch (`feat/pd-03-seed-fail-closed`) against its base
+(`feat/pd-02b-verdict-driver`, PR #81). Nothing downstream depends on these
+files yet — no later PR in the chain has landed. If a production deploy
+already ran with the seed gate live, the documented recovery is `pnpm
+--filter @contratos/api prisma:seed` by hand (stated in `deploy/README.md`
+and the tasks.md Work Units table), not a code rollback.
 
 ## Next recommended
 
-`sdd-apply` should stop here per explicit instruction (2B.3 — opening PR #2
-— is the orchestrator's job, not this batch's). Once PR #2 is opened,
-continue with PR3 (Phase 3: seed fail-closed gate, D3) on a new branch off
-`feat/pd-02-render-verdict`.
+Continue `sdd-apply` with PR4 (Phase 5 + Phase 5B: `deploy.sh`, D5), on a
+new branch off `feat/pd-03-seed-fail-closed` per the feature-branch-chain
+strategy. PR4 is one atomic 4-RED/1-GREEN unit (tasks 5.1-5.5) and stays
+over the 400-line budget by design (~630-750 estimated) — not a candidate
+for further splitting without separating a RED test from the GREEN that
+satisfies it.

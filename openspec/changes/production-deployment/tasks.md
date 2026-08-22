@@ -162,37 +162,37 @@ per the chained-pr skill's per-PR requirement.
 
 - [x] 1B.1 `deploy/README.md`: install order (`provision.sh` → `deploy.sh` → `tls-bootstrap.sh`), the apt fallback list (audit/offline reference only, per D1's rejected-primary-mechanism decision — verified against Puppeteer's current troubleshooting docs via context7: **36 packages**, not the planning docs' approximate "37"), and cross-reference where the two still-open items resolve (`age` availability in PR7/8.3; the restore drill in PR8/9.8).
 - [x] 1B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the PR1 diff; record results. All three green — see apply-progress for full output.
-- [x] 1B.3 Open PR #1 targeting the tracker/feature branch (feature-branch-chain, draft/no-merge tracker). Evidence: focused test command output, `provision.sh --dry-run` result, rollback boundary from the Work Units table. Opened as PR #78, open and green.
+- [ ] 1B.3 Open PR #1 targeting the tracker/feature branch (feature-branch-chain, draft/no-merge tracker). Evidence: focused test command output, `provision.sh --dry-run` result, rollback boundary from the Work Units table. **Excluded from this apply run by explicit instruction — not authorized to publish.**
 
 ## Phase 2 — PR2: render verdict (D2)
 
-- [x] 2.1 RED: `apps/api/scripts/renderVerdict.spec.ts` — fixtures for `fc-match`/`pdffonts`/`pdftotext` stdout (present/fallback/missing per layer) assert the parser returns pass/fail + reason per layer. Must fail — module does not exist. Confirmed: `Cannot find module './renderVerdict' imported from '.../apps/api/scripts/renderVerdict.spec.ts'`.
+- [x] 2.1 RED: `apps/api/scripts/renderVerdict.spec.ts` — fixtures for `fc-match`/`pdffonts`/`pdftotext` stdout (present/fallback/missing per layer) assert the parser returns pass/fail + reason per layer. Must fail — module does not exist.
 - [x] 2.2 GREEN: create `apps/api/scripts/renderVerdict.ts` (pure parser, three layers: family resolution, glyph embedding, text round-trip) and `apps/api/scripts/verificarRender.ts` (jiti driver: renders a probe doc via `GeneradorDeDocumentosPuppeteer`, runs the three tools, feeds stdout to the parser).
-- [x] 2.3 Read the contract template's CSS to record the exact font family requested (open question) and hardcode it as the `fc-match` argument in `verificarRender.ts`, with a comment naming the source line. Both families (`Liberation Serif` line 25, `Liberation Sans` line 34) recorded in `REQUESTED_FONT_FAMILIES` (renderVerdict.ts), source-commented, imported by the driver.
+- [x] 2.3 Read the contract template's CSS to record the exact font family requested (open question) and hardcode it as the `fc-match` argument in `verificarRender.ts`, with a comment naming the source line.
 - [x] 2.4 Add `verify:render` script to `apps/api/package.json`.
 - [x] 2.5 Exercise the real render + verdict in the existing `integration` job (`pnpm --filter @contratos/api test:integration`, Chromium present in CI). Real host fonts remain unverifiable pre-VPS — note this explicitly, do not claim otherwise.
 
 ## Phase 2B — PR2 close out
 
 - [x] 2B.1 `deploy/README.md`: render verdict section — the three-layer check (family resolution, glyph embedding, text round-trip), the hardcoded font family from 2.3 with its source comment, and the explicit caveat that real host fonts remain unverifiable pre-VPS (2.5).
-- [x] 2B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results. All three green — see apply-progress for full output.
-- [ ] 2B.3 Open PR #2 targeting PR #1's branch (feature-branch-chain). Evidence: focused test command output, `verify:render` integration result (real render probe, Chromium present in CI), rollback boundary from the Work Units table.
+- [x] 2B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results.
+- [x] 2B.3 Open PR #2 targeting PR #1's branch (feature-branch-chain). Evidence: focused test command output, `verify:render` integration result (real render probe, Chromium present in CI), rollback boundary from the Work Units table. **Applied as two PRs, not one**: PR2 was split at apply time into **PR #80** (`renderVerdict.ts`, the pure parser) and **PR #81** (`verificarRender.ts`, the jiti driver, targeting PR #80's branch). The chain is now **9 PRs, not 8** — every PR number from this point on shifts by one versus this document's original numbering (this document's "PR3" is the 4th PR opened; PR7/PR8's go-live gate is now the 8th/9th PR opened). Task numbering, content, and RED/GREEN pairing in this file are unchanged.
 
 ## Phase 4 — PR3: seed fail-closed gate (D3)
 
-*Live application code, distinct in risk from the deploy/publish infra scripts in PR4/PR5 — the seam this PR applies.*
+*Live application code, distinct in risk from the deploy/publish infra scripts in PR4/PR5 — the seam this PR applies. Opened as the 4th PR in the chain (see the split note on 2B.3) — its own branch is `feat/pd-03-seed-fail-closed`, based on `feat/pd-02b-verdict-driver` (PR #81).*
 
-- [ ] 4.1 RED: `apps/api/src/seed/seedDatabase.spec.ts` — new case: `nodeEnv: "production"` with `tecnico` input resolving `action: "omitido"` (no `SEED_TECNICO_PASSWORD`) makes `seedDatabase` throw a named error. Must fail today — the function only throws for the provisional-signature case (**lines 122-133**, orchestrator-verified — the only production `throw` in the file today); the `omitido` path returns silently.
-- [ ] 4.2 RED: same file, same pattern, for `administrador` resolving `omitido` in production. Must fail for the same reason.
-- [ ] 4.3 RED: same file — `nodeEnv: "production"` with either account resolving `already-present` does NOT throw. This is the load-bearing regression guard design D3 calls out: without it, every redeploy fails once passwords are rotated out of the env file. Must currently pass trivially (no throw exists at all yet) but must stay green after 4.4.
-- [ ] 4.4 GREEN: modify `apps/api/src/seed/seedDatabase.ts` — after computing `administrador`/`tecnico` results, when `nodeEnv === "production"` and either resolves `"omitido"`, throw an `Error` naming the missing account and its env var (`SEED_ADMIN_PASSWORD` / `SEED_TECNICO_PASSWORD`), mirroring the existing provisional-signature guard's message style.
-- [ ] 4.5 Confirm `apps/api/src/seed/seedTecnico.spec.ts` and `seedAdministrador.spec.ts` still pass unmodified (they exercise `sembrarCuenta` directly, not the new gate).
+- [x] 4.1 RED: `apps/api/src/seed/seedDatabase.spec.ts` — new case: `nodeEnv: "production"` with `tecnico` input resolving `action: "omitido"` (no `SEED_TECNICO_PASSWORD`) makes `seedDatabase` throw a named error. Must fail today — the function only throws for the provisional-signature case (**lines 122-133**, orchestrator-verified — the only production `throw` in the file today); the `omitido` path returns silently.
+- [x] 4.2 RED: same file, same pattern, for `administrador` resolving `omitido` in production. Must fail for the same reason.
+- [x] 4.3 RED: same file — `nodeEnv: "production"` with either account resolving `already-present` does NOT throw. This is the load-bearing regression guard design D3 calls out: without it, every redeploy fails once passwords are rotated out of the env file. Must currently pass trivially (no throw exists at all yet) but must stay green after 4.4.
+- [x] 4.4 GREEN: modify `apps/api/src/seed/seedDatabase.ts` — after computing `administrador`/`tecnico` results, when `nodeEnv === "production"` and either resolves `"omitido"`, throw an `Error` naming the missing account and its env var (`SEED_ADMIN_PASSWORD` / `SEED_TECNICO_PASSWORD`), mirroring the existing provisional-signature guard's message style.
+- [x] 4.5 Confirm `apps/api/src/seed/seedTecnico.spec.ts` and `seedAdministrador.spec.ts` still pass unmodified (they exercise `sembrarCuenta` directly, not the new gate). Confirmed: both spec files' diffs are empty; both suites pass (9 + 11 tests) unmodified.
 
 ## Phase 4B — PR3 close out
 
-- [ ] 4B.1 `deploy/README.md`: seed-gate section — the fail-closed guarantee, and why `already-present` never throwing is load-bearing for routine redeploys.
-- [ ] 4B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3 diff; record results.
-- [ ] 4B.3 Open PR #3 targeting PR #2's branch (feature-branch-chain). Evidence per Work Units table; call out explicitly that this PR is live application code (auth/seed path), distinct in risk from the deploy scripts that follow in PR4/PR5.
+- [x] 4B.1 `deploy/README.md`: seed-gate section — the fail-closed guarantee, and why `already-present` never throwing is load-bearing for routine redeploys.
+- [x] 4B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3 diff; record results. All three green — see apply-progress for full output.
+- [ ] 4B.3 Open PR #3 targeting PR #2's branch (feature-branch-chain). Evidence per Work Units table; call out explicitly that this PR is live application code (auth/seed path), distinct in risk from the deploy scripts that follow in PR4/PR5. **Excluded from this apply run — the orchestrator opens the PR, not `sdd-apply`.**
 
 ## Phase 5 — PR4: deploy sequence (D5)
 
@@ -297,4 +297,14 @@ combined "seed gate + deploy + publish" PR and its single close-out (pass
 2's "5B") is now three PRs (PR3, PR4, PR5) each needing its own. Net: 58
 original tasks (unchanged in content, RED/GREEN pairing, and order across
 all three passes) + 15 net new close-out tasks = **73 tasks total** across
-16 phase blocks / 8 chained PRs.
+16 phase blocks / 8 chained PRs (task numbering; opened as 9 PRs — see the
+2B.3 split note).
+
+---
+
+**Apply progress (batch 3, PR3): 23/73 tasks complete (1.1-1.6, 1B.1-1B.2 —
+PR1, PR #78 opened and green, 1B.3 excluded; 2.1-2.5, 2B.1-2B.3 — PR2,
+opened as PR #80 + PR #81, both green; 4.1-4.5, 4B.1-4B.2 — PR3, seed
+fail-closed gate, this batch, 4B.3 excluded — the orchestrator opens the
+PR, not `sdd-apply`). Full evidence in `apply-progress.md` and
+`sdd/production-deployment/apply-progress` (Engram).**
