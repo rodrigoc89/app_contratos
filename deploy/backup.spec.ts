@@ -301,6 +301,130 @@ describe("backup.sh", () => {
 
   // --------------------------------------------------------- housekeeping
 
+  it("never deletes a remote file that is not one of its own backup artifacts", async () => {
+    // `rclone lsjson` lists everything at the remote path, and the prune
+    // deletes the lexically-first entries. An operator's own file sharing
+    // that bucket counts toward the total AND gets deleted as an "old
+    // backup" — do_prune_local already filters on '*.tar.enc'; the remote
+    // side did not.
+    const backupEnvFile = await makeValidBackupEnvFile();
+    const remoteStoreRoot = join(scratch, "remote-store");
+    const remoteBackupsDir = join(remoteStoreRoot, "backups");
+    await mkdir(remoteBackupsDir, { recursive: true });
+
+    for (let i = 0; i < 31; i++) {
+      await writeFile(
+        join(remoteBackupsDir, `contratos-backup-${timestampFor(i)}.tar.enc`),
+        "fixture",
+        "utf-8",
+      );
+    }
+    // Sorts before every 'contratos-...' name, so it is pruned first.
+    await writeFile(join(remoteBackupsDir, "LEEME.txt"), "no es un backup\n", "utf-8");
+
+    const { binDir } = await makeRcloneStub(remoteStoreRoot);
+
+    await execFileAsync(SCRIPT, ["--prune-only"], {
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        BACKUP_ENV_FILE: backupEnvFile,
+        BACKUP_WORK_DIR: join(scratch, "local-work"),
+      },
+    });
+
+    const remaining = await readdir(remoteBackupsDir);
+    expect(remaining).toContain("LEEME.txt");
+    expect(remaining.filter((name) => name.endsWith(".tar.enc"))).toHaveLength(30);
+  });
+
+  it("fails loudly when the remote cannot be listed, instead of reading it as an empty remote", async () => {
+    // A remote this script cannot reach must never look like a remote
+    // holding no backups: that reads as "nothing to prune" and reports
+    // success on a run that proved nothing about the offsite copy.
+    const backupEnvFile = await makeValidBackupEnvFile();
+    const binDir = join(scratch, "bin");
+    await mkdir(binDir, { recursive: true });
+    const rcloneStub = join(binDir, "rclone");
+    await writeFile(
+      rcloneStub,
+      "#!/usr/bin/env bash\necho 'rclone: connection refused' >&2\nexit 1\n",
+      "utf-8",
+    );
+    await chmod(rcloneStub, 0o755);
+
+    const error = await expectToFail(
+      execFileAsync(SCRIPT, ["--prune-only"], {
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH}`,
+          BACKUP_ENV_FILE: backupEnvFile,
+          BACKUP_WORK_DIR: join(scratch, "local-work"),
+        },
+      }),
+    );
+
+    expect(error.code).not.toBe(0);
+  });
+
+  it("refuses a RETENTION_REMOTE_COUNT of 0, which would delete every offsite backup ever taken", async () => {
+    // The remote copy is the only one that survives losing the VPS. Keeping
+    // zero of them does not just skip a prune: it deletes the whole history
+    // including the artifact this very run pushed.
+    const backupEnvFile = await makeValidBackupEnvFile();
+    const remoteStoreRoot = join(scratch, "remote-store");
+    const remoteBackupsDir = join(remoteStoreRoot, "backups");
+    await mkdir(remoteBackupsDir, { recursive: true });
+    await writeFile(
+      join(remoteBackupsDir, `contratos-backup-${timestampFor(0)}.tar.enc`),
+      "fixture",
+      "utf-8",
+    );
+
+    const { binDir } = await makeRcloneStub(remoteStoreRoot);
+
+    const error = await expectToFail(
+      execFileAsync(SCRIPT, ["--prune-only"], {
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH}`,
+          BACKUP_ENV_FILE: backupEnvFile,
+          BACKUP_WORK_DIR: join(scratch, "local-work"),
+          RETENTION_REMOTE_COUNT: "0",
+        },
+      }),
+    );
+
+    expect(error.code).toBe(1);
+    expect(error.stderr).toContain("RETENTION_REMOTE_COUNT");
+    await expect(readdir(remoteBackupsDir)).resolves.toHaveLength(1);
+  });
+
+  it("uses the encryption tool the operator configured, not whichever one is installed", async () => {
+    // Same defect encrypt-backup-archive.sh had: this script kept its own
+    // copy of the $PATH-based selection, so a host configured for gpg stops
+    // backing up the moment anything pulls `age` onto it.
+    const backupEnvFile = await makeValidBackupEnvFile();
+    const binDir = join(scratch, "bin");
+    await mkdir(binDir, { recursive: true });
+    const ageStub = join(binDir, "age");
+    await writeFile(ageStub, "#!/usr/bin/env bash\nexit 0\n", "utf-8");
+    await chmod(ageStub, 0o755);
+
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        BACKUP_ENV_FILE: backupEnvFile,
+        ENV_FILE: await makeValidEnvFile(),
+        DOCUMENT_STORE_DIR: await makeDocumentStoreDir(),
+        BACKUP_WORK_DIR: join(scratch, "local-work"),
+      },
+    });
+
+    expect(stdout).toContain("encryption=gpg");
+  });
+
   it("rejects an unrecognized flag instead of silently proceeding", async () => {
     const envFile = await makeValidEnvFile();
     const backupEnvFile = await makeValidBackupEnvFile();

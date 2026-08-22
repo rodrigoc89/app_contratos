@@ -41,7 +41,26 @@ log() {
   printf '%s\n' "$*" >&2
 }
 
+# Which tool encrypts is a decision the operator makes by setting a
+# recipient, not one made for them by whatever happens to be installed.
+# Selecting on $PATH alone means an unrelated `apt install` that pulls in
+# `age` breaks every backup on a host deliberately configured for gpg:
+# $AGE_RECIPIENT is unset there, so the run refuses — a backup that stopped
+# working because of a package nobody connected to backups.
+#
+# Only when neither recipient is configured does $PATH decide, and then
+# purely so the refusal below names the tool this host would have used.
 resolve_encryption_tool() {
+  if [ -n "$AGE_RECIPIENT" ]; then
+    printf 'age\n'
+    return
+  fi
+
+  if [ -n "$GPG_RECIPIENT" ]; then
+    printf 'gpg\n'
+    return
+  fi
+
   if command -v age > /dev/null 2>&1; then
     printf 'age\n'
   else
@@ -54,7 +73,11 @@ ENCRYPTION_TOOL="$(resolve_encryption_tool)"
 case "$ENCRYPTION_TOOL" in
   age)
     if [ -z "$AGE_RECIPIENT" ]; then
-      echo "encrypt-backup-archive.sh: \$AGE_RECIPIENT must be set — age is on \$PATH and is the preferred tool" >&2
+      echo "encrypt-backup-archive.sh: \$AGE_RECIPIENT must be set — age is on \$PATH and is the preferred tool when no recipient is configured" >&2
+      exit 1
+    fi
+    if ! command -v age > /dev/null 2>&1; then
+      echo "encrypt-backup-archive.sh: \$AGE_RECIPIENT is set but age is not installed on \$PATH. Install age, or unset \$AGE_RECIPIENT and set \$GPG_RECIPIENT to use the gpg fallback — this script will not silently encrypt to a different recipient than the one configured." >&2
       exit 1
     fi
     age -r "$AGE_RECIPIENT" -o "$OUTPUT_FILE" "$INPUT_FILE"
@@ -62,6 +85,10 @@ case "$ENCRYPTION_TOOL" in
   gpg)
     if [ -z "$GPG_RECIPIENT" ]; then
       echo "encrypt-backup-archive.sh: \$GPG_RECIPIENT must be set — age is not on \$PATH, falling back to gpg --recipient (still asymmetric, per design.md D7)" >&2
+      exit 1
+    fi
+    if ! command -v gpg > /dev/null 2>&1; then
+      echo "encrypt-backup-archive.sh: neither age nor gpg is installed on \$PATH — this file cannot be encrypted, and an unencrypted backup must never leave this host (design.md D7)." >&2
       exit 1
     fi
     gpg --batch --yes --trust-model always --recipient "$GPG_RECIPIENT" --output "$OUTPUT_FILE" --encrypt "$INPUT_FILE"

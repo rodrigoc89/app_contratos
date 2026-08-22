@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +9,7 @@ import {
   evaluateFamilyResolution,
   evaluateGlyphEmbedding,
   evaluateTextRoundTrip,
+  type FontFamilyRequest,
   type LayerVerdict,
 } from "./renderVerdict";
 
@@ -18,12 +22,43 @@ import {
  * synthesized to exercise a defect this dev machine does not currently have.
  */
 
+const PLANTILLAS = ["v1-comodato.html", "v1-condiciones-generales.html"];
+
+/**
+ * Reads `font-family: "<primary>", "<fallback>", <generic>;` declarations
+ * straight out of a template, in source order.
+ */
+function familiasDeclaradas(plantilla: string): FontFamilyRequest[] {
+  const html = readFileSync(
+    join(import.meta.dirname, "../prisma/plantillas", plantilla),
+    "utf-8",
+  );
+
+  return [...html.matchAll(/font-family:\s*"([^"]+)",\s*"([^"]+)"/g)].map(
+    (coincidencia) => ({
+      primary: coincidencia[1]!,
+      fallback: coincidencia[2]!,
+    }),
+  );
+}
+
 describe("REQUESTED_FONT_FAMILIES", () => {
-  it("matches the exact families the templates request — v1-comodato.html lines 25 and 34 (identical in v1-condiciones-generales.html)", () => {
-    expect(REQUESTED_FONT_FAMILIES).toEqual([
-      { primary: "Liberation Serif", fallback: "DejaVu Serif" },
-      { primary: "Liberation Sans", fallback: "DejaVu Sans" },
+  it("is derived from what the templates actually declare, not from a copy of itself", () => {
+    // Asserting the constant against a hand-written duplicate of the same
+    // literal would stay green after someone changes the template's CSS —
+    // and the verdict would then check a family the PDF never requests,
+    // passing all three layers while every glyph renders as tofu.
+    expect(familiasDeclaradas("v1-comodato.html")).toEqual([
+      ...REQUESTED_FONT_FAMILIES,
     ]);
+  });
+
+  it("holds for every template, not just the one that was checked", () => {
+    for (const plantilla of PLANTILLAS) {
+      expect(familiasDeclaradas(plantilla), plantilla).toEqual([
+        ...REQUESTED_FONT_FAMILIES,
+      ]);
+    }
   });
 });
 
@@ -70,6 +105,29 @@ describe("evaluateFamilyResolution (layer 1 — fc-match)", () => {
     expect(verdict.reason).toContain('unrecognized font ("Noto Sans")');
   });
 });
+
+  it("fails when a requested family was never probed at all", () => {
+    // This module's own header warns that a verdict probing only the serif
+    // face passes while every heading renders as tofu. `[].every()` is
+    // `true`, so without this the warning describes a hole the code leaves
+    // open.
+    const soloSerif = evaluateFamilyResolution([
+      {
+        family: REQUESTED_FONT_FAMILIES[0]!,
+        stdout: "Liberation Serif\n",
+      },
+    ]);
+
+    expect(soloSerif.pass).toBe(false);
+    expect(soloSerif.reason).toContain("Liberation Sans");
+  });
+
+  it("fails when nothing was probed, instead of passing vacuously", () => {
+    const nada = evaluateFamilyResolution([]);
+
+    expect(nada.pass).toBe(false);
+    expect(nada.reason).not.toBe("");
+  });
 
 describe("evaluateGlyphEmbedding (layer 2 — pdffonts)", () => {
   // Real `pdffonts` header, captured against a probe PDF rendered by
@@ -158,20 +216,41 @@ describe("evaluateTextRoundTrip (layer 3 — pdftotext)", () => {
 });
 
 describe("buildRenderVerdict", () => {
-  it("passes only when every layer passes", () => {
-    const pass: LayerVerdict = {
-      layer: "family-resolution",
-      pass: true,
-      reason: "ok",
-    };
-    const fail: LayerVerdict = {
-      layer: "glyph-embedding",
-      pass: false,
-      reason: "nope",
-    };
+  const capa = (
+    layer: LayerVerdict["layer"],
+    pass: boolean,
+  ): LayerVerdict => ({ layer, pass, reason: pass ? "ok" : "nope" });
 
-    expect(buildRenderVerdict([pass, pass]).pass).toBe(true);
-    expect(buildRenderVerdict([pass, fail]).pass).toBe(false);
+  const lasTres = (...fallan: LayerVerdict["layer"][]): LayerVerdict[] =>
+    (["family-resolution", "glyph-embedding", "text-round-trip"] as const).map(
+      (layer) => capa(layer, !fallan.includes(layer)),
+    );
+
+  it("passes only when every layer passes", () => {
+    expect(buildRenderVerdict(lasTres()).pass).toBe(true);
+    expect(buildRenderVerdict(lasTres("glyph-embedding")).pass).toBe(false);
+    expect(buildRenderVerdict(lasTres("family-resolution")).pass).toBe(false);
+    expect(buildRenderVerdict(lasTres("text-round-trip")).pass).toBe(false);
+  });
+
+  it("refuses an incomplete layer set instead of reporting a pass over it", () => {
+    // A verdict over a subset of the layers is not a verdict. Without this,
+    // a driver that drops a layer — or `[]` outright — reports `pass: true`:
+    // a render nobody checked, reported as a render that is fine.
+    expect(() => buildRenderVerdict([])).toThrow(/family-resolution/);
+    expect(() =>
+      buildRenderVerdict([capa("family-resolution", true)]),
+    ).toThrow(/glyph-embedding/);
+  });
+
+  it("refuses a duplicated layer, which would hide the one it replaced", () => {
+    expect(() =>
+      buildRenderVerdict([
+        capa("family-resolution", true),
+        capa("family-resolution", true),
+        capa("glyph-embedding", true),
+      ]),
+    ).toThrow(/family-resolution/);
   });
 
   it("carries every layer verdict through untouched, for the driver to print", () => {

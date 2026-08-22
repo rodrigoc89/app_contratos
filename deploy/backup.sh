@@ -117,8 +117,18 @@ load_backup_env_into_environment() {
   GPG_RECIPIENT="${GPG_RECIPIENT:-}"
 }
 
+# Same rule as encrypt-backup-archive.sh, which does the actual encrypting:
+# the recipient the operator configured decides, not whatever happens to be
+# installed. Selecting on $PATH here means a host deliberately configured
+# for gpg stops backing up the moment an unrelated package pulls `age` in.
+# $PATH only breaks the tie when neither recipient is configured, so that
+# the refusal below names the tool this host would have used.
 resolve_encryption_tool() {
-  if command -v age > /dev/null 2>&1; then
+  if [ -n "$AGE_RECIPIENT" ]; then
+    ENCRYPTION_TOOL="age"
+  elif [ -n "$GPG_RECIPIENT" ]; then
+    ENCRYPTION_TOOL="gpg"
+  elif command -v age > /dev/null 2>&1; then
     ENCRYPTION_TOOL="age"
   else
     ENCRYPTION_TOOL="gpg"
@@ -126,6 +136,31 @@ resolve_encryption_tool() {
 }
 
 # --------------------------------------------------------------- guards
+
+# `total -le RETENTION` is the only thing standing between a prune and a
+# wipe: at 0 nothing is retained, so every artifact — including the one this
+# very run just pushed — lands in the pruned set. The remote copy is the
+# only one that survives losing the VPS, so 0 there is never a policy, it is
+# the destruction of the entire backup history; the run refuses. A local 0
+# IS a legitimate policy ("offsite only, keep nothing on the box"), so it is
+# allowed — the artifact it deletes is already at the remote by then.
+check_retention_counts() {
+  local name value
+  for name in RETENTION_REMOTE_COUNT RETENTION_LOCAL_COUNT; do
+    value="${!name}"
+    case "$value" in
+      '' | *[!0-9]*)
+        echo "backup.sh: \$$name must be a whole number, got '$value'" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  if [ "$RETENTION_REMOTE_COUNT" -lt 1 ]; then
+    echo "backup.sh: \$RETENTION_REMOTE_COUNT must be at least 1 (got '$RETENTION_REMOTE_COUNT') — at 0 the prune deletes every offsite artifact, including the one this run just pushed, and the remote copy is the only one that survives losing this host" >&2
+    exit 1
+  fi
+}
 
 check_rclone_remote_set() {
   if [ -z "$RCLONE_REMOTE" ]; then
@@ -246,9 +281,21 @@ do_push() {
 # convention as publicar-assets.sh's `.releases/<timestamp>.files`), so a
 # lexical sort orders them oldest-first — the same head/tail split
 # publicar-assets.sh's do_prune_old_releases already uses.
+# Filtered to this script's OWN artifacts, exactly as
+# list_local_artifact_names already filters on '*.tar.enc'. `rclone lsjson`
+# lists everything at the remote path, and the prune deletes the
+# lexically-first entries — so an unrelated file sharing that bucket would
+# both inflate the count and be deleted as an "old backup". This script must
+# only ever delete what it created.
+#
+# Filtered with `sed -n '/…/p'`, not `grep`: under `set -o pipefail` a grep
+# that matches nothing fails the whole pipeline, and the usual `|| true`
+# would then also swallow a genuine `rclone lsjson` failure — a remote this
+# script could not reach would look like a remote holding no backups.
 list_remote_artifact_names() {
   rclone lsjson "$RCLONE_REMOTE" \
     | sed -n 's/.*"Name": *"\([^"]*\)".*/\1/p' \
+    | sed -n '/\.tar\.enc$/p' \
     | sort
 }
 
@@ -307,6 +354,7 @@ main() {
   # preflight guards (design.md D5/D6): a refusal here costs nothing.
   load_backup_env_into_environment
   resolve_encryption_tool
+  check_retention_counts
   check_rclone_remote_set
 
   if [ "$PRUNE_ONLY" = true ]; then

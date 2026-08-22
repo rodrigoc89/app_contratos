@@ -179,7 +179,7 @@ print_plan() {
   log "[plan:checkout] git fetch --tags && git checkout --detach '${TAG:-<unset>}'"
   log "[plan:install] pnpm install --frozen-lockfile, install the Chromium browser (D1), and build the web app, all as '$SERVICE_USER'"
   log "[plan:migrate] prisma migrate deploy"
-  log "[plan:seed] prisma:seed — fails closed in production per D3, never at boot"
+  log "[plan:seed] $(seed_command) — fails closed in production per D3, never at boot"
   log "[plan:publish] deploy/publicar-assets.sh — additive assets, then index.html, then sw.js (D4)"
   log "[plan:start] start the $SERVICE_NAME service and verify GET $HEALTH_URL with retries"
 }
@@ -239,9 +239,30 @@ do_migrate() {
 # `omitido` (D3, apps/api/src/seed/seedDatabase.ts) — never on
 # `already-present`, which is what keeps a routine redeploy working after
 # both passwords are rotated out of $ENV_FILE.
+# The one definition of what the seed step runs, so `print_plan` above shows
+# the real command instead of a prose description that can drift from it.
+#
+# `NODE_ENV=production` is stated here rather than read from $ENV_FILE, and
+# it is not optional: `prisma:seed` runs outside systemd, so it inherits
+# nothing from `EnvironmentFile=`; `load_env_file_into_environment` exports
+# an explicit whitelist; `run_as_service_user` passes an explicit
+# `--preserve-env` list; and `dotenv/config` in `prisma/seed.ts` loads
+# `apps/api/.env`, which does not exist on this host. Without this
+# assignment `process.env.NODE_ENV` is undefined and every
+# `nodeEnv === "production"` guard in `seedDatabase.ts` silently passes —
+# including the one that refuses to seed with the placeholder signature,
+# which the comment there calls "THE line" because a contract signed with it
+# is rendered, hashed, sealed and stored exactly like a real one, with no
+# later stage that would catch it. Reading the value from $ENV_FILE would
+# fail open again the first time an operator left the line out; deploy.sh
+# only ever runs on the production host, so it asserts it.
+seed_command() {
+  printf "cd '%s/apps/api' && NODE_ENV=production pnpm prisma:seed" "$APP_DIR"
+}
+
 do_seed() {
   log "[step] seeding the database (fails closed in production per D3)"
-  run_as_service_user "cd '$APP_DIR/apps/api' && pnpm prisma:seed"
+  run_as_service_user "$(seed_command)"
 }
 
 # publicar-assets.sh (PR5, D4) does not exist in this repository yet — only

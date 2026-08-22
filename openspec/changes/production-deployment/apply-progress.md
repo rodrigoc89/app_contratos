@@ -218,9 +218,256 @@ files yet — no other PR in the chain has landed. The one exception is
 and is untouched by a revert of this branch's commits (only the additions
 this batch made are reverted).
 
-## Next recommended
+## Next recommended (superseded by Batch 5 below — kept for history)
 
 Continue `sdd-apply` with PR2 (Phase 2 + Phase 2B: render verdict, D2), on a
 new branch off `feat/pd-01-env-provisioning` per the feature-branch-chain
 strategy — or, if the user authorizes publishing, complete 1B.3 (open PR #1)
 first.
+
+---
+
+**Note on Batches 2-4.** This filesystem copy of `apply-progress.md` was not
+updated after Batch 1 landed — the canonical, current record for Batches
+2-4 (PR2/PR3/PR4: render verdict D2, seed fail-closed gate D3, deploy
+sequence D5) lives in Engram, `sdd/production-deployment/apply-progress`
+(obs 559 as of Batch 4). Per this apply run's own instructions, that gap is
+not reconstructed here — only Batch 5 (this run) is appended below.
+
+---
+
+## Batch 5 — PR5 (Phase 5C + Phase 5D), tasks 5.6-5.10 and 5D.1-5D.2
+
+Branch: `feat/pd-05-asset-publish` (base: `feat/pd-04-deploy-sequence`,
+PR #83). Implements design.md D4 — the asset publish step `deploy.sh`'s
+`[plan:publish]` line names by path. Independently testable from `deploy.sh`
+(PR4): no RED/GREEN cross-coupling between the two scripts.
+
+### Why this matters (context carried into the implementation, not just the
+commit message)
+
+A técnico can be standing in a customer's house, tablet open, mid-*comodato*,
+when a deploy lands. `sw.js`'s generated workbox precache manifest carries a
+`revision` hash per entry, `index.html` included. If `sw.js` publishes
+before `index.html`, an installing worker fetches whatever `index.html`
+currently sits at `$WEB_ROOT` — the OLD shell — and stores those bytes keyed
+under the NEW revision hash `sw.js` already carries. Workbox treats a
+revision it already has cached as satisfied and never re-fetches it: that
+client is stuck serving the old shell permanently, under a hash that claims
+to be current. There is no self-healing reload — only clearing site data by
+hand fixes it. This is why the publish order (additive copy → `index.html`
+→ `sw.js` last) is a correctness requirement, not a style choice, and why
+the implementation carries the full mechanism explanation both in the
+script's own comments and in `deploy/README.md`, not just the rule.
+
+### TDD Cycle Evidence
+
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5.6 | `deploy/publicar-assets.spec.ts` | Unit (shell, `execFile --dry-run`) | N/A (new file) | ✅ Written | ✅ Passed | ✅ 2 cases (plan-order test + real-copy/swap behavioral test) | ➖ None needed — code already matched the target shape on first GREEN |
+| 5.7 | `deploy/publicar-assets.spec.ts` | Unit (shell, `execFile` real run) | N/A (new file) | ✅ Written | ✅ Passed | ✅ 2 cases (boundary: ≤2 manifests → no prune; 3+ manifests → prune to 2 + orphan-asset removal) | ➖ None needed |
+
+RED confirmed for the right reason on both tasks — `deploy/publicar-assets.sh`
+did not exist yet:
+
+```
+× prints the publish plan in copy-assets → swap-index → swap-sw order
+  → spawn /home/rodrigo/work/app_contratos/deploy/publicar-assets.sh ENOENT
+× retains only the 2 newest release manifests when 3+ are present, pruning
+  older manifests and the assets referenced only by them
+  → spawn /home/rodrigo/work/app_contratos/deploy/publicar-assets.sh ENOENT
+```
+
+(All 7 tests in the file failed with the same `ENOENT` on the first RED run;
+one test's setup had its own bug — a missing `mkdir` of `.releases/` in the
+retention test's fixture, unrelated to the production script — fixed before
+GREEN so every RED failure traces to "script does not exist," not a test
+bug.)
+
+### 5.8 — GREEN: `deploy/publicar-assets.sh`
+
+Implements D4's 5-step sequence:
+
+1. `do_copy_assets` — additive copy (`install -D -m 644`, no `--delete`) of
+   every file under `$BUILD_DIR` except `index.html`/`sw.js`.
+2. `do_swap_index` — atomic publish of `index.html` via a temp-file-then-
+   rename-in-target-directory pattern (`atomic_publish_file`), not a
+   cross-directory `mv`.
+3. `do_swap_sw` — same atomic pattern, for `sw.js`, always called last.
+4. `do_write_manifest` — writes `.releases/<timestamp>.files`, the full
+   relative file list of that release's `$BUILD_DIR`.
+5. `do_prune_old_releases` — keeps the `$RETENTION_COUNT` (default 2)
+   newest manifests; for every older one, deletes any file it lists that no
+   retained manifest also lists, then deletes the old manifest itself.
+
+**Design decision recorded at apply time — atomic swap via temp-file-then-
+rename, not a literal cross-directory `mv`.** `design.md`'s D4 shorthand
+says "mv index.html into place (rename(2), atomic)." A literal
+`mv "$BUILD_DIR/index.html" "$WEB_ROOT/index.html"` is only atomic — and
+only guaranteed not to fail with `EXDEV` — when `$BUILD_DIR` and `$WEB_ROOT`
+are on the same filesystem, which is true today (`$WEB_ROOT` defaults to
+`/var/www/contratos`, `$BUILD_DIR` to `$APP_DIR/apps/web/dist`, both under
+the same root filesystem) but is not guaranteed by anything the script
+itself checks. The implementation instead copies into a temp file created
+in `$WEB_ROOT` itself (`mktemp "${target_file}.XXXXXX"`), then renames
+that temp file over the target — the rename is unconditionally a same-
+filesystem `rename(2)`, atomic regardless of where `$BUILD_DIR` lives. Same
+end-state and same atomicity guarantee D4 asks for, more robust to a future
+change in where the build output is produced.
+
+**Env vars** (all overridable, matching `provision.sh`/`deploy.sh`'s D8
+harness convention): `APP_DIR` (default `/opt/contratos`), `BUILD_DIR`
+(default `$APP_DIR/apps/web/dist` — `vite build`'s output; the API has no
+`dist/` and is never involved), `WEB_ROOT` (default `/var/www/contratos`,
+matching `deploy/nginx.conf`'s `root`), `RELEASES_DIR` (default
+`$WEB_ROOT/.releases`), `RETENTION_COUNT` (default 2).
+
+### Files
+
+| File | Action | Lines |
+|---|---|---|
+| `deploy/publicar-assets.spec.ts` | Created | 239 |
+| `deploy/publicar-assets.sh` | Created | 239 |
+| `deploy/README.md` | Modified — new "Asset publish (D4)" section (order, the poisoned-precache mechanism in full, the 2-release retention policy, the unresolved in-flight `firmar` drop noted plainly), install-order table row 2a, "What this PR cannot prove yet" additions, 3 new post-VPS checklist items, updated "Next step" | +141/-5 |
+| `openspec/changes/production-deployment/tasks.md` | Modified — 5.6-5.10, 5D.1-5D.2 ticked; 5D.3 left unchecked | — |
+
+### Static verification (task 5.9)
+
+```
+$ command -v shellcheck
+(no output)
+$ echo $?
+1
+```
+
+`shellcheck` is **not installed** on this machine — the same gap PR1's
+`provision.sh` and PR4's `deploy.sh` already declared, confirmed again
+directly rather than assumed. No system package was installed to work
+around it.
+
+```
+$ bash -n deploy/deploy.sh; echo $?
+0
+$ bash -n deploy/publicar-assets.sh; echo $?
+0
+```
+
+Both scripts pass `bash -n` with zero syntax errors.
+
+### Verification run (5D.2, cumulative PR1-PR5 diff)
+
+```
+$ pnpm test
+deploy test:            Test Files 3 passed (3)    Tests  19 passed (19)  (4 provision + 8 deploy + 7 publicar-assets)
+packages/esquemas test: Test Files 5 passed (5)     Tests 125 passed (125)
+apps/api test:          Test Files 58 passed (58)   Tests 778 passed (778)
+apps/web test:          Test Files 72 passed (72)   Tests 571 passed (571)
+exit code: 0
+
+$ pnpm typecheck
+deploy typecheck: Done
+packages/esquemas typecheck: Done
+apps/api typecheck: Done
+apps/web typecheck: Done
+exit code: 0
+
+$ pnpm lint
+(no output — 0 errors, 0 warnings)
+exit code: 0
+```
+
+### What this PR cannot prove (stated in `deploy/README.md`)
+
+`--dry-run` proves the publish order and the retention arithmetic for real,
+against scratch `BUILD_DIR`/`WEB_ROOT` directories. It proves nothing about
+a real `vite build` output published over a real previous release, the
+post-restart `/salud` failure path colliding with an in-progress publish, or
+asset-swap ordering observed against a real browser tab holding an open
+comodato session across a real deploy. All three remain unverifiable until
+the VPS exists. Also recorded, unresolved and named per task 5.10 (not
+fixed here): the API restart inside `deploy.sh` still drops an in-flight
+`POST /contratos/:id/firmar` — draining needs a second `contratos-api`
+instance, and a 4 GB VPS cannot host one alongside Postgres and Chromium's
+render queue. Mitigation stays operator scheduling.
+
+### Diff size
+
+```
+ deploy/README.md               | 146 ++++++++++++++++++++++++-
+ deploy/publicar-assets.sh      | 239 +++++++++++++++++++++++++++++++++++++++++
+ deploy/publicar-assets.spec.ts | 239 +++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 619 insertions(+), 5 deletions(-)
+```
+
+Total changed lines: **624** (619 insertions + 5 deletions) vs. the
+~365-455 estimate — over by roughly 1.4-1.7x, in the same direction as
+PR1 (~707-719 vs. ~450-560) and PR2 (~978 vs. ~330-410), though less
+severely than either. PR3 (222 vs. ~190-220) and PR4 (701 vs. ~630-750)
+both landed close to or inside their estimates; this batch did not. The
+largest single contributor is `deploy/README.md`'s new section (146 lines)
+— it was written to explain the poisoned-precache mechanism in full, per
+this batch's explicit instruction ("explain the mechanism, not just the
+rule"), which cost more prose than a rule-only version would have. No task
+in this batch's scope was thinned or skipped to hit a number.
+
+### Rollback boundary
+
+`git revert` `feat/pd-05-asset-publish` against `feat/pd-04-deploy-sequence`
+(PR #83). Nothing downstream depends on `publicar-assets.sh` in production
+yet — no VPS exists, and `deploy.sh`'s `do_publish` calling it by path is
+already merged (PR4) but never executed for real pre-VPS — so rollback is
+git-only.
+
+## Learned
+
+1. An atomic same-filesystem rename is safer implemented as
+   copy-to-temp-then-rename-within-the-target-directory than as a literal
+   cross-directory `mv`, which risks `EXDEV` if source and destination ever
+   end up on different filesystems.
+2. A retention-pruning test's own fixture setup (creating the
+   `.releases/` directory before writing manifest files into it) is exactly
+   the kind of test-side bug strict TDD's RED-for-the-right-reason gate is
+   built to catch before it gets confused with a production defect.
+3. Explaining a cache-poisoning mechanism in full (not just stating the
+   ordering rule) costs meaningfully more prose than a rule-only README
+   section — worth it here, but it is the direct reason this batch ran
+   further over its own line estimate than PR3 or PR4 did.
+4. Bash's `for ((i=0; i<n; i++))` arithmetic loops can misbehave under
+   `set -e`/`errexit`; this implementation avoided that class of bug
+   entirely by using file-based line iteration (`head`/`tail`/`while read`)
+   instead of C-style loop arithmetic for the retention-pruning logic.
+
+## Next recommended
+
+Continue `sdd-apply` with PR6 (Phase 6 + Phase 6B: TLS bootstrap, D6), on a
+new branch off `feat/pd-05-asset-publish` per the feature-branch-chain
+strategy — after the orchestrator opens PR #5 (task 5D.3, excluded from this
+batch).
+
+## Batch 6 — PR6: TLS bootstrap (D6)
+
+Tasks 6.1-6.7, 6B.1-6B.2. Branch `feat/pd-06-tls-bootstrap`, 715 changed
+lines against a ~420-520 estimate.
+
+- `deploy/nginx.conf` templated with exactly four substitutions
+  (`server_name` ×2, both `ssl_certificate*` paths, `root`). Nothing else in
+  its 187 lines changed.
+- `deploy/nginx-bootstrap.conf` (HTTP-only ACME + 503 catch-all),
+  `deploy/tls-bootstrap.sh`, `deploy/renewal-hook-nginx.sh` and their specs.
+- `nginx -t` is a hard gate: on failure the symlink is repointed to the
+  bootstrap conf and reloaded, so nginx never ends a run unable to start.
+- Two separate guards by design: a surviving `__..__` token and an empty
+  required value are different failures, because substitution turns an empty
+  value into an empty string with no token left to detect.
+
+Applied by the orchestrator, not the actor: `nginx.conf`'s header still told
+operators to replace literals that task 6.1 had just removed, and to `cp` the
+file into place by hand — which would now install a config with a literal
+placeholder as its `server_name`. Corrected in the same commit.
+
+Verified independently: `pnpm test` exit 0 (1500 tests), the `nginx.conf`
+diff read line by line, and the deploy suite re-run after the header edit to
+confirm the placeholder-drift guard still passes. `shellcheck` remains
+unavailable on this machine — fourth batch to declare it.
+
+Full narrative in Engram `sdd/production-deployment/apply-progress` (obs 559).

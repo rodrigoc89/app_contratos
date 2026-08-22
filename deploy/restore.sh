@@ -130,8 +130,39 @@ require_archive_file() {
   fi
 }
 
+# The tool has to match how the ARCHIVE was encrypted — a property of the
+# archive, not of the scratch host. Selecting on $PATH means an `age` that
+# happens to be installed demands an age identity for a gpg-encrypted
+# archive, and the operator's own $AGE_IDENTITY_FILE is the only statement
+# of intent this script has. Same rule as encrypt-backup-archive.sh and
+# backup.sh use on the way out.
+# `do_restore_documents` copies additively (`cp -a src/. dst/`) and never
+# clears the target, so anything already sitting there survives the restore.
+# A file left by an earlier drill at the same path then satisfies
+# verificarRestauracion's `faltantes` check for a row whose PDF is MISSING
+# from this archive — and, being the same document, its sha256 matches too,
+# so `desajustados` stays clean as well. The drill passes on a backup that
+# cannot actually be restored, which is the one outcome the go-live gate
+# depends on it never producing.
+#
+# It refuses rather than clearing: this script's whole posture is that it
+# never deletes what an operator pointed it at. Emptying the directory is
+# their call, made knowingly.
+check_document_target_empty() {
+  if [ ! -d "$ALMACEN_DOCUMENTOS_RUTA" ]; then
+    return
+  fi
+
+  if [ -n "$(ls -A "$ALMACEN_DOCUMENTOS_RUTA" 2>/dev/null)" ]; then
+    echo "restore.sh: the restore target '$ALMACEN_DOCUMENTOS_RUTA' (\$ALMACEN_DOCUMENTOS_RUTA) is not empty. A file left there by an earlier run would stand in for one this archive is missing, and the verifier would report a clean restore of a backup that cannot actually be restored. Empty it (or point at a fresh directory) and run again — this script will not delete it for you." >&2
+    exit 1
+  fi
+}
+
 resolve_decryption_tool() {
-  if command -v age > /dev/null 2>&1; then
+  if [ -n "$AGE_IDENTITY_FILE" ]; then
+    DECRYPTION_TOOL="age"
+  elif command -v age > /dev/null 2>&1 && ! command -v gpg > /dev/null 2>&1; then
     DECRYPTION_TOOL="age"
   else
     DECRYPTION_TOOL="gpg"
@@ -139,9 +170,19 @@ resolve_decryption_tool() {
 }
 
 check_decryption_identity() {
-  if [ "$DECRYPTION_TOOL" = "age" ] && [ -z "$AGE_IDENTITY_FILE" ]; then
-    echo "restore.sh: \$AGE_IDENTITY_FILE must be set — age is on \$PATH and is the preferred tool. This identity file must NEVER live on the production VPS." >&2
-    exit 1
+  if [ "$DECRYPTION_TOOL" = "age" ]; then
+    if [ -z "$AGE_IDENTITY_FILE" ]; then
+      echo "restore.sh: \$AGE_IDENTITY_FILE must be set — gpg is not available, so age is the only tool left. This identity file must NEVER live on the production VPS." >&2
+      exit 1
+    fi
+    if [ ! -f "$AGE_IDENTITY_FILE" ]; then
+      echo "restore.sh: age identity file '$AGE_IDENTITY_FILE' (\$AGE_IDENTITY_FILE) does not exist — refusing before touching anything" >&2
+      exit 1
+    fi
+    if ! command -v age > /dev/null 2>&1; then
+      echo "restore.sh: \$AGE_IDENTITY_FILE is set but age is not installed on \$PATH — install age, or unset it to decrypt a gpg-encrypted archive" >&2
+      exit 1
+    fi
   fi
   # The gpg fallback needs the matching secret key already imported into
   # the invoking user's own keyring — there is no path variable to check
@@ -204,6 +245,7 @@ main() {
   require_target_var DATABASE_URL "$DATABASE_URL"
   require_target_var ALMACEN_DOCUMENTOS_RUTA "$ALMACEN_DOCUMENTOS_RUTA"
   require_archive_file
+  check_document_target_empty
   resolve_decryption_tool
   check_decryption_identity
 

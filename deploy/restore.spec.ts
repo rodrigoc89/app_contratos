@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -169,6 +169,69 @@ describe("restore.sh", () => {
   });
 
   // --------------------------------------------------------- housekeeping
+
+  it("refuses a document target that is not empty, which could hide the very corruption the drill exists to catch", async () => {
+    // do_restore_documents copies additively (`cp -a src/. dst/`) and never
+    // clears the target. A file left by an earlier drill at the same path
+    // therefore satisfies verificarRestauracion's `faltantes` check for a
+    // row whose PDF is MISSING from this archive — and, being the same
+    // document, its sha256 matches too. The drill then passes on a backup
+    // that cannot actually be restored, which is the one outcome the
+    // go-live gate depends on it never producing.
+    const targetDocumentStoreDir = await makeScratchDocumentStoreDir();
+    const archiveFile = join(scratch, "contratos-backup-fixture.tar.enc");
+    await writeFile(archiveFile, "no-hace-falta-que-sea-real\n", "utf-8");
+
+    const error = await expectToFail(
+      execFileAsync(SCRIPT, [], {
+        env: {
+          ...process.env,
+          ENV_FILE: join(scratch, "no-such-api.env"),
+          DATABASE_URL: "postgresql://scratch:scratch@127.0.0.1:5432/scratch_restore",
+          ALMACEN_DOCUMENTOS_RUTA: targetDocumentStoreDir,
+          ARCHIVE_FILE: archiveFile,
+        },
+      }),
+    );
+
+    expect(error.code).toBe(1);
+    expect(error.stderr).toContain(targetDocumentStoreDir);
+    // Refuses, never clears: the operator decides what to delete.
+    await expect(
+      readFile(join(targetDocumentStoreDir, "marker.txt"), "utf-8"),
+    ).resolves.toContain("pre-existing");
+  });
+
+  it("picks the decryption tool from what the operator configured, not from what is installed", async () => {
+    // The tool has to match how the ARCHIVE was encrypted — a property of
+    // the archive, not of the scratch host. Selecting on $PATH means an
+    // installed `age` demands an age identity for a gpg-encrypted archive.
+    const targetDocumentStoreDir = join(scratch, "empty-target");
+    await mkdir(targetDocumentStoreDir, { recursive: true });
+    const archiveFile = join(scratch, "gpg-encrypted.tar.enc");
+    await writeFile(archiveFile, "pretend this is gpg output\n", "utf-8");
+
+    const binDir = join(scratch, "bin");
+    await mkdir(binDir, { recursive: true });
+    const ageStub = join(binDir, "age");
+    await writeFile(ageStub, "#!/usr/bin/env bash\nexit 0\n", "utf-8");
+    await chmod(ageStub, 0o755);
+
+    const error = await expectToFail(
+      execFileAsync(SCRIPT, [], {
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH}`,
+          ENV_FILE: join(scratch, "no-such-api.env"),
+          DATABASE_URL: "postgresql://scratch:scratch@127.0.0.1:5432/scratch_restore",
+          ALMACEN_DOCUMENTOS_RUTA: targetDocumentStoreDir,
+          ARCHIVE_FILE: archiveFile,
+        },
+      }),
+    );
+
+    expect(error.stderr).not.toContain("AGE_IDENTITY_FILE");
+  });
 
   it("rejects an unrecognized flag instead of silently proceeding", async () => {
     await expect(
