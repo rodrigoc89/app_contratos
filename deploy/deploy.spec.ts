@@ -121,6 +121,30 @@ describe("deploy.sh --dry-run", () => {
     }
   });
 
+  it("seeds with NODE_ENV=production, without which every production gate in the seed is inert", async () => {
+    // `prisma:seed` runs outside systemd, so it inherits nothing from
+    // `EnvironmentFile=`. `load_env_file_into_environment` exports an
+    // explicit whitelist, `run_as_service_user` passes an explicit
+    // `--preserve-env` list, and `dotenv/config` in `prisma/seed.ts` reads
+    // `apps/api/.env`, which does not exist on the server. So unless this
+    // script states it, `process.env.NODE_ENV` is undefined there and every
+    // `nodeEnv === "production"` guard in `seedDatabase.ts` silently does
+    // nothing — including the one refusing to seed with the placeholder
+    // signature, which has no later stage to catch it.
+    //
+    // deploy.sh only ever runs on the production host, so it asserts this
+    // rather than reading it: a value taken from $ENV_FILE would be back to
+    // failing open the moment an operator leaves the line out.
+    const appDir = await makeValidAppDir();
+    const envFile = await makeValidEnvFile();
+
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: appDir, ENV_FILE: envFile },
+    });
+
+    expect(stdout).toContain("NODE_ENV=production pnpm prisma:seed");
+  });
+
   // ------------------------------------------------------------- task 5.2
 
   it("refuses when $APP_DIR is not the git checkout it claims to be, even when cwd is a different repo (threat matrix: git repository selection)", async () => {
