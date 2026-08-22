@@ -5,14 +5,15 @@ every falsifiable guarantee into TypeScript and Vitest so CI can prove it
 **before the VPS exists** (see `../openspec/changes/production-deployment/design.md`).
 This file documents the parts that only make sense once you are standing in
 front of the real host: install order, the audit/offline package fallback,
-and where the two questions this PR cannot answer get resolved later in the
-chain.
+and where the one remaining question this chain cannot answer gets resolved.
 
 ## Quick path
 
 1. Provision the host once, as root: `sudo deploy/provision.sh`
 2. Deploy the application: `TAG=v1.2.3 deploy/deploy.sh`
 3. Bootstrap TLS: `sudo CONTRATOS_HOST=contratos.example.com deploy/tls-bootstrap.sh`
+4. Schedule daily backups: `deploy/backup.sh` (offsite, encrypted — see
+   "Backup" below; a systemd timer to run it automatically lands in PR8)
 
 Every script supports `--dry-run` and needs no VPS to preview: its Vitest
 spec `execFile`s it against a scratch temp directory (design.md D8).
@@ -24,7 +25,8 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 | 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | Done |
 | 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5); the `publish` step calls `publicar-assets.sh` (D4, row 2a) | Done |
 | 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | Done |
-| 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) — see "TLS bootstrap" below | **This PR** |
+| 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) — see "TLS bootstrap" below | Done |
+| 4 | `backup.sh` | Dump the database, copy the PDF tree — always in that order — archive, encrypt asymmetrically, push offsite, prune (D7) — see "Backup" below | **This PR** |
 
 `provision.sh` assumes `/opt/contratos` is (or will become) the git checkout
 `deploy.sh` operates on — see "`.cache/` and the git-exclude step" below for
@@ -474,15 +476,155 @@ after a **successful** renewal only, so the hook is simply
 passes, so a renewed certificate is never paired with a reload of a config
 that cannot even start.
 
-## Still-open items, and exactly where they resolve
+## Backup (D7)
 
-Two questions design.md left open are **not** blocked on any task in this
-PR; both have a named home later in the chain:
+Every signed *comodato* on this server exists in exactly one place until this
+script runs: the box itself. `backup.sh` produces a daily, offsite, encrypted
+copy — database and PDF archive together — that a *different* machine could
+lose the VPS and still recover from.
+
+### Why the database dumps before the PDF tree is copied — never the reverse
+
+```
+pg_dump -Fc  (dump-first)
+  → copy the PDF tree (ALMACEN_DOCUMENTOS_RUTA)
+  → archive, encrypt, push offsite
+```
+
+This order is a falsifiability argument, not a preference. A `contrato_documentos`
+row and its PDF file are written at different times during signing; a backup
+that spans that gap will always miss one side of a contract written mid-run.
+Which side is chosen by which step runs first:
+
+- **Dump first (chosen).** A PDF written after the dump completes is simply
+  not yet referenced by any row in the dump — an **orphan file** the backup
+  carries but nothing needs. Harmless.
+- **Copy first (rejected).** A row committed after the PDF copy completes
+  points at a file the backup never captured. A restore then reconstructs a
+  database that *claims* a signed contract has a document, when the backup
+  holds no such file — the exact failure mode `deploy/backup.spec.ts`
+  (task 8.1) asserts can never happen, by asserting `[plan:dump]` always
+  precedes `[plan:copy-documents]` in the printed plan.
+
+PR8's restore verifier (`verificarRestauracion.ts`) is what turns "orphan
+file, harmless" from an argument into a proven fact: it warns on an orphan,
+never fails on one, and fails hard on the reverse (a row with no file).
+
+### Encryption: `age`, asymmetric — `gpg --recipient` as the fallback
+
+Design D7's property in one sentence: **no key capable of decrypting a
+backup may live on the VPS that produced it.** An attacker who compromises
+the server must not thereby gain every historical backup of every signed
+contract — which is exactly what a symmetric passphrase sitting in
+`backup.env` would hand them, encrypted-looking or not.
+
+**Chosen: `age`, with a recipient public key.** Confirmed packaged (verified
+directly against `packages.ubuntu.com`, not assumed) for both plausible LTS
+targets — Ubuntu 22.04 (jammy) and 24.04 (noble), both in `universe`. `age`
+needs only the recipient's public key string (`age1...`) to encrypt; the
+VPS never needs a local keyring or an import step, and the matching secret
+key never has to exist anywhere the backup pipeline touches.
+
+**Fallback: `gpg --recipient` (asymmetric — not `gpg --symmetric`).** If
+`age` is ever absent from `$PATH` at runtime, `encrypt-backup-archive.sh`
+falls back to gpg's own asymmetric mode. This still satisfies D7: `gpg
+--recipient` encrypts to a public key already imported into the operator's
+keyring, and decrypting needs the matching *secret* key, which likewise
+never touches the VPS. Design D7's rejected choice is specifically `gpg
+--symmetric` (a shared passphrase) — asymmetric `gpg --recipient` was never
+rejected, only judged less convenient than `age`.
+
+**Honesty about what ran for real here.** `age` itself is not an installed
+binary on the machine this PR was implemented on (only `gpg` is present),
+and this apply run does not install system packages. `encrypt-backup-archive.spec.ts`'s
+round-trip test therefore exercises the **gpg fallback** for real: a
+throwaway keypair generated in the test's own temp `$GNUPGHOME`, a real
+encrypt, a real decrypt proving byte-identical output, and a real decrypt
+*failure* against an empty keyring proving the archive is unreadable
+without the key. A second, structural test proves the tool-**selection**
+logic itself prefers `age` whenever it is present on `$PATH`, using a
+mocked `age` binary — the same PATH-injection pattern
+`renewal-hook-nginx.spec.ts` already established for `nginx`/`systemctl`.
+Both paths are exercised; only one ran against a real cryptographic
+round-trip on this machine, and that gap is recorded here rather than
+implied away.
+
+### `backup.env` — new to this PR, never committed
+
+`backup.sh` reads `DATABASE_URL` from the *same* `/etc/contratos/api.env`
+`deploy.sh` already reads (no credential duplication). Everything new to
+this PR — the `rclone` remote configuration and the encryption recipient —
+lives in a second file, `/etc/contratos/backup.env` (root-owned, `0600`,
+created by an operator on the host, never git-tracked):
+
+```sh
+# /etc/contratos/backup.env — created on the host, root:root, chmod 0600
+RCLONE_REMOTE=offsite:contratos-backups
+# rclone needs no config file on disk: every RCLONE_CONFIG_<REMOTE>_* key
+# below is read straight from the environment (rclone's own supported
+# mechanism). backup.sh exports every KEY=value line in this file into its
+# own process environment before invoking rclone.
+RCLONE_CONFIG_OFFSITE_TYPE=s3
+RCLONE_CONFIG_OFFSITE_PROVIDER=<provider>
+RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID=<real value, operator-supplied>
+RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY=<real value, operator-supplied>
+# age (preferred) — the recipient PUBLIC key; no secret key belongs here
+# or anywhere else on this host.
+AGE_RECIPIENT=age1<real recipient public key>
+# gpg fallback only, if age is ever absent from $PATH — the recipient's
+# key fingerprint; the PUBLIC key itself must already be imported into
+# gpg's own keyring before backup.sh can encrypt to it.
+GPG_RECIPIENT=<real fingerprint>
+```
+
+Task 8.7's repo scan searched for a committed `backup.env`, any file whose
+name matches `*.env`/`*secret*`/`*credential*`, any `RCLONE_CONFIG_*_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY`/`_TOKEN`/`_PASS` literal assignment, any
+`AGE-SECRET-KEY-1` string, and any `BEGIN PGP PRIVATE KEY BLOCK` marker,
+across tracked files, untracked files, and this PR's own diff. **Found:
+none.** The only `age1...`-shaped string in this PR is the fixture value
+`encrypt-backup-archive.spec.ts` uses to prove tool-selection — its own
+literal text (`age1fakepublickeyusedonlybythistest...`) makes clear it is
+not a real key.
+
+### Retention: 30 remote, 2 local
+
+```
+prune-remote → keep the 30 most recent, delete older (offsite, `rclone`)
+prune-local  → keep the 2 most recent,  delete older (`$BACKUP_WORK_DIR`,
+                                                        a local safety net,
+                                                        not the offsite copy)
+```
+
+Artifacts are named `contratos-backup-<timestamp>.tar.enc` — the same
+ISO-8601-like-prefix convention `publicar-assets.sh`'s `.releases/*.files`
+manifests already use, so a lexical sort is also a chronological sort, and
+the prune arithmetic (list, sort, keep the newest N, delete the rest) is
+the same head/tail split `do_prune_old_releases` already uses. `deploy/backup.spec.ts`
+(task 8.5) proves this for real against 31+ dated artifacts, no VPS
+needed: a mocked `rclone` binary treats a local scratch directory as the
+"remote," so the listing, sorting, and deletion logic itself runs
+unmocked — only the network transport is a stub.
+
+`deploy/backup.sh --prune-only` re-runs retention pruning alone, without
+taking a new backup — useful after a retention-count change, or to clean up
+a remote left over-quota by a partially failed push. It needs only
+`RCLONE_REMOTE` (from `backup.env`); unlike a full backup run, it needs
+neither `DATABASE_URL` nor an encryption recipient, since it never dumps or
+encrypts anything.
+
+## Still-open items, and exactly where it resolves
+
+One question design.md left open is **not** blocked on any task in this
+chain — it has a named home later:
 
 | Open item | Resolves in | What happens there |
 |---|---|---|
-| `age` availability on the target Ubuntu release | PR7, task 8.3 | Checked during `backup.sh`'s implementation; falls back to `gpg --recipient` (asymmetric — the decrypt key still never touches the VPS) if `age` is absent from the release's apt repositories |
 | A real backup-then-restore drill | PR8, task 9.8 | Blocked on the `offsite-backup-destination` external dependency (`state.yaml`), not on any code task — the fixture-level tests in 8.1/8.3-8.6/9.1-9.4 do not need it |
+
+The other open question design.md recorded — `age` availability on the
+target Ubuntu release — is resolved above, in "Backup (D7)": confirmed
+packaged for both plausible LTS targets, `age` chosen as the primary tool,
+`gpg --recipient` implemented and proven as the fallback.
 
 ## What this PR cannot prove yet
 
@@ -549,6 +691,31 @@ directive-order review, that the HTTP-only bootstrap conf and its own
   `nginx.conf:55-56`'s certificate paths are themselves syntactically
   correct is unverified until a real nginx parses them.
 
+`backup.sh --dry-run` proves the plan and its guards for real, no VPS
+needed (`backup.spec.ts`, task 8.1). `backup.sh --prune-only` proves the
+retention arithmetic for real against a mocked `rclone` (task 8.5).
+`encrypt-backup-archive.sh` proves a genuine encrypt/decrypt round-trip and
+key-gating for real (task 8.3, gpg fallback path — see "Backup (D7)" for
+why `age` itself did not run on this machine). What none of that proves:
+
+- **A real `pg_dump` against a live PostgreSQL instance.** `do_dump`,
+  `do_copy_documents`, `do_archive`, and `do_push` are implemented but,
+  like `deploy.sh`'s `do_stop`/`do_checkout`/`do_install`, never actually
+  invoked in a spec — `pg_dump` is not installed on this machine, and there
+  is no live database to dump from pre-VPS.
+- **A real `rclone` push to a real offsite remote.** `rclone` itself is not
+  installed on this machine either; `backup.spec.ts`'s retention tests mock
+  it entirely. The credentialed remote is blocked on the
+  `offsite-backup-destination` external dependency (`state.yaml`), same as
+  the full restore drill (PR8, task 9.8).
+- **The real `age` binary, encrypting for real.** Confirmed packaged for
+  the target Ubuntu release (see "Backup (D7)"), but not installed on this
+  development machine — the real round-trip proof here used the `gpg`
+  fallback path instead. Both paths satisfy design D7's property
+  identically; only one was cryptographically exercised on this machine.
+- **A scheduled, unattended run.** `contratos-backup.service`/`.timer`
+  land in PR8 (task 9.7) — this PR's `backup.sh` is invoked by hand.
+
 ## Checklist (post-VPS, not yet actionable)
 
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
@@ -566,12 +733,20 @@ directive-order review, that the HTTP-only bootstrap conf and its own
 - [ ] `nginx -t` reports `syntax is ok` / `test is successful` against the real, rendered `/etc/nginx/sites-available/contratos` — the first time this file has ever been parsed by a real nginx
 - [ ] `certbot renew --force-renewal --cert-name <real hostname>` followed by `openssl s_client -connect <real hostname>:443 -servername <real hostname> </dev/null 2>/dev/null | openssl x509 -noout -dates` shows a **new** `notBefore`, proving `renewal-hook-nginx.sh` actually reloaded nginx and not just that certbot wrote a new file to disk
 - [ ] A deliberately broken rendered conf (temporarily corrupt `/etc/nginx/sites-available/contratos` by hand, then re-run `tls-bootstrap.sh`) exercises the hard-gate rollback: `nginx -t` fails, the symlink repoints back to the bootstrap conf, nginx reloads successfully, and the script still exits `1`
+- [ ] `sudo deploy/backup.sh` completes a real dump → copy → archive → encrypt → push cycle against the live database and `ALMACEN_DOCUMENTOS_RUTA`, and the encrypted archive lands on the real offsite remote (needs the `offsite-backup-destination` credential — `state.yaml`)
+- [ ] `age -d -i <the real recipient's identity file>` (kept off the VPS entirely) decrypts a real pushed archive byte-identical to the pre-encryption tar
+- [ ] After 31+ real daily runs, exactly 30 remote copies remain and the 31st-oldest is gone
+- [ ] `deploy/backup.sh --prune-only` run by hand against the real remote behaves identically to its mocked-`rclone` test — same head/tail split, no accidental deletion of a retained copy
 
 ## Next step
 
-This PR (PR6) added `tls-bootstrap.sh` and `deploy/nginx-bootstrap.conf`
-(row 3 of the install-order table, D6) — the HTTP-only bootstrap conf that
-lets nginx start before a certificate exists, `nginx -t` as a hard gate
-that never leaves nginx unable to start, and `renewal-hook-nginx.sh` so a
-certbot renewal actually reaches a running nginx. PR7 adds `backup.sh`
-(D7): database-before-PDFs backup ordering and encryption at rest.
+This PR (PR7) added `backup.sh` and `encrypt-backup-archive.sh` (row 4 of
+the install-order table, D7) — database-before-PDFs backup ordering,
+asymmetric encryption (`age`, `gpg --recipient` fallback), offsite push via
+`rclone`, and 30-remote/2-local retention pruning. PR8 adds `restore.sh`
+and the hash-based restore verifier: the mechanical proof that a restore
+actually reconstructs what this PR backs up, plus the `contratos-backup.timer`
+that runs this script on a schedule instead of by hand. **PR7 and PR8
+together are the go-live gate** — no comodato may be signed on this server
+until both have landed and a real backup-then-restore drill has passed
+(see task 10.4).
