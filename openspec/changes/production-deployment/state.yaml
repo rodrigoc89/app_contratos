@@ -9,7 +9,7 @@ project: app_contratos
 artifactStore: hybrid
 createdAt: 2026-08-22
 updatedAt: 2026-08-22
-lastPhaseCompleted: tasks
+lastPhaseCompleted: apply
 # apply is IN PROGRESS, through PR5 of 8 (feature-branch-chain):
 #   PR1 (Phase 1+1B, env/provisioning)  — feat/pd-01-env-provisioning — done, PR #78/#79
 #   PR2 (Phase 2+2B, render verdict D2) — feat/pd-02-render-verdict   — done, opened as PR #80 + PR #81
@@ -65,7 +65,7 @@ phases:
     engramTopicKey: sdd/production-deployment/tasks
     engramObservationId: 550
   apply:
-    status: in_progress
+    status: done
     artifact: tasks.md
     engramTopicKey: sdd/production-deployment/apply-progress
   verify:
@@ -81,7 +81,7 @@ artifacts:
   specs: done
   design: done
   tasks: done
-  applyProgress: in_progress # through PR5 (Batch 5): sdd/production-deployment/apply-progress (Engram, canonical) + apply-progress.md
+  applyProgress: done # all batches; canonical record in Engram (sdd/production-deployment/apply-progress) + apply-progress.md
   verifyReport: missing
 
 taskProgress:
@@ -90,7 +90,12 @@ taskProgress:
   pending: 0
   allComplete: true
 
-nextRecommended: apply # next sdd-apply batch is PR6 (Phase 6 + 6B: TLS bootstrap, D6), on a new branch off feat/pd-05-asset-publish, after the orchestrator opens PR #5 (task 5D.3)
+nextRecommended: verify # ALL work merged to master as of 2026-08-22:
+# nine chained PRs (#78, #80-#89) reviewed and merged into the tracker, then
+# tracker PR #90 merged to master (2582a19), then PR #91 (shellcheck in CI,
+# 13e18ad). Zero PRs open. Review of the chain found and fixed nine defects,
+# each with a failing test first — see Engram for the per-PR record. The
+# superseded note below described the state before that review began: next sdd-apply batch was PR6 (Phase 6 + 6B: TLS bootstrap, D6), on a new branch off feat/pd-05-asset-publish, after the orchestrator opens PR #5 (task 5D.3)
 blockedReasons: []
 
 # External sequencing dependencies recorded by the proposal. These are NOT

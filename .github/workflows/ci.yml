@@ -204,6 +204,41 @@ jobs:
       - name: Apply database migrations
         run: pnpm --filter @contratos/api prisma:migrate:deploy
 
+      - name: Install the PostgreSQL 17 client
+        # `deploy/backup.integration.spec.ts` runs `backup.sh` for real, and
+        # `backup.sh` calls `pg_dump` on the host. pg_dump refuses to dump a
+        # server newer than itself, and the service container above is
+        # Postgres 17, so the runner image's own client is not enough — this
+        # is the same PGDG repository `deploy/provision.sh` adds on the VPS,
+        # which also keeps the client here matching the one in production.
+        run: |
+          sudo install -d -m 755 /etc/apt/keyrings
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /etc/apt/keyrings/postgresql.asc > /dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/postgresql.asc] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          # Debian's /usr/bin/pg_dump is pg_wrapper, which picks a version
+          # from the default cluster — and this image already ships
+          # postgresql-client-16, so installing 17 alone leaves `pg_dump` on
+          # $PATH at 16.15, which refuses to dump a 17 server. Verified: the
+          # first run of this step failed exactly that way. Put 17's own bin
+          # directory first and prove which binary won.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Confirm pg_dump matches the server major version
+        run: |
+          pg_dump --version
+          test "$(pg_dump --version | grep -oE '[0-9]+' | head -1)" = "17"
+
+      - name: Deploy script integration tests
+        # Proves `backup.sh` completes its pg_dump BEFORE the PDF copy begins
+        # by observing a real run (contract-archive-backup spec.md). The
+        # dry-run suite in `pnpm -r test` asserts only the order of the plan
+        # strings, which stays green even with the two calls swapped.
+        run: pnpm --filter @contratos/deploy test:integration
+
       - name: Integration tests
         # These specs TRUNCATE their tables between cases, which is safe only
         # because DATABASE_URL above points at this run's disposable service

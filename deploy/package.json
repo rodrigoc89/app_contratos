@@ -6,6 +6,7 @@
   "description": "Idempotent bash provisioning and deploy scripts for the HostGator VPS. Every guard, ordering rule, and prune policy is asserted by a Vitest execFile spec against --dry-run output (design.md D8) \u2014 no VPS needed to prove the script logic itself.",
   "scripts": {
     "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint:shell": "shellcheck *.sh"
