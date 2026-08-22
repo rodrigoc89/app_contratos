@@ -73,6 +73,70 @@ actually looks (the same command `.github/workflows/ci.yml:167` already
 runs, for the same reason: a warm pnpm store skips Puppeteer's postinstall
 download).
 
+### Render verdict (`pnpm --filter @contratos/api verify:render`)
+
+**Answer first:** `fc-match` returning a font is not proof of anything —
+fontconfig always resolves to *something*, silently substituting when the
+requested family is missing. So the render verdict is three independent
+layers, each proving one thing the others cannot:
+
+| Layer | Tool | Proves | Does NOT prove |
+|---|---|---|---|
+| Family resolution | `fc-match` | The requested family resolves to **itself**, not a silent substitute | Anything about the produced PDF |
+| Glyph embedding | `pdffonts` | A real, known-good font is actually **embedded** in the PDF | Correct glyph shapes |
+| Text round-trip | `pdftotext` | The PDF's `ToUnicode` map carries the right codepoints | **Nothing about rasterization** — `pdftotext` reads `ToUnicode`, never the ink, so a PDF full of tofu boxes can still extract the correct characters |
+
+Layer 3 alone is never sufficient for exactly that reason — a tofu render
+still round-trips. All three must pass.
+
+**The two font families checked** — read from the template's own CSS, not
+assumed:
+
+```
+apps/api/prisma/plantillas/v1-comodato.html (identical in v1-condiciones-generales.html)
+  line 25:  font-family: "Liberation Serif", "DejaVu Serif", serif;
+  line 34:  font-family: "Liberation Sans", "DejaVu Sans", sans-serif;
+```
+
+Both are checked, not one — a verdict that only probed the serif face would
+pass while every heading (which uses the sans face) rendered as tofu. Layer 1
+is strict about the *primary* family only (a substitution to `DejaVu Serif`
+still fails it, because it means `fonts-liberation` did not actually
+install); layers 2-3 accept either family, because `provision.sh` installs
+both `fonts-liberation` and `fonts-dejavu-core` on purpose, and either one
+landing in the PDF is real proof that glyph embedding and text extraction
+work.
+
+**Relationship to the source-level check.** `seedContent.spec.ts` ("uses
+only fonts that exist on a bare Ubuntu server…") already asserts the
+template's CSS *declares* the right families with a generic fallback — a
+**source-level** check on what the template asks for. `verify:render` is the
+**runtime** half: whether the host actually resolves those families and
+whether the produced PDF actually embeds and extracts them. The two are
+complementary, not duplicated — one without the other misses half the
+failure mode.
+
+Rejected: pixel comparison against a CI-generated golden PNG — decisive, but
+a font package update changes pixels and turns provisioning red for a
+non-defect. Recorded as the escalation path if the layered check ever passes
+on a tofu render, not the default mechanism.
+
+`fc-match`, `pdffonts` and `pdftotext` are opportunistic system tools, not
+project dependencies (same status `pdftotext` already had in
+`GeneradorDeDocumentosPuppeteer.integration.spec.ts`). A tool missing on
+PATH is reported plainly as a failed layer, never silently skipped and never
+faked.
+
+**Pre-VPS caveat, stated explicitly:** `verify:render`'s pure parser
+(`apps/api/scripts/renderVerdict.ts`) is unit-tested from fixtures, and its
+driver (`apps/api/scripts/verificarRender.ts`) is exercised end to end in
+`pnpm --filter @contratos/api test:integration` — both against whatever host
+runs them (a dev machine, CI). **Neither proves anything about the real
+production VPS.** That host's actual installed fonts are only verified by
+running `pnpm --filter @contratos/api verify:render` there, after
+`provision.sh`, which is the checklist item below — real host fonts remain
+unverifiable pre-VPS.
+
 ### 36-package apt fallback list (audit / offline reference only)
 
 **This list is not what `provision.sh` runs.** D1 rejected hardcoding it as
@@ -136,10 +200,11 @@ until then it is a documented limitation, not a silent one.
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
 - [ ] Re-running it exits 0 with every guard reporting `[skip]`
 - [ ] Headless Chromium launches with `--no-sandbox --disable-setuid-sandbox` and no missing-library error
-- [ ] A probe PDF renders `ñ á é í ó ú Ñ` and round-trips through text extraction unchanged
+- [ ] `pnpm --filter @contratos/api verify:render` prints `Veredicto final: APROBADO` (all three layers, see "Render verdict" above)
 - [ ] `free -h` shows the 2 GB swapfile active, and it survives a reboot
 
 ## Next step
 
-PR2 adds the render verdict check (D2) that proves the font item above; PR4
-adds `deploy.sh` (row 2 of the install-order table).
+This PR (PR2) added the render verdict check (D2, above) that proves the
+font item in the checklist. PR3 adds the seed fail-closed gate (D3, live
+application code); PR4 adds `deploy.sh` (row 2 of the install-order table).
