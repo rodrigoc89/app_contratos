@@ -224,22 +224,22 @@ per the chained-pr skill's per-PR requirement.
 
 - [x] 5D.1 `deploy/README.md`: asset publish section (`publicar-assets.sh`'s additive-then-atomic-swap order, why `sw.js` publishes last — the poisoned-precache mechanism, not just the rule — and the 2-release retention policy).
 - [x] 5D.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR5 diff; record results. All three green — see apply-progress for full output.
-- [ ] 5D.3 Open PR #5 targeting PR #4's branch (feature-branch-chain). **Excluded from this apply run — the orchestrator opens the PR, not `sdd-apply`.**
+- [x] 5D.3 Open PR #5 targeting PR #4's branch (feature-branch-chain). **Excluded from this apply run — the orchestrator opens the PR, not `sdd-apply`.**
 
 ## Phase 6 — PR6: TLS bootstrap (D6)
 
-- [ ] 6.1 Modify `deploy/nginx.conf`: replace the literal `contratos.iesnet.com.ar` (`server_name`, `ssl_certificate`/`ssl_certificate_key` paths) and `/var/www/contratos` (`root`) with placeholder tokens (e.g. `__CONTRATOS_HOST__`, `__WEB_ROOT__`) so `tls-bootstrap.sh` can render it as a template.
-- [ ] 6.2 RED: `deploy/tls-bootstrap.spec.ts` — rendering with a value that still contains a literal `__..__` token in the output asserts the script FAILs (non-zero exit) before touching nginx. Must fail — script does not exist.
-- [ ] 6.3 RED: same file — `--dry-run` plan asserts the HTTP-only bootstrap conf installs and `nginx -t` runs BEFORE `certbot certonly` is invoked, and the full `nginx.conf` template is not referenced until after the cert exists. Must fail — script does not exist.
-- [ ] 6.4 GREEN: create `deploy/nginx-bootstrap.conf` (ACME location + `503` catch-all) and `deploy/tls-bootstrap.sh` implementing the D6 sequence, with `nginx -t` as a hard gate that repoints the symlink back to the bootstrap conf and reloads on failure — nginx must never end a run unable to start.
-- [ ] 6.5 RED then GREEN: `deploy/renewal-hook-nginx.spec.ts` asserts the hook calls `nginx -t && systemctl reload nginx` (mocked); create `deploy/renewal-hook-nginx.sh` to satisfy it.
-- [ ] 6.6 Static verification: `shellcheck` + `bash -n` on `tls-bootstrap.sh` and `renewal-hook-nginx.sh`.
-- [ ] 6.7 No proof available pre-VPS: real ACME issuance against a DNS-resolvable domain, forced-renewal drill checked via `openssl s_client`, `nginx -t` on a real install. Add to `deploy/README.md`'s post-VPS checklist.
+- [x] 6.1 Modify `deploy/nginx.conf`: replace the literal `contratos.iesnet.com.ar` (`server_name`, `ssl_certificate`/`ssl_certificate_key` paths) and `/var/www/contratos` (`root`) with placeholder tokens (e.g. `__CONTRATOS_HOST__`, `__WEB_ROOT__`) so `tls-bootstrap.sh` can render it as a template.
+- [x] 6.2 RED: `deploy/tls-bootstrap.spec.ts` — rendering with a value that still contains a literal `__..__` token in the output asserts the script FAILs (non-zero exit) before touching nginx. Must fail — script does not exist.
+- [x] 6.3 RED: same file — `--dry-run` plan asserts the HTTP-only bootstrap conf installs and `nginx -t` runs BEFORE `certbot certonly` is invoked, and the full `nginx.conf` template is not referenced until after the cert exists. Must fail — script does not exist.
+- [x] 6.4 GREEN: create `deploy/nginx-bootstrap.conf` (ACME location + `503` catch-all) and `deploy/tls-bootstrap.sh` implementing the D6 sequence, with `nginx -t` as a hard gate that repoints the symlink back to the bootstrap conf and reloads on failure — nginx must never end a run unable to start.
+- [x] 6.5 RED then GREEN: `deploy/renewal-hook-nginx.spec.ts` asserts the hook calls `nginx -t && systemctl reload nginx` (mocked); create `deploy/renewal-hook-nginx.sh` to satisfy it.
+- [x] 6.6 Static verification: `shellcheck` + `bash -n` on `tls-bootstrap.sh` and `renewal-hook-nginx.sh`.
+- [x] 6.7 No proof available pre-VPS: real ACME issuance against a DNS-resolvable domain, forced-renewal drill checked via `openssl s_client`, `nginx -t` on a real install. Add to `deploy/README.md`'s post-VPS checklist.
 
 ## Phase 6B — PR6 close out
 
-- [ ] 6B.1 `deploy/README.md`: TLS bootstrap section (HTTP-only bootstrap conf first, `nginx -t` gate before `certbot`, renewal hook).
-- [ ] 6B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR6 diff; record results.
+- [x] 6B.1 `deploy/README.md`: TLS bootstrap section (HTTP-only bootstrap conf first, `nginx -t` gate before `certbot`, renewal hook).
+- [x] 6B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR6 diff; record results.
 - [ ] 6B.3 Open PR #6 targeting PR #5's branch (feature-branch-chain).
 
 ## Phase 8 — PR7: backup ordering & encryption (D7)

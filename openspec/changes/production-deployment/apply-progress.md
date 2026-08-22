@@ -443,3 +443,31 @@ Continue `sdd-apply` with PR6 (Phase 6 + Phase 6B: TLS bootstrap, D6), on a
 new branch off `feat/pd-05-asset-publish` per the feature-branch-chain
 strategy — after the orchestrator opens PR #5 (task 5D.3, excluded from this
 batch).
+
+## Batch 6 — PR6: TLS bootstrap (D6)
+
+Tasks 6.1-6.7, 6B.1-6B.2. Branch `feat/pd-06-tls-bootstrap`, 715 changed
+lines against a ~420-520 estimate.
+
+- `deploy/nginx.conf` templated with exactly four substitutions
+  (`server_name` ×2, both `ssl_certificate*` paths, `root`). Nothing else in
+  its 187 lines changed.
+- `deploy/nginx-bootstrap.conf` (HTTP-only ACME + 503 catch-all),
+  `deploy/tls-bootstrap.sh`, `deploy/renewal-hook-nginx.sh` and their specs.
+- `nginx -t` is a hard gate: on failure the symlink is repointed to the
+  bootstrap conf and reloaded, so nginx never ends a run unable to start.
+- Two separate guards by design: a surviving `__..__` token and an empty
+  required value are different failures, because substitution turns an empty
+  value into an empty string with no token left to detect.
+
+Applied by the orchestrator, not the actor: `nginx.conf`'s header still told
+operators to replace literals that task 6.1 had just removed, and to `cp` the
+file into place by hand — which would now install a config with a literal
+placeholder as its `server_name`. Corrected in the same commit.
+
+Verified independently: `pnpm test` exit 0 (1500 tests), the `nginx.conf`
+diff read line by line, and the deploy suite re-run after the header edit to
+confirm the placeholder-drift guard still passes. `shellcheck` remains
+unavailable on this machine — fourth batch to declare it.
+
+Full narrative in Engram `sdd/production-deployment/apply-progress` (obs 559).
