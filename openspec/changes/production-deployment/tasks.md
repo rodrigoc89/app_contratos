@@ -240,24 +240,24 @@ per the chained-pr skill's per-PR requirement.
 
 - [x] 6B.1 `deploy/README.md`: TLS bootstrap section (HTTP-only bootstrap conf first, `nginx -t` gate before `certbot`, renewal hook).
 - [x] 6B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR6 diff; record results.
-- [ ] 6B.3 Open PR #6 targeting PR #5's branch (feature-branch-chain).
+- [x] 6B.3 Open PR #6 targeting PR #5's branch (feature-branch-chain).
 
 ## Phase 8 — PR7: backup ordering & encryption (D7)
 
 *Task 8.2 relocated to Phase 9 — see Re-slicing note 1. `backup.sh`'s core (8.1, 8.3, 8.4) is one atomic RED×2/GREEN×1 unit; retention pruning (8.5, 8.6) is a separate, later-addable RED/GREEN pair — named-but-unapplied seam, Re-slicing note 5.*
 
-- [ ] 8.1 RED: `deploy/backup.spec.ts` — `--dry-run` plan asserts the `pg_dump` step is listed strictly before the PDF-tree copy step. Must fail — script does not exist.
+- [x] 8.1 RED: `deploy/backup.spec.ts` — `--dry-run` plan asserts the `pg_dump` step is listed strictly before the PDF-tree copy step. Must fail — script does not exist.
 - [ ] ~~8.2~~ **Relocated to Phase 9** (immediately before 9.3) — it shares a single GREEN (9.4) with 9.3, both targeting the not-yet-created `verificarRestauracion.integration.spec.ts`.
-- [ ] 8.3 RED: encrypt/decrypt round-trip on a fixture — byte-identical after round-trip, unreadable without the key. Must fail — encryption step does not exist. Resolve the `age`-availability open question here: check `age` package presence for the target Ubuntu release during implementation; fall back to `gpg --recipient` (asymmetric, decrypt key never touches the VPS) if absent — either satisfies D7's "no decryption key on the box" property.
-- [ ] 8.4 GREEN: create `deploy/backup.sh` — `pg_dump -Fc` → PDF-tree copy → encrypt (age or gpg fallback per 8.3) → `rclone` push using `/etc/contratos/backup.env` (root `0600`).
-- [ ] 8.5 RED: same file — 31+ dated remote artifacts asserts exactly the 30 most recent are retained (mocked/local listing, no VPS). Must fail.
-- [ ] 8.6 GREEN: implement retention pruning in `deploy/backup.sh` (30 remote, 2 local) to satisfy 8.5.
-- [ ] 8.7 Static verification: `shellcheck` + `bash -n` on `backup.sh`; repo scan confirms no committed credential/secrets file.
+- [x] 8.3 RED: encrypt/decrypt round-trip on a fixture — byte-identical after round-trip, unreadable without the key. Must fail — encryption step does not exist. Resolve the `age`-availability open question here: check `age` package presence for the target Ubuntu release during implementation; fall back to `gpg --recipient` (asymmetric, decrypt key never touches the VPS) if absent — either satisfies D7's "no decryption key on the box" property.
+- [x] 8.4 GREEN: create `deploy/backup.sh` — `pg_dump -Fc` → PDF-tree copy → encrypt (age or gpg fallback per 8.3) → `rclone` push using `/etc/contratos/backup.env` (root `0600`).
+- [x] 8.5 RED: same file — 31+ dated remote artifacts asserts exactly the 30 most recent are retained (mocked/local listing, no VPS). Must fail.
+- [x] 8.6 GREEN: implement retention pruning in `deploy/backup.sh` (30 remote, 2 local) to satisfy 8.5.
+- [x] 8.7 Static verification: `shellcheck` + `bash -n` on `backup.sh`; repo scan confirms no committed credential/secrets file.
 
 ## Phase 8B — PR7 close out
 
-- [ ] 8B.1 `deploy/README.md`: backup section (dump-before-PDF-copy ordering rationale, encryption choice — `age` or the `gpg` fallback per 8.3 — and retention policy).
-- [ ] 8B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR7 diff; record results.
+- [x] 8B.1 `deploy/README.md`: backup section (dump-before-PDF-copy ordering rationale, encryption choice — `age` or the `gpg` fallback per 8.3 — and retention policy).
+- [x] 8B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR7 diff; record results.
 - [ ] 8B.3 Open PR #7 targeting PR #6's branch (feature-branch-chain).
 
 ## Phase 9 — PR8: restore & hash verification (D7 cont.)

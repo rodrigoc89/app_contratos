@@ -86,8 +86,8 @@ artifacts:
 
 taskProgress:
   total: 73 # 58 original tasks unchanged in content/RED-GREEN pairing/order + 15 net new close-out tasks (8 PRs need 8 close-outs)
-  completed: 50 # PR1 9 (#78) + PR2 8 (#80 parser, #81 driver) + PR3 8 (#82) + PR4 8 (#83) + PR5 8 (#84, 5D.3 ticked now that it is open) + PR6 9 (6.1-6.7, 6B.1-6B.2) = 50. 6B.3 stays open until PR6 is opened. Ticks are applied to this file per batch, never by copying a chain branch's copy over it — that silently lost PR2-PR4's history once.
-  pending: 23
+  completed: 59 # +6B.3 (PR #85 open) +PR7 8.1,8.3-8.7,8B.1-8B.2 = 59. PR7 split at apply time into PR7a encryption (263 lines) and PR7b backup (898); the chain is 10 PRs. 8.2 stays open — it was relocated to Phase 9 and shares GREEN 9.4 with 9.3.
+  pending: 14
   allComplete: false
 
 nextRecommended: apply # next sdd-apply batch is PR6 (Phase 6 + 6B: TLS bootstrap, D6), on a new branch off feat/pd-05-asset-publish, after the orchestrator opens PR #5 (task 5D.3)
