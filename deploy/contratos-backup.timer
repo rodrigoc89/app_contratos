@@ -1,0 +1,30 @@
+# Fires deploy/contratos-backup.service once a day (design.md D7's schedule
+# decision: daily, not weekly — DESIGN.md §10 prices the gap between them
+# at roughly 100 home re-visits lost vs. roughly 20).
+#
+# Install alongside deploy/contratos-backup.service — see that file's own
+# header for the full install sequence.
+
+[Unit]
+Description=Daily timer for the offsite contratos backup (design.md D7)
+Documentation=file:///opt/contratos/deploy/README.md
+
+[Timer]
+# 03:15 local time — a low-traffic hour for a técnico-facing service with
+# no customers awake to notice a brief pg_dump lock window. Not itself
+# load-bearing; what matters is that this fires once a day, every day.
+OnCalendar=*-*-* 03:15:00
+# Spreads actual start time across a 15-minute window so this box's backup
+# never fires at the exact same wall-clock second as some other scheduled
+# job sharing the same host — cheap insurance, not a correctness
+# requirement of its own.
+RandomizedDelaySec=15m
+# If the VPS was down (reboot, maintenance) at the scheduled time, run the
+# missed backup as soon as the timer unit is next active instead of simply
+# skipping that day — a daily backup that silently skips days on downtime
+# is not the daily backup design.md D7 asks for.
+Persistent=true
+Unit=contratos-backup.service
+
+[Install]
+WantedBy=timers.target
