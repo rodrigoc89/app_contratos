@@ -218,182 +218,150 @@ files yet — no other PR in the chain has landed. The one exception is
 and is untouched by a revert of this branch's commits (only the additions
 this batch made are reverted).
 
-## Filesystem/Engram sync note (recorded in Batch 4)
+## Next recommended (superseded by Batch 5 below — kept for history)
 
-Batches 2 and 3 below were completed and persisted to Engram
-(`sdd/production-deployment/apply-progress` and `.../tasks`) at the time,
-but the corresponding updates to this file, `tasks.md`, and `state.yaml`
-on the filesystem never actually landed — a real drift between the two
-artifact stores in hybrid mode. Batch 4 (below) reconstructed the Batch
-2/3 summaries from the Engram record and reconciled all three local files
-so both stores agree again. The task-by-task record for Batches 2 and 3
-below is condensed from Engram's fuller original; nothing was re-derived
-or guessed — only trimmed for length.
+Continue `sdd-apply` with PR2 (Phase 2 + Phase 2B: render verdict, D2), on a
+new branch off `feat/pd-01-env-provisioning` per the feature-branch-chain
+strategy — or, if the user authorizes publishing, complete 1B.3 (open PR #1)
+first.
 
 ---
 
-## Batch 2 — PR2 (Phase 2 + Phase 2B), tasks 2.1-2.5 and 2B.1-2B.3
-
-Branch: `feat/pd-02-render-verdict` (base: `feat/pd-01-env-provisioning`,
-PR #78). Implements design.md D2: a three-layer render verdict, each layer
-proving one thing the others cannot — `fc-match` (family resolves to
-itself, not a silent fontconfig substitute), `pdffonts` (a real known-good
-font is embedded), `pdftotext` (the `ToUnicode` map round-trips
-`ñ á é í ó ú Ñ`, though this alone never proves rasterization).
-
-**Files**: `apps/api/scripts/renderVerdict.ts` (286 lines, pure parser, zero
-I/O, fixture-tested — `evaluateFamilyResolution`, `evaluateGlyphEmbedding`,
-`evaluateTextRoundTrip`, `buildRenderVerdict`); `renderVerdict.spec.ts` (186
-lines, 13 tests); `apps/api/scripts/verificarRender.ts` (311 lines, jiti
-driver — real Chromium probe render + `fc-match`/`pdffonts`/`pdftotext`,
-adds `verify:render` to `apps/api/package.json`);
-`verificarRender.integration.spec.ts` (101 lines); `vitest.config.ts` /
-`vitest.integration.config.ts` `include` extended to `scripts/**`;
-`tsconfig.json` `include` extended to `scripts/**/*.ts`; `deploy/README.md`
-"Render verdict" subsection.
-
-**Design judgment call**: layer 1 (`fc-match`) is strict per-family — a
-substitution to the documented DejaVu fallback still fails it, because
-layer 1's specific job is proving `fonts-liberation` itself resolved.
-Layers 2-3 (`pdffonts`, `pdftotext`) are lenient across the whole
-known-good set, since `provision.sh` installs both fonts on purpose.
-
-**2B.3 (open PR)**: applied as **two** PRs, not one — PR #80
-(`renderVerdict.ts`, the pure parser) and PR #81 (`verificarRender.ts`, the
-jiti driver, base `feat/pd-02b-verdict-driver`, targeting PR #80's branch).
-Both open and green. The chain is now **9 PRs total, not 8** — every PR
-number after PR2 shifts by one versus `tasks.md`'s original numbering
-(task labels/content unchanged; only the opened-PR count/position
-shifted).
-
-**Diff**: ~978 changed lines vs. a ~330-410 estimate (~2.4-3x over, worse
-than PR1's ~1.3-1.6x overage).
-
-**Verification**: `pnpm test`, `pnpm typecheck`, `pnpm lint` all green
-against the cumulative PR1+PR2 diff.
+**Note on Batches 2-4.** This filesystem copy of `apply-progress.md` was not
+updated after Batch 1 landed — the canonical, current record for Batches
+2-4 (PR2/PR3/PR4: render verdict D2, seed fail-closed gate D3, deploy
+sequence D5) lives in Engram, `sdd/production-deployment/apply-progress`
+(obs 559 as of Batch 4). Per this apply run's own instructions, that gap is
+not reconstructed here — only Batch 5 (this run) is appended below.
 
 ---
 
-## Batch 3 — PR3 (Phase 4 + Phase 4B), tasks 4.1-4.5 and 4B.1-4B.2
+## Batch 5 — PR5 (Phase 5C + Phase 5D), tasks 5.6-5.10 and 5D.1-5D.2
 
-Branch: `feat/pd-03-seed-fail-closed` (base: `feat/pd-02b-verdict-driver`,
-PR #81). Implements design.md D3: `apps/api/src/seed/seedDatabase.ts` now
-throws in `NODE_ENV=production` when the `admin` or `tecnico` account
-resolves to `action: "omitido"` (its password env var was never set), and
-— the load-bearing regression guard (task 4.3) — never throws when an
-account resolves to `"already-present"`. Without that distinction, every
-routine redeploy would fail once passwords are correctly rotated out of
-the environment file after the accounts already exist.
+Branch: `feat/pd-05-asset-publish` (base: `feat/pd-04-deploy-sequence`,
+PR #83). Implements design.md D4 — the asset publish step `deploy.sh`'s
+`[plan:publish]` line names by path. Independently testable from `deploy.sh`
+(PR4): no RED/GREEN cross-coupling between the two scripts.
 
-**Why**: the seed report already *knew* about the defect —
-`describeSeedReport`'s own `ATENCION` warning at `seedDatabase.ts:282`
-already said skipping the técnico makes "el flujo de firma es
-inalcanzable," then the process still exited 0. The gate turns that known
-warning into a production refusal. Design D3 rejected a `deploy.sh`
-grep-based guard: the operator's actual recovery path under pressure —
-`pnpm --filter @contratos/api prisma:seed` by hand — never goes through
-`deploy.sh`, so a script-level guard would never see it.
+### Why this matters (context carried into the implementation, not just the
+commit message)
 
-**Files**: `apps/api/src/seed/seedDatabase.spec.ts` (new `describe` block,
-3 tests: técnico-omitido throws, administrador-omitido throws, and the
-regression guard — seeds both accounts once with passwords, then reseeds
-in production with both passwords omitted, asserting `"already-present"`
-and no throw); `apps/api/src/seed/seedDatabase.ts` (restructured the
-return-object literal into local variables, then added the production gate
-after all four are computed); `deploy/README.md` "Seed fail-closed gate
-(D3)" section.
-
-**Task 4.5**: confirmed `seedTecnico.spec.ts` and `seedAdministrador.spec.ts`
-diffs are empty; both suites pass unmodified (9 + 11 tests) — the gate
-landed at the right layer.
-
-**4B.3 (open PR)**: deliberately **not done** — the orchestrator opens
-PRs, not `sdd-apply`.
-
-**Diff**: 222 changed lines (190 insertions + 32 deletions) vs. a ~190-220
-estimate — the closest an actual landed to its estimate across the first
-three batches, likely because this PR was scoped to one file pair plus
-docs with no infrastructure surface to expand into.
-
-**Verification**: `pnpm test` (778 api + 571 web + 4 deploy = 1353 tests),
-`pnpm typecheck` (4/4 packages), `pnpm lint` (exit 0) all green against the
-cumulative PR1+PR2+PR3 diff.
-
----
-
-## Batch 4 — PR4 (Phase 5 + Phase 5B), tasks 5.1-5.5 and 5B.1-5B.2
-
-Branch: `feat/pd-04-deploy-sequence` (base: `feat/pd-03-seed-fail-closed`,
-PR #82). Implements design.md D5 — the deploy sequence. This is the single
-most dangerous script in `deploy/`: its real job is to stop the running
-production service. **One atomic 4-RED/1-GREEN unit** — tasks 5.1-5.4 are
-four independent RED specs against the single GREEN in 5.5 (`deploy.sh`
-does not exist until 5.5, so no earlier RED task can pass on its own).
-Stays over the 400-line budget by design (Re-slicing note 4) — not
-shrunk to chase the ceiling.
+A técnico can be standing in a customer's house, tablet open, mid-*comodato*,
+when a deploy lands. `sw.js`'s generated workbox precache manifest carries a
+`revision` hash per entry, `index.html` included. If `sw.js` publishes
+before `index.html`, an installing worker fetches whatever `index.html`
+currently sits at `$WEB_ROOT` — the OLD shell — and stores those bytes keyed
+under the NEW revision hash `sw.js` already carries. Workbox treats a
+revision it already has cached as satisfied and never re-fetches it: that
+client is stuck serving the old shell permanently, under a hash that claims
+to be current. There is no self-healing reload — only clearing site data by
+hand fixes it. This is why the publish order (additive copy → `index.html`
+→ `sw.js` last) is a correctness requirement, not a style choice, and why
+the implementation carries the full mechanism explanation both in the
+script's own comments and in `deploy/README.md`, not just the rule.
 
 ### TDD Cycle Evidence
 
-| Task | RED (confirmed failure) | GREEN |
-|---|---|---|
-| 5.1 (plan order) | `spawn .../deploy/deploy.sh ENOENT` | `deploy.sh` prints `[plan:stop]` → `[plan:dump]` → `[plan:checkout]` → `[plan:install]` → `[plan:migrate]` → `[plan:seed]` → `[plan:publish]` → `[plan:start]`, asserted by marker-index ordering |
-| 5.2 (git repo selection, threat matrix, Applicable) | `expected 'ENOENT' to be 1` | `check_git_repository()`: refuses when `$APP_DIR` does not exist / is not a git checkout / its top-level disagrees with `$APP_DIR` / it has no configured remote — always `git -C "$APP_DIR"`, never bare `git` reading cwd |
-| 5.3 (commit state, threat matrix, Applicable) | `expected 'ENOENT' to be 1` | `check_clean_worktree()`: refuses on non-empty `git status --porcelain`; the script contains no `--force` or `reset --hard` invocation anywhere — verified both by the guard's own code (nothing to grep) and behaviorally (test re-reads the dirty file's content and `git status` after the refused run and asserts byte-identical) |
-| 5.4 (deployment-configuration, 3 sub-cases) | `expected 'ENOENT' to be 1` (×3: missing `DATABASE_URL`, missing `JWT_SECRET`, missing a seed password under `FIRST_DEPLOY=true`) | `check_deploy_configuration()`: reads `$ENV_FILE` without sourcing it, requires `DATABASE_URL`/`JWT_SECRET` unconditionally, requires `SEED_ADMIN_PASSWORD`/`SEED_TECNICO_PASSWORD` only when `FIRST_DEPLOY=true` |
-| 5.5 (GREEN) | — | `deploy/deploy.sh` created; all 8 `deploy.spec.ts` tests pass |
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 5.6 | `deploy/publicar-assets.spec.ts` | Unit (shell, `execFile --dry-run`) | N/A (new file) | ✅ Written | ✅ Passed | ✅ 2 cases (plan-order test + real-copy/swap behavioral test) | ➖ None needed — code already matched the target shape on first GREEN |
+| 5.7 | `deploy/publicar-assets.spec.ts` | Unit (shell, `execFile` real run) | N/A (new file) | ✅ Written | ✅ Passed | ✅ 2 cases (boundary: ≤2 manifests → no prune; 3+ manifests → prune to 2 + orphan-asset removal) | ➖ None needed |
 
-All three guards run **before** `systemctl stop` in both `--dry-run` and a
-real deploy — confirmed structurally in `main()` (guards called, then
-`if [ "$DRY_RUN" = true ]; then print_plan; exit 0; fi`, then `do_stop`)
-and behaviorally by the three preflight-failure tests asserting
-`stdout` never contains `[plan:stop]`.
+RED confirmed for the right reason on both tasks — `deploy/publicar-assets.sh`
+did not exist yet:
 
-### Design decision: the `FIRST_DEPLOY` env var
+```
+× prints the publish plan in copy-assets → swap-index → swap-sw order
+  → spawn /home/rodrigo/work/app_contratos/deploy/publicar-assets.sh ENOENT
+× retains only the 2 newest release manifests when 3+ are present, pruning
+  older manifests and the assets referenced only by them
+  → spawn /home/rodrigo/work/app_contratos/deploy/publicar-assets.sh ENOENT
+```
 
-Task 5.4's literal wording — "a seed password when seeding" — is genuinely
-ambiguous against Batch 3's own D3 regression guard: if `deploy.sh`
-unconditionally required `SEED_ADMIN_PASSWORD`/`SEED_TECNICO_PASSWORD` to
-be present in `$ENV_FILE`, it would hard-block exactly the routine
-redeploy scenario D3's regression test protects (passwords rotated out of
-the file once the accounts already exist). `deploy.sh` always runs the
-seed step (per the literal 8-step plan), so "when seeding" cannot mean
-"whenever the seed step runs" without contradicting that guarantee.
+(All 7 tests in the file failed with the same `ENOENT` on the first RED run;
+one test's setup had its own bug — a missing `mkdir` of `.releases/` in the
+retention test's fixture, unrelated to the production script — fixed before
+GREEN so every RED failure traces to "script does not exist," not a test
+bug.)
 
-**Resolution**: `FIRST_DEPLOY` is an explicit opt-in env var, default
-unset/`false`. Only when `FIRST_DEPLOY=true` does the preflight require
-both seed passwords, refusing before the stop if either is missing. Left
-unset (every deploy after the first), the preflight does not require them
-— `seedDatabase.ts`'s own D3 gate remains the real guarantee either way;
-this preflight is only a convenience that turns a foreseeable failure into
-a pre-stop refusal instead of a mid-deploy one. Documented in
-`deploy/README.md`'s new "Deploy sequence (D5)" section, including a
-positive test proving the routine-redeploy path still reaches
-`[plan:seed]` with no seed passwords set and `FIRST_DEPLOY` unset.
+### 5.8 — GREEN: `deploy/publicar-assets.sh`
+
+Implements D4's 5-step sequence:
+
+1. `do_copy_assets` — additive copy (`install -D -m 644`, no `--delete`) of
+   every file under `$BUILD_DIR` except `index.html`/`sw.js`.
+2. `do_swap_index` — atomic publish of `index.html` via a temp-file-then-
+   rename-in-target-directory pattern (`atomic_publish_file`), not a
+   cross-directory `mv`.
+3. `do_swap_sw` — same atomic pattern, for `sw.js`, always called last.
+4. `do_write_manifest` — writes `.releases/<timestamp>.files`, the full
+   relative file list of that release's `$BUILD_DIR`.
+5. `do_prune_old_releases` — keeps the `$RETENTION_COUNT` (default 2)
+   newest manifests; for every older one, deletes any file it lists that no
+   retained manifest also lists, then deletes the old manifest itself.
+
+**Design decision recorded at apply time — atomic swap via temp-file-then-
+rename, not a literal cross-directory `mv`.** `design.md`'s D4 shorthand
+says "mv index.html into place (rename(2), atomic)." A literal
+`mv "$BUILD_DIR/index.html" "$WEB_ROOT/index.html"` is only atomic — and
+only guaranteed not to fail with `EXDEV` — when `$BUILD_DIR` and `$WEB_ROOT`
+are on the same filesystem, which is true today (`$WEB_ROOT` defaults to
+`/var/www/contratos`, `$BUILD_DIR` to `$APP_DIR/apps/web/dist`, both under
+the same root filesystem) but is not guaranteed by anything the script
+itself checks. The implementation instead copies into a temp file created
+in `$WEB_ROOT` itself (`mktemp "${target_file}.XXXXXX"`), then renames
+that temp file over the target — the rename is unconditionally a same-
+filesystem `rename(2)`, atomic regardless of where `$BUILD_DIR` lives. Same
+end-state and same atomicity guarantee D4 asks for, more robust to a future
+change in where the build output is produced.
+
+**Env vars** (all overridable, matching `provision.sh`/`deploy.sh`'s D8
+harness convention): `APP_DIR` (default `/opt/contratos`), `BUILD_DIR`
+(default `$APP_DIR/apps/web/dist` — `vite build`'s output; the API has no
+`dist/` and is never involved), `WEB_ROOT` (default `/var/www/contratos`,
+matching `deploy/nginx.conf`'s `root`), `RELEASES_DIR` (default
+`$WEB_ROOT/.releases`), `RETENTION_COUNT` (default 2).
 
 ### Files
 
 | File | Action | Lines |
 |---|---|---|
-| `deploy/deploy.spec.ts` | Created | 255 |
-| `deploy/deploy.sh` | Created | 335 |
-| `deploy/README.md` | Modified — new "Deploy sequence (D5)" section (order table, the three guards, the `FIRST_DEPLOY` decision, `CONFIAR_EN_PROXY` cross-link from 1.2), updated Quick path / Install order / "What this PR cannot prove yet" / Checklist / Next step | +97/-14 |
-| `openspec/changes/production-deployment/tasks.md` | Modified — 5.1-5.5, 5B.1-5B.2 ticked; also reconciled the Batch 2/3 filesystem drift (see below) | — |
+| `deploy/publicar-assets.spec.ts` | Created | 239 |
+| `deploy/publicar-assets.sh` | Created | 239 |
+| `deploy/README.md` | Modified — new "Asset publish (D4)" section (order, the poisoned-precache mechanism in full, the 2-release retention policy, the unresolved in-flight `firmar` drop noted plainly), install-order table row 2a, "What this PR cannot prove yet" additions, 3 new post-VPS checklist items, updated "Next step" | +141/-5 |
+| `openspec/changes/production-deployment/tasks.md` | Modified — 5.6-5.10, 5D.1-5D.2 ticked; 5D.3 left unchecked | — |
 
-### Static verification (5B.2 covers `pnpm test`/`typecheck`/`lint`; this is 5.9's sibling for PR4's own script)
+### Static verification (task 5.9)
 
-- `bash -n deploy/deploy.sh` — **pass**, no syntax errors.
-- `shellcheck deploy/deploy.sh` — **shellcheck is not installed** on this
-  machine (`command -v shellcheck` found nothing), same gap as PR1's
-  `provision.sh`. Reported plainly, not silently skipped, no system
-  package installed.
+```
+$ command -v shellcheck
+(no output)
+$ echo $?
+1
+```
 
-### Verification run (5B.2, cumulative PR1+PR2+PR3+PR4 diff)
+`shellcheck` is **not installed** on this machine — the same gap PR1's
+`provision.sh` and PR4's `deploy.sh` already declared, confirmed again
+directly rather than assumed. No system package was installed to work
+around it.
+
+```
+$ bash -n deploy/deploy.sh; echo $?
+0
+$ bash -n deploy/publicar-assets.sh; echo $?
+0
+```
+
+Both scripts pass `bash -n` with zero syntax errors.
+
+### Verification run (5D.2, cumulative PR1-PR5 diff)
 
 ```
 $ pnpm test
-deploy test:  Test Files 2 passed (2)   Tests  12 passed (12)   (4 provision + 8 deploy)
-apps/api test: Test Files 58 passed (58) Tests 778 passed (778)
-apps/web test: Test Files 72 passed (72) Tests 571 passed (571)
+deploy test:            Test Files 3 passed (3)    Tests  19 passed (19)  (4 provision + 8 deploy + 7 publicar-assets)
+packages/esquemas test: Test Files 5 passed (5)     Tests 125 passed (125)
+apps/api test:          Test Files 58 passed (58)   Tests 778 passed (778)
+apps/web test:          Test Files 72 passed (72)   Tests 571 passed (571)
 exit code: 0
 
 $ pnpm typecheck
@@ -410,49 +378,68 @@ exit code: 0
 
 ### What this PR cannot prove (stated in `deploy/README.md`)
 
-`--dry-run` proves the plan and all three guards for real, against a
-fabricated temp git repo. It proves nothing about `pg_dump` against a live
-database, `systemctl stop`/`start` against a real unit, `pnpm install` and
-the Puppeteer browser download as the real `contratos` user, `prisma
-migrate deploy` against production data, or a real `GET /salud` round trip
-through nginx. All of that remains unverifiable until the VPS exists.
+`--dry-run` proves the publish order and the retention arithmetic for real,
+against scratch `BUILD_DIR`/`WEB_ROOT` directories. It proves nothing about
+a real `vite build` output published over a real previous release, the
+post-restart `/salud` failure path colliding with an in-progress publish, or
+asset-swap ordering observed against a real browser tab holding an open
+comodato session across a real deploy. All three remain unverifiable until
+the VPS exists. Also recorded, unresolved and named per task 5.10 (not
+fixed here): the API restart inside `deploy.sh` still drops an in-flight
+`POST /contratos/:id/firmar` — draining needs a second `contratos-api`
+instance, and a 4 GB VPS cannot host one alongside Postgres and Chromium's
+render queue. Mitigation stays operator scheduling.
 
 ### Diff size
 
 ```
- deploy/README.md                                 |  97 ++++++-
- deploy/deploy.sh                                  | 335 ++++++++++++++++++++
- deploy/deploy.spec.ts                             | 255 ++++++++++++++++
- openspec/changes/production-deployment/tasks.md   |  14 +-
- 4 files changed, 687 insertions(+), 14 deletions(-)
+ deploy/README.md               | 146 ++++++++++++++++++++++++-
+ deploy/publicar-assets.sh      | 239 +++++++++++++++++++++++++++++++++++++++++
+ deploy/publicar-assets.spec.ts | 239 +++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 619 insertions(+), 5 deletions(-)
 ```
 
-Total changed lines: **701** (687 additions + 14 deletions) — inside the
-~630-750 estimate from `tasks.md`'s Review Workload Forecast, unlike PR1
-(~707-719 vs. ~450-560) and PR2 (~978 vs. ~330-410), which both ran well
-over. No task was thinned or padded to land inside the range; this is
-simply the first batch whose actual matched its plan.
-
-### Filesystem/Engram drift reconciled in this batch
-
-At the start of this batch, `openspec/changes/production-deployment/tasks.md`
-on the filesystem still showed Phase 2 (2.1-2.5, 2B.1-2B.3) and Phase 4
-(4.1-4.5, 4B.1-4B.2) as **unchecked** `- [ ]`, even though Engram's copy of
-the same tasks artifact (and a prior batch's own note) said this
-reconciliation had already happened. This file (`apply-progress.md`) had
-never been updated past Batch 1 at all. Both were corrected in this batch
-— see the "Batch 2" and "Batch 3" sections above and the `state.yaml`
-update — so hybrid mode's two stores agree again as of this batch.
+Total changed lines: **624** (619 insertions + 5 deletions) vs. the
+~365-455 estimate — over by roughly 1.4-1.7x, in the same direction as
+PR1 (~707-719 vs. ~450-560) and PR2 (~978 vs. ~330-410), though less
+severely than either. PR3 (222 vs. ~190-220) and PR4 (701 vs. ~630-750)
+both landed close to or inside their estimates; this batch did not. The
+largest single contributor is `deploy/README.md`'s new section (146 lines)
+— it was written to explain the poisoned-precache mechanism in full, per
+this batch's explicit instruction ("explain the mechanism, not just the
+rule"), which cost more prose than a rule-only version would have. No task
+in this batch's scope was thinned or skipped to hit a number.
 
 ### Rollback boundary
 
-`git revert` this branch (`feat/pd-04-deploy-sequence`) against its base
-(`feat/pd-03-seed-fail-closed`, PR #82). Nothing in production invokes
-`deploy.sh` yet — no VPS exists — so rollback is git-only.
+`git revert` `feat/pd-05-asset-publish` against `feat/pd-04-deploy-sequence`
+(PR #83). Nothing downstream depends on `publicar-assets.sh` in production
+yet — no VPS exists, and `deploy.sh`'s `do_publish` calling it by path is
+already merged (PR4) but never executed for real pre-VPS — so rollback is
+git-only.
+
+## Learned
+
+1. An atomic same-filesystem rename is safer implemented as
+   copy-to-temp-then-rename-within-the-target-directory than as a literal
+   cross-directory `mv`, which risks `EXDEV` if source and destination ever
+   end up on different filesystems.
+2. A retention-pruning test's own fixture setup (creating the
+   `.releases/` directory before writing manifest files into it) is exactly
+   the kind of test-side bug strict TDD's RED-for-the-right-reason gate is
+   built to catch before it gets confused with a production defect.
+3. Explaining a cache-poisoning mechanism in full (not just stating the
+   ordering rule) costs meaningfully more prose than a rule-only README
+   section — worth it here, but it is the direct reason this batch ran
+   further over its own line estimate than PR3 or PR4 did.
+4. Bash's `for ((i=0; i<n; i++))` arithmetic loops can misbehave under
+   `set -e`/`errexit`; this implementation avoided that class of bug
+   entirely by using file-based line iteration (`head`/`tail`/`while read`)
+   instead of C-style loop arithmetic for the retention-pruning logic.
 
 ## Next recommended
 
-Continue `sdd-apply` with PR5 (Phase 5C + Phase 5D: `publicar-assets.sh`,
-D4, tasks 5.6-5.10 and 5D.1-5D.3), on a new branch off
-`feat/pd-04-deploy-sequence` per the feature-branch-chain strategy — after
-the orchestrator opens PR #4 (task 5B.3, excluded from this batch).
+Continue `sdd-apply` with PR6 (Phase 6 + Phase 6B: TLS bootstrap, D6), on a
+new branch off `feat/pd-05-asset-publish` per the feature-branch-chain
+strategy — after the orchestrator opens PR #5 (task 5D.3, excluded from this
+batch).

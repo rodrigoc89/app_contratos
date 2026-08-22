@@ -10,38 +10,19 @@ artifactStore: hybrid
 createdAt: 2026-08-22
 updatedAt: 2026-08-22
 lastPhaseCompleted: tasks
-# apply is IN PROGRESS. Four apply batches so far:
-#  - Batch 1 (PR1, Phase 1 + 1B, tasks 1.1-1.6 + 1B.1-1B.2): branch
-#    feat/pd-01-env-provisioning. Opened as PR #78, green. 1B.3 (open) is
-#    done — PR #78 exists.
-#  - Batch 2 (PR2, Phase 2 + 2B, tasks 2.1-2.5 + 2B.1-2B.3): branch
-#    feat/pd-02-render-verdict. Opened at apply time as TWO PRs, not one:
-#    PR #80 (renderVerdict.ts parser) and PR #81 (verificarRender.ts jiti
-#    driver, base feat/pd-02b-verdict-driver, targets #80's branch). The
-#    chain is now **9 PRs, not 8** — every PR number after PR2 shifts by
-#    one versus tasks.md's original numbering (tasks.md's own
-#    "PR3"/"PR4"/... labels are unchanged; only the actual GitHub PR
-#    count/position shifted).
-#  - Batch 3 (PR3, Phase 4 + 4B, tasks 4.1-4.5 + 4B.1-4B.2): branch
-#    feat/pd-03-seed-fail-closed (base feat/pd-02b-verdict-driver, PR #81).
-#    Seed fail-closed gate (D3) in apps/api/src/seed/seedDatabase.ts. 4B.3
-#    (open PR) deliberately NOT done — the orchestrator opens PRs, not
-#    sdd-apply.
-#  - Batch 4 (PR4, Phase 5 + 5B, tasks 5.1-5.5 + 5B.1-5B.2): branch
-#    feat/pd-04-deploy-sequence (base feat/pd-03-seed-fail-closed, PR #82).
-#    Deploy sequence (D5) in deploy/deploy.sh — the script that stops the
-#    running production service. One atomic 4-RED/1-GREEN unit (5.1-5.4
-#    are four independent RED specs against the single GREEN in 5.5).
-#    5B.3 (open PR) deliberately NOT done — the orchestrator opens PRs.
-#    This batch also reconciled a real filesystem/Engram drift: tasks.md,
-#    apply-progress.md, and this file had never actually been updated
-#    with Batch 2's or Batch 3's progress on the filesystem (Engram had
-#    it), despite a prior batch's own note claiming otherwise — all three
-#    local files now match Engram's cumulative record again.
-# See sdd/production-deployment/apply-progress (Engram) and
-# apply-progress.md for the full record, including one factual correction to
-# tasks.md 1.1's premise (`.env.example` already existed; RED failed on the
-# real completeness gap instead).
+# apply is IN PROGRESS, through PR5 of 8 (feature-branch-chain):
+#   PR1 (Phase 1+1B, env/provisioning)  — feat/pd-01-env-provisioning — done, PR #78/#79
+#   PR2 (Phase 2+2B, render verdict D2) — feat/pd-02-render-verdict   — done, opened as PR #80 + PR #81
+#   PR3 (Phase 4+4B, seed gate D3)      — feat/pd-03-seed-fail-closed — done, PR #82
+#   PR4 (Phase 5+5B, deploy sequence D5)— feat/pd-04-deploy-sequence  — done, PR #83
+#   PR5 (Phase 5C+5D, asset publish D4) — feat/pd-05-asset-publish    — done, this batch
+# Each PR's own close-out "open PR" task (1B.3/4B.3/5B.3/5D.3) is
+# deliberately NOT done by sdd-apply — the orchestrator opens PRs. See
+# sdd/production-deployment/apply-progress (Engram, canonical) and
+# apply-progress.md for the full per-batch record, including deviations
+# recorded at apply time (e.g. task 1.1's `.env.example` premise, task 5.4's
+# FIRST_DEPLOY design decision, task 5.8's atomic-swap-via-temp-rename
+# decision).
 # tasks.md was re-sliced on 2026-08-22 after ask-on-risk delivery guard:
 # user chose "split further into smaller PRs, keeping all tests intact"
 # (rejected the alternative of thinning the execFile Vitest specs).
@@ -49,8 +30,7 @@ lastPhaseCompleted: tasks
 # earlier "roughly 6" framing as an approximation, not the user's actual
 # target ("genuinely reviewable against 400 while keeping every test
 # intact"), and directed applying 2 of the 3 previously-named-but-unapplied
-# seams inside old-PR3. Now 8 PRs (task-numbering). See tasks.md
-# "Re-slicing notes". Opened as 9 PRs at apply time — see PR2 split above.
+# seams inside old-PR3. Now 8 PRs. See tasks.md "Re-slicing notes".
 
 phases:
   explore:
@@ -101,16 +81,16 @@ artifacts:
   specs: done
   design: done
   tasks: done
-  applyProgress: in_progress # four batches written: sdd/production-deployment/apply-progress + apply-progress.md
+  applyProgress: in_progress # through PR5 (Batch 5): sdd/production-deployment/apply-progress (Engram, canonical) + apply-progress.md
   verifyReport: missing
 
 taskProgress:
   total: 73 # 58 original tasks unchanged in content/RED-GREEN pairing/order + 15 net new close-out tasks (8 PRs need 8 close-outs)
-  completed: 30 # PR1: 1.1-1.6, 1B.1-1B.2 (8); PR2: 2.1-2.5, 2B.1-2B.3 (8, opened as PR #80+#81); PR3: 4.1-4.5, 4B.1-4B.2 (7, 4B.3 excluded); PR4: 5.1-5.5, 5B.1-5B.2 (7, 5B.3 excluded)
-  pending: 43
+  completed: 37 # PR1 (1.1-1.6,1B.1-1B.2=8) + PR2 (2.1-2.5,2B.1-2B.3=8) + PR3 (4.1-4.5,4B.1-4B.2=7) + PR4 (5.1-5.5,5B.1-5B.2=7) + PR5 (5.6-5.10,5D.1-5D.2=7) = 37; each PR's own "open PR" task excluded (orchestrator's job)
+  pending: 36
   allComplete: false
 
-nextRecommended: apply # next sdd-apply batch is PR5 (Phase 5C + 5D, publicar-assets.sh, D4) — independently testable from deploy.sh, no RED/GREEN cross-coupling
+nextRecommended: apply # next sdd-apply batch is PR6 (Phase 6 + 6B: TLS bootstrap, D6), on a new branch off feat/pd-05-asset-publish, after the orchestrator opens PR #5 (task 5D.3)
 blockedReasons: []
 
 # External sequencing dependencies recorded by the proposal. These are NOT
@@ -142,8 +122,4 @@ sizeForecast:
   deliveryStrategy: ask-on-risk
   deliveryDecision: split-further-approved # user rejected thinning execFile Vitest specs to hit line count
   decisionNeededBeforeApply: false # orchestrator directed exactly which named seams to apply (both inside old-PR3) and which to leave named-but-unapplied (old-PR5/now-PR7's retention seam; no seam invented for old-PR6/now-PR8)
-  goLiveGatePRs: [7, 8] # task-numbering labels in tasks.md; actual opened-PR position is 8th/9th on GitHub after the PR2 split (see phases.apply note above)
-  prBudgetPR1: 450-560 # estimate; actual PR1 diff at apply time ran to ~707-719 changed lines — recorded honestly, not padded or trimmed
-  prBudgetPR2: 330-410 # estimate; actual PR2 diff (opened as PR #80+#81 combined) ran to ~978 changed lines
-  prBudgetPR3: 190-220 # estimate; actual PR3 diff (seed fail-closed gate) ran to 222 changed lines (190 insertions + 32 deletions) — closest match so far
-  prBudgetPR4: 630-750 # estimate; actual PR4 diff (deploy sequence) ran to 701 changed lines (687 insertions + 14 deletions) — the first batch to land INSIDE its own estimate
+  goLiveGatePRs: [7, 8] # renumbered from [5, 6]; backup (PR7) + restore/hash-verification (PR8) must both merge, deploy, and pass a real restore drill before the first real customer comodato is signed
