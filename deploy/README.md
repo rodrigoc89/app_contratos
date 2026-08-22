@@ -962,6 +962,18 @@ and installs `postgresql-client-17`. A missing `pg_dump` fails the spec by
 name rather than skipping it: a backup suite that quietly stops exercising
 `pg_dump` proves nothing.
 
+**Installing the right client is not the same as running it.** On Debian and
+Ubuntu `/usr/bin/pg_dump` is `pg_wrapper`, which picks a version from the
+default cluster, so on a host that already has an older client the newly
+installed 17 is not what `$PATH` resolves to. CI hit exactly this — it
+installed `postgresql-client-17` and still ran `pg_dump (PostgreSQL) 16.15`,
+which cannot dump a 17 server — and now puts `/usr/lib/postgresql/17/bin`
+first and asserts the major version before the suite runs. Worth knowing on
+the VPS too: `provision.sh` installs `postgresql-17` on a clean host, but if
+another client is ever added alongside it, check `pg_dump --version` rather
+than the package list. A backup that fails at 03:15 inside a systemd timer is
+one nobody reads until they need a restore.
+
 ## shellcheck
 
 `eslint` does not read shell, so until this landed the roughly 2000 lines of
