@@ -89,6 +89,7 @@ export default tseslint.config(
             "apps/api/vitest.config.ts",
             "apps/api/vitest.integration.config.ts",
             "packages/esquemas/vitest.config.ts",
+            "deploy/vitest.config.ts",
           ],
         },
         tsconfigRootDir: import.meta.dirname,
