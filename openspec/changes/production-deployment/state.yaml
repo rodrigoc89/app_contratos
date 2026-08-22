@@ -1,0 +1,119 @@
+# DAG state for the `production-deployment` change.
+# Written by the SDD orchestrator so the cycle survives compaction.
+# Layout contract: `openspec-convention.md`; persistence: `persistence-contract.md`.
+schema: sdd-change-state
+schemaVersion: 1
+
+change: production-deployment
+project: app_contratos
+artifactStore: hybrid
+createdAt: 2026-08-22
+updatedAt: 2026-08-22
+lastPhaseCompleted: tasks
+# apply is IN PROGRESS: PR1 batch (Phase 1 + Phase 1B, tasks 1.1-1.6 and
+# 1B.1-1B.2) is done on branch feat/pd-01-env-provisioning. Task 1B.3 (open
+# PR #1) is deliberately NOT done — publishing was not authorized for this
+# run. See sdd/production-deployment/apply-progress (Engram) and
+# apply-progress.md for the full record, including one factual correction to
+# tasks.md 1.1's premise (`.env.example` already existed; RED failed on the
+# real completeness gap instead).
+# tasks.md was re-sliced on 2026-08-22 after ask-on-risk delivery guard:
+# user chose "split further into smaller PRs, keeping all tests intact"
+# (rejected the alternative of thinning the execFile Vitest specs).
+# Pass 2 produced 6 PRs. Pass 3 (same day): orchestrator corrected its own
+# earlier "roughly 6" framing as an approximation, not the user's actual
+# target ("genuinely reviewable against 400 while keeping every test
+# intact"), and directed applying 2 of the 3 previously-named-but-unapplied
+# seams inside old-PR3. Now 8 PRs. See tasks.md "Re-slicing notes".
+
+phases:
+  explore:
+    status: done
+    artifact: exploration.md
+    engramTopicKey: sdd/production-deployment/explore
+    engramObservationId: 540
+  propose:
+    status: done
+    artifact: proposal.md
+    engramTopicKey: sdd/production-deployment/proposal
+    engramObservationId: 544
+  spec:
+    status: done
+    artifact: specs/{domain}/spec.md
+    domains:
+      - server-provisioning
+      - release-deployment
+      - tls-termination
+      - contract-archive-backup
+      - deployment-configuration
+    engramTopicKey: sdd/production-deployment/spec
+    engramObservationId: 545
+  design:
+    status: done
+    artifact: design.md
+    engramTopicKey: sdd/production-deployment/design
+    engramObservationId: 547
+  tasks:
+    status: done
+    artifact: tasks.md
+    engramTopicKey: sdd/production-deployment/tasks
+    engramObservationId: 550
+  apply:
+    status: in_progress
+    artifact: tasks.md
+    engramTopicKey: sdd/production-deployment/apply-progress
+  verify:
+    status: pending
+    artifact: verify-report.md
+  archive:
+    status: pending
+    artifact: null
+
+artifacts:
+  exploration: done
+  proposal: done
+  specs: done
+  design: done
+  tasks: done
+  applyProgress: in_progress # first batch written: sdd/production-deployment/apply-progress + apply-progress.md
+  verifyReport: missing
+
+taskProgress:
+  total: 73 # 58 original tasks unchanged in content/RED-GREEN pairing/order + 15 net new close-out tasks (8 PRs need 8 close-outs)
+  completed: 8 # 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1B.1, 1B.2 — PR1's own scope minus 1B.3 (PR open, not authorized this run)
+  pending: 65
+  allComplete: false
+
+nextRecommended: apply # continue with PR1's 1B.3 (PR open) only once publishing is authorized; otherwise next sdd-apply batch is PR2 (Phase 2 + 2B)
+blockedReasons: []
+
+# External sequencing dependencies recorded by the proposal. These are NOT
+# implementation tasks and do not block the planning phases; they block
+# server-side validation only. See proposal.md "Dependencies".
+externalDependencies:
+  - id: vps-purchase
+    description: HostGator VPS NVMe 4 (2 vCPU / 4 GB / 100 GB) with root SSH
+    status: pending
+    blocks: [verify]
+  - id: domain-dns
+    description: contratos.iesnet.com.ar registered with an A/AAAA record on the VPS
+    status: pending
+    blocks: [verify]
+  - id: offsite-backup-destination
+    description: Object store outside HostGator, chosen and credentialed
+    status: pending
+    blocks: [verify]
+
+sizeForecast:
+  estimatedChangedLines: 900-1300 # design.md's figure, superseded by tasks.md's own estimate below
+  tasksEstimatedChangedLines: 2650-3200 # pass 1, 3-slice, superseded below
+  tasksEstimatedChangedLinesResliced: 3260-3990 # pass 2, 6-slice, superseded below
+  tasksEstimatedChangedLinesPass3: 3495-4265 # pass 3, 8-slice (final): PR1 ~450-560, PR2 ~330-410, PR3 ~190-220, PR4 ~630-750, PR5 ~365-455, PR6 ~420-520, PR7 ~430-530, PR8 ~680-820
+  reviewBudgetLines: 400
+  exceedsBudget: true
+  recommendedSlices: 8 # was 3, then 6; orchestrator corrected "roughly 6" as its own approximation, not the user's actual target, and directed applying 2 of 3 previously-named seams inside old-PR3
+  chainStrategy: feature-branch-chain
+  deliveryStrategy: ask-on-risk
+  deliveryDecision: split-further-approved # user rejected thinning execFile Vitest specs to hit line count
+  decisionNeededBeforeApply: false # orchestrator directed exactly which named seams to apply (both inside old-PR3) and which to leave named-but-unapplied (old-PR5/now-PR7's retention seam; no seam invented for old-PR6/now-PR8)
+  goLiveGatePRs: [7, 8] # renumbered from [5, 6]; backup (PR7) + restore/hash-verification (PR8) must both merge, deploy, and pass a real restore drill before the first real customer comodato is signed
