@@ -176,6 +176,46 @@ fallback reference. `fontconfig` is listed explicitly even though
 that would mean relying on the stability of the very list D1 calls unstable,
 and `fc-cache` would then fail mid-run, after PostgreSQL is already installed.
 
+## Seed fail-closed gate (D3)
+
+**Answer first:** in `NODE_ENV=production`, `apps/api/src/seed/seedDatabase.ts`
+now refuses to finish seeding — it throws, naming the missing environment
+variable — when either the `admin` or `tecnico` account cannot be created
+because its password variable was never set. It does **not** throw when the
+account already exists. That distinction is the entire point:
+
+| Account result | Meaning | Production behaviour |
+|---|---|---|
+| `omitido` | No `SEED_ADMIN_PASSWORD` / `SEED_TECNICO_PASSWORD` was set, so the account was never created | **Throws** — deploy fails loudly, before reporting success |
+| `already-present` | The account already exists (from an earlier seed run) | **Never throws** — nothing needed to happen, so nothing did |
+| `created` | The password was set and the account did not exist yet | Seeds normally |
+
+**Why this lives in the application, not in `deploy.sh` (design.md D3).** A
+guard grepping the env file inside `deploy.sh` protects only deploys that go
+through that script. The recovery path an operator actually reaches for
+under pressure — `pnpm --filter @contratos/api prisma:seed`, run by hand —
+never goes through `deploy.sh` at all, so a script-level guard would not see
+it. The gate lives where the lie would otherwise happen: before this change,
+`seedDatabase.ts` already *said* (in `describeSeedReport`'s `ATENCION`
+warnings) that skipping the técnico account makes the signing flow
+unreachable, then still exited 0. This change turns that warning into a
+refusal in production; the warning text itself, and the non-production
+behaviour, are unchanged.
+
+**Why `already-present` never throwing is load-bearing, not an oversight.**
+Consider a routine, correctly-run redeploy: an operator provisions
+production, sets both passwords, seeds successfully — then, for good
+security hygiene, rotates both passwords out of the environment file, since
+the accounts already exist and nothing needs to recreate them. The next
+redeploy resolves both accounts to `already-present`. If the gate fired on
+anything other than `omitido`, **every redeploy from that day forward would
+fail**, in the startup path, on a machine where the fix is not obvious. A
+fail-closed gate that also fails on the healthy path is not a safety
+feature — it is an outage generator wearing a security justification.
+`seedDatabase.spec.ts`'s regression test seeds both accounts once, rotates
+both passwords out, then reseeds in production and asserts no throw — the
+scenario above, exercised directly.
+
 ## Still-open items, and exactly where they resolve
 
 Two questions design.md left open are **not** blocked on any task in this
@@ -205,6 +245,7 @@ until then it is a documented limitation, not a silent one.
 
 ## Next step
 
-This PR (PR2) added the render verdict check (D2, above) that proves the
-font item in the checklist. PR3 adds the seed fail-closed gate (D3, live
-application code); PR4 adds `deploy.sh` (row 2 of the install-order table).
+This PR (PR3) added the seed fail-closed gate (D3, above) — live application
+code, distinct in risk from the deploy/publish scripts that follow. PR4 adds
+`deploy.sh` (row 2 of the install-order table), the script that calls this
+gate via `prisma:seed`.
