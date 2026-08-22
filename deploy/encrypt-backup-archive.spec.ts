@@ -171,6 +171,44 @@ describe("encrypt-backup-archive.sh", () => {
     await expect(readFile(outputFile, "utf-8")).resolves.toBe("fake-ciphertext");
   });
 
+  it("uses the tool the operator configured, not whichever one happens to be installed", async () => {
+    // Selecting by $PATH alone means an unrelated apt install that pulls in
+    // `age` breaks every backup on a host deliberately configured for gpg:
+    // AGE_RECIPIENT is unset there, so the run refuses. What is installed
+    // is not a decision anyone made about this backup.
+    const binDir = join(scratch, "bin");
+    const logFile = join(scratch, "tool-calls.log");
+    await mkdir(binDir, { recursive: true });
+
+    for (const nombre of ["age", "gpg"]) {
+      const stub = join(binDir, nombre);
+      await writeFile(
+        stub,
+        `#!/usr/bin/env bash\necho "${nombre}" >> "${logFile}"\n` +
+          `output=""\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "-o" ] || [ "$1" = "--output" ]; then output="$2"; fi\n  shift\ndone\n` +
+          `printf 'fake-ciphertext' > "$output"\nexit 0\n`,
+        "utf-8",
+      );
+      await chmod(stub, 0o755);
+    }
+
+    const fixtureFile = join(scratch, "fixture.txt");
+    await writeFile(fixtureFile, "irrelevant\n", "utf-8");
+    const outputFile = join(scratch, "fixture.txt.enc");
+
+    await execFileAsync(SCRIPT, [fixtureFile, outputFile], {
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        AGE_RECIPIENT: "",
+        GPG_RECIPIENT: "DEADBEEFDEADBEEF",
+      },
+    });
+
+    const calls = (await readFile(logFile, "utf-8")).trim().split("\n");
+    expect(calls).toEqual(["gpg"]);
+  });
+
   // --------------------------------------------------------------- guard
 
   it("refuses with a named error when the resolved tool's recipient variable is unset", async () => {
