@@ -65,6 +65,29 @@ require_build_dir() {
   fi
 }
 
+# ------------------------------------------------- guard: retention count
+
+# Below 1 nothing is ever retained, so `do_prune_old_releases` prunes the
+# manifest this very run just wrote and removes every file it lists —
+# index.html and sw.js included — leaving $WEB_ROOT empty while the script
+# still exits 0 reporting "published". A publish step that reports success
+# after deleting the site it published is the one outcome this script must
+# never have, and 0 is a plausible thing for an operator to write meaning
+# "keep no old releases". Refused in the preflight, before any write.
+require_valid_retention_count() {
+  case "$RETENTION_COUNT" in
+    '' | *[!0-9]*)
+      echo "publicar-assets.sh: RETENTION_COUNT must be a whole number, got '$RETENTION_COUNT'" >&2
+      exit 1
+      ;;
+  esac
+
+  if [ "$RETENTION_COUNT" -lt 1 ]; then
+    echo "publicar-assets.sh: RETENTION_COUNT must be at least 1 (got '$RETENTION_COUNT') — the release being published is itself one of the retained releases, so keeping fewer would delete it" >&2
+    exit 1
+  fi
+}
+
 # ------------------------------------------------------------------- plan
 
 print_plan() {
@@ -207,6 +230,7 @@ main() {
   # run — same principle as deploy.sh's preflight guards: a refusal here
   # costs nothing.
   require_build_dir
+  require_valid_retention_count
 
   if [ "$DRY_RUN" = true ]; then
     print_plan

@@ -216,6 +216,28 @@ describe("publicar-assets.sh", () => {
 
   // --------------------------------------------------------- housekeeping
 
+  it("refuses a RETENTION_COUNT below 1, which would delete the release it just published", async () => {
+    // Verified before this guard existed: with RETENTION_COUNT=0 nothing is
+    // retained, so the just-written manifest is itself pruned and every file
+    // it lists — index.html and sw.js included — is removed as "orphaned".
+    // $WEB_ROOT ends up empty and the script still exits 0 reporting
+    // "published". The guard runs in the preflight, before any write, so a
+    // refusal costs nothing.
+    await makeBuildDir();
+    await mkdir(webRoot, { recursive: true });
+    await writeFile(join(webRoot, "canario.txt"), "sigo acá\n", "utf-8");
+
+    const error = await expectToFail(
+      execFileAsync(SCRIPT, [], {
+        env: { ...process.env, BUILD_DIR: buildDir, WEB_ROOT: webRoot, RETENTION_COUNT: "0" },
+      }),
+    );
+
+    expect(error.code).toBe(1);
+    expect(error.stderr).toContain("RETENTION_COUNT");
+    await expect(readFile(join(webRoot, "canario.txt"), "utf-8")).resolves.toContain("sigo acá");
+  });
+
   it("refuses when $BUILD_DIR has no vite build output yet", async () => {
     const error = await expectToFail(
       execFileAsync(SCRIPT, ["--dry-run"], {

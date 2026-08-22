@@ -125,6 +125,45 @@ describe("tls-bootstrap.sh", () => {
     }
   });
 
+  it("installs certbot alongside nginx, since nothing else in deploy/ ever does", async () => {
+    // provision.sh does not install it and no other script in the chain
+    // does either, so without this the run gets as far as installing the
+    // bootstrap conf and reloading nginx, then dies on `certbot: command
+    // not found` — inside the one script whose entire job is breaking a
+    // chicken-and-egg. The packaged certbot is also what brings the systemd
+    // renewal timer the README's renewal section relies on.
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, CONTRATOS_HOST: "contratos.example.invalid" },
+    });
+
+    const planDeInstalacion = stdout
+      .split("\n")
+      .find((linea) => linea.includes("[plan:install-nginx]"));
+
+    expect(planDeInstalacion).toContain("certbot");
+  });
+
+  it("refuses when $CERTBOT_WEBROOT disagrees with the path the bootstrap conf serves", async () => {
+    // The bootstrap conf hardcodes the ACME `root` and is installed as-is,
+    // never rendered — so overriding CERTBOT_WEBROOT alone would have
+    // certbot write the challenge into one directory while nginx serves the
+    // challenge location from another, and validation would 404 with the
+    // two paths looking individually correct.
+    const error = await expectToFail(
+      execFileAsync(SCRIPT, ["--dry-run"], {
+        env: {
+          ...process.env,
+          CONTRATOS_HOST: "contratos.example.invalid",
+          CERTBOT_WEBROOT: "/srv/acme-challenge",
+        },
+      }),
+    );
+
+    expect(error.code).toBe(1);
+    expect(error.stderr).toContain("/srv/acme-challenge");
+    expect(error.stderr).toContain("/var/www/certbot");
+  });
+
   it("renders successfully against the real deploy/nginx.conf template with no leftover placeholder", async () => {
     const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
       env: {

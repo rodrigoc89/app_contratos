@@ -9,9 +9,13 @@ import { describe, expect, it } from "vitest";
  * schema — see that file's own comment on why (a signing key with a
  * fallback is a signing key an attacker already has).
  *
- * Read directly from both source files rather than assumed — see
- * `deployment-configuration` spec.md's "`.env.example` completeness"
- * requirement.
+ * This is a hand-written list, and on its own it would be the weakest kind
+ * of guard: add a tenth key to `EsquemaConfiguracion` and every assertion
+ * below keeps passing while `.env.example` never documents it — a test that
+ * goes quiet instead of failing. The last spec in this file is what makes it
+ * trustworthy: it re-derives both halves from the source files and fails
+ * when this list drifts from them (`deployment-configuration` spec.md's
+ * "`.env.example` completeness" requirement).
  */
 const VARIABLES_ESPERADAS = [
   // EsquemaConfiguracion — apps/api/src/config/configuracion.ts
@@ -79,6 +83,36 @@ describe(".env.example", () => {
       (clave) => !(VARIABLES_ESPERADAS as readonly string[]).includes(clave),
     );
     expect(clavesInesperadas).toEqual([]);
+  });
+
+  it("stays in sync with the source files it claims to mirror", () => {
+    // The guard on the guard. Without it, VARIABLES_ESPERADAS is a snapshot
+    // of what the app read on the day it was written, asserted against
+    // `.env.example` forever after.
+    const rutaConfiguracion = join(import.meta.dirname, "configuracion.ts");
+    const rutaSeed = join(import.meta.dirname, "../../prisma/seed.ts");
+
+    const configuracion = readFileSync(rutaConfiguracion, "utf-8");
+    const esquema = /const EsquemaConfiguracion = z\.object\(\{([\s\S]*?)^\}\);/m.exec(
+      configuracion,
+    )?.[1];
+    expect(esquema, "EsquemaConfiguracion no encontrado en configuracion.ts").toBeDefined();
+
+    const clavesDelEsquema = [
+      ...(esquema ?? "").matchAll(/^ {2}([A-Z][A-Z0-9_]*):/gm),
+    ].map((coincidencia) => coincidencia[1]);
+
+    const clavesDelSeed = [
+      ...new Set(
+        [...readFileSync(rutaSeed, "utf-8").matchAll(/process\.env\.(SEED_[A-Z0-9_]+)/g)].map(
+          (coincidencia) => coincidencia[1],
+        ),
+      ),
+    ];
+
+    expect([...clavesDelEsquema, ...clavesDelSeed].sort()).toEqual(
+      [...VARIABLES_ESPERADAS].sort(),
+    );
   });
 
   it("documents CONFIAR_EN_PROXY=true as the required production value, with the rate-limiter-collapse consequence stated", () => {

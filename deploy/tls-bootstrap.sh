@@ -91,6 +91,35 @@ check_contratos_host_set() {
   fi
 }
 
+# The bootstrap conf is installed as-is, never rendered as a template (see
+# its own header), so the ACME `root` it serves is a literal inside that
+# file while $CERTBOT_WEBROOT is a variable here. Left unchecked, overriding
+# only the variable makes certbot write the challenge into one directory
+# while nginx serves the challenge location from another: issuance fails on
+# a 404 with both paths looking individually correct. Read the real value
+# out of the conf and refuse a mismatch, rather than trusting the two to be
+# kept in step by hand.
+check_certbot_webroot_matches_bootstrap_conf() {
+  if [ ! -f "$NGINX_BOOTSTRAP_CONF_TEMPLATE" ]; then
+    echo "tls-bootstrap.sh: bootstrap conf '$NGINX_BOOTSTRAP_CONF_TEMPLATE' not found — refusing to touch nginx" >&2
+    exit 1
+  fi
+
+  local declared
+  declared="$(awk '/acme-challenge/{found=1} found && /root[[:space:]]/{print $2; exit}' \
+    "$NGINX_BOOTSTRAP_CONF_TEMPLATE" | tr -d ';')"
+
+  if [ -z "$declared" ]; then
+    echo "tls-bootstrap.sh: could not find the ACME challenge 'root' directive in '$NGINX_BOOTSTRAP_CONF_TEMPLATE' — refusing to touch nginx" >&2
+    exit 1
+  fi
+
+  if [ "$declared" != "$CERTBOT_WEBROOT" ]; then
+    echo "tls-bootstrap.sh: \$CERTBOT_WEBROOT is '$CERTBOT_WEBROOT' but '$NGINX_BOOTSTRAP_CONF_TEMPLATE' serves the ACME challenge from '$declared'. certbot would write the challenge where nginx does not look for it and issuance would fail on a 404 — refusing to touch nginx." >&2
+    exit 1
+  fi
+}
+
 # ------------------------------------------------------------------ render
 
 # Substitutes deploy/nginx.conf's two placeholder tokens (task 6.1) into
@@ -133,7 +162,7 @@ check_no_placeholder_literals() {
 print_plan() {
   log "== tls-bootstrap.sh plan for '$CONTRATOS_HOST' (dry-run=$DRY_RUN) =="
   log "[plan:render-check] render deploy/nginx.conf with \$CONTRATOS_HOST/\$WEB_ROOT and confirm no placeholder token survives — already done above"
-  log "[plan:install-nginx] apt-get install -y nginx"
+  log "[plan:install-nginx] apt-get install -y nginx certbot"
   log "[plan:certbot-webroot-dir] install -d '$CERTBOT_WEBROOT' (ACME challenge webroot)"
   log "[plan:remove-default-site] remove nginx's default site from '$NGINX_SITES_ENABLED_DIR'"
   log "[plan:bootstrap-install] install '$NGINX_BOOTSTRAP_CONF_TEMPLATE' -> '$BOOTSTRAP_SITE_FILE', symlink '$ENABLED_LINK' -> it"
@@ -148,10 +177,17 @@ print_plan() {
 
 # ------------------------------------------------------------------- steps
 
+# certbot is installed here and nowhere else: provision.sh does not install
+# it and no other script in deploy/ does either, so without this line the run
+# reaches do_issue_certificate having already installed the bootstrap conf
+# and reloaded nginx, then dies on `certbot: command not found` — inside the
+# one script whose entire job is breaking a chicken-and-egg. The apt package
+# specifically (not a snap or pip install) is also what ships the systemd
+# renewal timer this README's renewal section relies on.
 do_install_nginx() {
-  log "[step] installing nginx"
+  log "[step] installing nginx and certbot"
   apt-get update
-  apt-get install -y nginx
+  apt-get install -y nginx certbot
 }
 
 do_prepare_certbot_webroot() {
@@ -192,6 +228,13 @@ do_issue_certificate() {
   if [ -n "$CERTBOT_EMAIL" ]; then
     email_args=(--email "$CERTBOT_EMAIL")
   else
+    # Registering without an address means Let's Encrypt has no way to warn
+    # anyone before this certificate expires. Renewal is automatic, so the
+    # address only matters when renewal has already been failing quietly —
+    # which is exactly when a warning is the only thing left between the
+    # site working and the site going dark. Said out loud rather than
+    # decided silently by an unset variable.
+    log "[warn] \$CERTBOT_EMAIL is unset: registering without an address, so Let's Encrypt cannot warn anyone if renewal starts failing and the certificate approaches expiry. Set CERTBOT_EMAIL to receive those warnings."
     email_args=(--register-unsafely-without-email)
   fi
   certbot certonly --webroot -w "$CERTBOT_WEBROOT" -d "$CONTRATOS_HOST" \
@@ -237,6 +280,7 @@ main() {
   # (design.md D5): a refusal here costs nothing; a refusal after the
   # bootstrap conf is already installed costs a needless partial state.
   check_contratos_host_set
+  check_certbot_webroot_matches_bootstrap_conf
   render_nginx_conf
   check_no_placeholder_literals "$RENDERED_CONF_FILE"
 
