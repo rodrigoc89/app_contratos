@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { HasherFalso } from "../identidad/application/dobles.testing";
+import type { Usuario } from "../identidad/domain/Usuario";
 import { FirmanteComodante } from "../firmantes/domain/FirmanteComodante";
 import { PlantillaContrato } from "../plantillas/domain/PlantillaContrato";
 import { FechaCalendario } from "../shared/domain/FechaCalendario";
@@ -9,6 +11,8 @@ import {
 } from "./seedContent";
 import {
   seedDatabase,
+  type AdminSeedInput,
+  type AdminSeedStore,
   type SignatorySeedStore,
   type TemplateSeedStore,
 } from "./seedDatabase";
@@ -132,5 +136,95 @@ describe("seedDatabase", () => {
 
     expect(reporte.firmante).toEqual({ version: "v1", action: "created" });
     expect(partes.signatories.instalados).toHaveLength(1);
+  });
+});
+
+class UsuariosFalsos implements AdminSeedStore {
+  readonly guardados: Usuario[] = [];
+
+  async buscarPorNombreUsuario(nombreUsuario: string): Promise<Usuario | null> {
+    return (
+      this.guardados.find((uno) => uno.nombreUsuario === nombreUsuario) ?? null
+    );
+  }
+
+  async guardar(usuario: Usuario): Promise<void> {
+    this.guardados.push(usuario);
+  }
+}
+
+function cuenta(
+  nombreUsuario: string,
+  contrasena: string | undefined,
+  usuarios: UsuariosFalsos = new UsuariosFalsos(),
+): AdminSeedInput {
+  return {
+    id: `usuario-${nombreUsuario}`,
+    nombreUsuario,
+    nombreCompleto: nombreUsuario,
+    contrasena,
+    usuarios,
+    hasher: new HasherFalso(),
+  };
+}
+
+// D3 — the fail-closed seed gate. `seedContent.spec.ts` and the two specs
+// above cover the provisional-signature guard; these cover the newer
+// guard over the admin/técnico accounts themselves.
+describe("seedDatabase — production seed gate over admin/técnico accounts (D3)", () => {
+  it("refuses to seed production when the técnico account resolves to omitido", async () => {
+    const partes = entrada("v1", "production");
+
+    await expect(
+      seedDatabase({ ...partes, tecnico: cuenta("tecnico", undefined) }),
+    ).rejects.toThrow(/SEED_TECNICO_PASSWORD/);
+  });
+
+  it("refuses to seed production when the administrador account resolves to omitido", async () => {
+    const partes = entrada("v1", "production");
+
+    await expect(
+      seedDatabase({
+        ...partes,
+        administrador: cuenta("admin", undefined),
+      }),
+    ).rejects.toThrow(/SEED_ADMIN_PASSWORD/);
+  });
+
+  // This is the load-bearing regression guard (design.md D3, tasks.md 4.3):
+  // once an account already exists, its password is correctly rotated out
+  // of the environment file, and every routine redeploy resolves that
+  // account to "already-present" — never "omitido". A gate that fired on
+  // anything other than "omitido" would turn every such redeploy into an
+  // outage, in the startup path, on a machine where the fix is not obvious.
+  it("never blocks a routine production redeploy once the seed accounts already exist", async () => {
+    const usuariosAdmin = new UsuariosFalsos();
+    const usuariosTecnico = new UsuariosFalsos();
+
+    // First run (e.g. provisioning), with both passwords set — creates
+    // both accounts.
+    const primeraEjecucion = entrada("v1", "development");
+    await seedDatabase({
+      ...primeraEjecucion,
+      administrador: cuenta(
+        "admin",
+        "una-contrasena-de-administrador",
+        usuariosAdmin,
+      ),
+      tecnico: cuenta("tecnico", "una-contrasena-de-tecnico", usuariosTecnico),
+    });
+
+    // Routine redeploy: both passwords were correctly rotated out of the
+    // environment after the accounts already exist, so both resolve to
+    // "already-present". Production must seed cleanly and must not throw.
+    const redeploy = entrada("v1", "production");
+    const reporte = await seedDatabase({
+      ...redeploy,
+      administrador: cuenta("admin", undefined, usuariosAdmin),
+      tecnico: cuenta("tecnico", undefined, usuariosTecnico),
+    });
+
+    expect(reporte.administrador?.action).toBe("already-present");
+    expect(reporte.tecnico?.action).toBe("already-present");
   });
 });

@@ -132,36 +132,59 @@ export async function seedDatabase(
     );
   }
 
-  return {
-    plantilla: {
-      version: content.plantilla.version,
-      action: await publicarPlantilla(templates, content.plantilla),
-    },
-    firmante: {
-      version: content.firmante.version,
-      action: await instalarFirmante(signatories, content.firmante),
-    },
-    administrador:
-      input.administrador === undefined
-        ? null
-        : await sembrarCuenta(input.administrador, {
-            rol: "admin",
-            variableContrasena: "SEED_ADMIN_PASSWORD",
-            largoMinimoContrasena: LARGO_MINIMO_CONTRASENA_ADMIN,
-            descripcionParaError:
-              "es la cuenta de administración de un servidor expuesto a internet.",
-          }),
-    tecnico:
-      input.tecnico === undefined
-        ? null
-        : await sembrarCuenta(input.tecnico, {
-            rol: "tecnico",
-            variableContrasena: "SEED_TECNICO_PASSWORD",
-            largoMinimoContrasena: LARGO_MINIMO_CONTRASENA_TECNICO,
-            descripcionParaError:
-              "firma contratos vinculantes en nombre de la empresa desde el dispositivo de campo.",
-          }),
+  const plantilla = {
+    version: content.plantilla.version,
+    action: await publicarPlantilla(templates, content.plantilla),
   };
+  const firmante = {
+    version: content.firmante.version,
+    action: await instalarFirmante(signatories, content.firmante),
+  };
+  const administrador =
+    input.administrador === undefined
+      ? null
+      : await sembrarCuenta(input.administrador, {
+          rol: "admin",
+          variableContrasena: "SEED_ADMIN_PASSWORD",
+          largoMinimoContrasena: LARGO_MINIMO_CONTRASENA_ADMIN,
+          descripcionParaError:
+            "es la cuenta de administración de un servidor expuesto a internet.",
+        });
+  const tecnico =
+    input.tecnico === undefined
+      ? null
+      : await sembrarCuenta(input.tecnico, {
+          rol: "tecnico",
+          variableContrasena: "SEED_TECNICO_PASSWORD",
+          largoMinimoContrasena: LARGO_MINIMO_CONTRASENA_TECNICO,
+          descripcionParaError:
+            "firma contratos vinculantes en nombre de la empresa desde el dispositivo de campo.",
+        });
+
+  // Fail-closed seed gate (D3). A production seed that reports success while
+  // an account it was asked to create is unreachable is a process lying
+  // about its own outcome — `describeSeedReport`'s own ATENCION warnings
+  // below already say so; production enforces it instead of merely printing
+  // it. `already-present` NEVER throws here: an existing account means there
+  // is nothing left to create, and every routine redeploy resolves both
+  // accounts to `already-present` once their passwords are correctly
+  // rotated out of the environment file. Throwing on that outcome would turn
+  // fail-closed provisioning into an outage generator on every redeploy.
+  if (nodeEnv === "production") {
+    if (administrador !== null && administrador.action === "omitido") {
+      throw new Error(
+        `No se puede sembrar la base de datos de producción sin el usuario administrador "${administrador.nombreUsuario}": no se definió SEED_ADMIN_PASSWORD. El panel de administración no estará disponible hasta que la cree. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`,
+      );
+    }
+
+    if (tecnico !== null && tecnico.action === "omitido") {
+      throw new Error(
+        `No se puede sembrar la base de datos de producción sin el usuario técnico "${tecnico.nombreUsuario}": no se definió SEED_TECNICO_PASSWORD. Nadie podría firmar un contrato: la aplicación solo implementa el flujo del técnico, así que sin esta cuenta el flujo de firma es inalcanzable. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`,
+      );
+    }
+  }
+
+  return { plantilla, firmante, administrador, tecnico };
 }
 
 /** What distinguishes one seedable account (admin, técnico) from another. */

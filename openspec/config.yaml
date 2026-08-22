@@ -1,0 +1,76 @@
+# OpenSpec configuration for the Digital Comodato Contracts project.
+# Layout and semantics: see the shared `openspec-convention.md` contract.
+schema: spec-driven
+
+context: |
+  Tech stack: TypeScript pnpm monorepo (Node >= 22, pnpm 11) — NestJS 11 API run
+    through jiti with no build step, React 19 + Vite 6 PWA, shared Zod package
+    `@contratos/esquemas`, Prisma 7 over PostgreSQL 17, Puppeteer for PDF rendering.
+  Architecture: hexagonal — the domain and application layers must stay runnable
+    without a database or a browser; adapters (Prisma, Puppeteer, HTTP) sit at the edge.
+  Testing: Vitest everywhere (unit + integration), supertest for HTTP, Testing
+    Library for the PWA; CI runs typecheck, unit tests, eslint, and an integration
+    job backed by Postgres and Chromium service containers.
+  Style: technical artifacts (docs, code, comments, tests, commits) in English;
+    domain terms (comodato, comodante, comodatario), UI copy, and contract content in Spanish.
+
+strict_tdd: true
+
+testing:
+  strict_tdd: true
+  test_runner:
+    command: pnpm -r test
+    framework: vitest
+  layers:
+    unit:
+      available: true
+      tool: vitest
+    integration:
+      available: true
+      tool: vitest (vitest.integration.config.ts) + supertest + Postgres/Chromium containers
+    e2e:
+      available: false
+      tool: null
+  coverage:
+    available: false
+    command: null
+  quality:
+    linter:
+      available: true
+      command: pnpm lint
+    type_checker:
+      available: true
+      command: pnpm typecheck
+    formatter:
+      available: false
+      command: null
+
+rules:
+  proposal:
+    - State the current-state gap before the proposed change
+    - Include a rollback plan for risky changes
+    - Sequence real-world dependencies (hardware, providers, domains) as proposal dependencies, not implementation tasks
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Keep domain vocabulary in Spanish (comodato, comodante, comodatario) inside otherwise English artifacts
+  design:
+    - Document architecture decisions with rationale, including rejected alternatives
+    - Keep the domain and application layers free of database and browser dependencies
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Pair each implementation task with the failing test that precedes it
+  apply:
+    guidelines:
+      - Follow existing code patterns and the hexagonal boundaries
+      - Strict TDD — write the failing test first, then the implementation
+    tdd: true
+    test_command: pnpm -r test
+  verify:
+    test_command: pnpm -r test
+    build_command: pnpm typecheck
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
+    - Never modify an archived change; the archive is an audit trail
