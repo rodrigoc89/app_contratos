@@ -745,6 +745,20 @@ scratch host is running the drill), extract the tar, `pg_restore --clean
 --if-exists` into the target database, copy the PDF tree into the target
 directory, then hand off to `verify-restore.sh`.
 
+### The restore target must be empty, and `restore.sh` will not empty it
+
+`do_restore_documents` copies additively (`cp -a src/. dst/`) and never
+clears the target. A PDF left there by an earlier drill therefore stands in
+for one **this** archive is missing: `verificarRestauracion` finds the row's
+file present, and — being the same document — its sha256 matches, so neither
+`faltantes` nor `desajustados` fires. The drill reports a clean restore of a
+backup that cannot actually be restored, which is the single thing the
+go-live gate below leans on it never doing.
+
+So the preflight refuses a non-empty `$ALMACEN_DOCUMENTOS_RUTA`. It refuses
+rather than clearing: this script never deletes what an operator pointed it
+at. Point it at a fresh directory, or empty the old one deliberately.
+
 ### `verify-restore.sh` — a thin wrapper, on purpose
 
 ```
@@ -880,6 +894,37 @@ every other directive — `Type=oneshot`, the hardening block,
 confirming the unit **syntax and semantics** are correct; only the
 path-existence check, which genuinely needs the VPS, does not pass
 pre-VPS.
+
+### The public key has to live somewhere `ProtectHome` does not hide
+
+`contratos-backup.service` runs as root with `ProtectHome=true`, which makes
+`/home`, `/root` and `/run/user` "inaccessible and empty" (`systemd.exec`).
+gpg reads its keyring from `$HOME/.gnupg` — `/root/.gnupg` for this unit —
+so without help it would build an empty keyring in that tmpfs and fail with
+`skipped: No public key` for the backup recipient. Every scheduled backup
+failing, every day, with the journal as the only witness and a restore
+attempt as the moment anyone finds out.
+
+The unit therefore sets `Environment=GNUPGHOME=/etc/contratos/gnupg`, beside
+the other root-owned 0600 configuration, and lists it in `ReadWritePaths`
+because gpg writes lockfiles into its keyring directory. Create it and
+import the recipient's **public** key before enabling the timer — the secret
+half must never reach this box, which is the entire point of D7's asymmetric
+choice:
+
+```sh
+sudo install -d -m 700 /etc/contratos/gnupg
+sudo GNUPGHOME=/etc/contratos/gnupg gpg --import /path/to/recipient-public.asc
+```
+
+`TimeoutStartSec=2h` is set for the same family of reason: `Type=oneshot`
+leaves it at infinity, and the timer will not start a second run while the
+first is still going, so one wedged `rclone` push would silently stop every
+future backup.
+
+`deploy/unidades-systemd.spec.ts` asserts these statically — the units were
+the only artifacts under `deploy/` with no spec, and they are the ones that
+actually run.
 
 ## Still-open items, and exactly where it resolves
 

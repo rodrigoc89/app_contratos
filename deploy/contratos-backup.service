@@ -10,6 +10,10 @@
 # Install:
 #   sudo cp deploy/contratos-backup.service deploy/contratos-backup.timer \
 #     /etc/systemd/system/
+#   sudo install -d -m 700 /etc/contratos/gnupg
+#   # Import the backup recipient's PUBLIC key into that keyring (never the
+#   # secret half — this box must not be able to read its own backups):
+#   sudo GNUPGHOME=/etc/contratos/gnupg gpg --import /path/to/recipient-public.asc
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now contratos-backup.timer
 #   systemctl list-timers contratos-backup.timer
@@ -43,13 +47,32 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=contratos-backup
 
+# gpg reads its keyring from $HOME/.gnupg, which for this root unit is
+# /root/.gnupg — and ProtectHome=true below makes /root "inaccessible and
+# empty" (systemd.exec). gpg would then build an empty keyring in that
+# tmpfs and fail with "skipped: No public key" for the backup recipient:
+# every scheduled backup failing, every day, with the journal as the only
+# witness and a restore attempt as the moment anyone finds out. Pointed at
+# the same root-owned 0600 directory that already holds api.env and
+# backup.env, and listed in ReadWritePaths below because gpg writes
+# lockfiles into it.
+Environment=GNUPGHOME=/etc/contratos/gnupg
+
+# Type=oneshot leaves TimeoutStartSec at infinity, and the timer will not
+# start a second run while the first is still going — so one wedged rclone
+# push silently stops every future backup. Two hours is far beyond any
+# healthy run for this dataset and still short enough that the next day's
+# timer takes over.
+TimeoutStartSec=2h
+
 # ── Hardening ────────────────────────────────────────────────────────────────
 # Mirrors contratos-api.service's posture, adjusted for a root, one-shot,
 # filesystem-and-network job rather than a long-running unprivileged
-# service: this unit needs no ProtectHome (backup.sh never touches /home or
-# /root — the age/gpg decryption key required to READ a backup back never
-# lives on this box at all, design.md D7's whole point) and needs
-# ReadWritePaths for its own local staging/retention directory, which
+# service: ProtectHome=true is safe here only because $GNUPGHOME is set
+# explicitly above — the DECRYPTION key never lives on this box at all
+# (design.md D7's whole point), but the recipient's PUBLIC key does, and it
+# has to live somewhere ProtectHome does not hide. ReadWritePaths covers the
+# local staging/retention directory and that keyring, both of which
 # ProtectSystem=strict would otherwise make read-only.
 NoNewPrivileges=true
 PrivateTmp=true
@@ -57,7 +80,7 @@ ProtectHome=true
 ProtectSystem=strict
 ProtectKernelTunables=true
 ProtectControlGroups=true
-ReadWritePaths=/var/backups/contratos-offsite
+ReadWritePaths=/var/backups/contratos-offsite /etc/contratos/gnupg
 
 # Deliberately NOT set: Restart=. A failed backup run is retried by the
 # NEXT day's timer firing, not by systemd immediately re-running a job that
