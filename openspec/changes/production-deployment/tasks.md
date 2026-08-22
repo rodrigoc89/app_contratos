@@ -258,28 +258,28 @@ per the chained-pr skill's per-PR requirement.
 
 - [x] 8B.1 `deploy/README.md`: backup section (dump-before-PDF-copy ordering rationale, encryption choice — `age` or the `gpg` fallback per 8.3 — and retention policy).
 - [x] 8B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR7 diff; record results.
-- [ ] 8B.3 Open PR #7 targeting PR #6's branch (feature-branch-chain).
+- [x] 8B.3 Open PR #7 targeting PR #6's branch (feature-branch-chain).
 
 ## Phase 9 — PR8: restore & hash verification (D7 cont.)
 
 *No atomicity-safe seam was identified inside this PR — see Re-slicing note 6.*
 
-- [ ] 9.1 RED: `deploy/restore.spec.ts` — target `DATABASE_URL` or `ALMACEN_DOCUMENTOS_RUTA` equal to the production value asserts `restore.sh` refuses (non-zero exit, no writes). Must fail — script does not exist.
-- [ ] 9.2 GREEN: create `deploy/restore.sh` — restores into a scratch database and directory only, enforces the refusal guard, then invokes `verify-restore.sh`.
-- [ ] **8.2** (relocated from Phase 8) RED: `apps/api/prisma/restauracion/verificarRestauracion.integration.spec.ts` (against CI's Postgres 17 container) — a row committed after the dump completes but before the PDF copy finishes results in a `huerfanos` warning only, never a missing row. Must fail — verifier does not exist.
-- [ ] 9.3 RED: same file (CI's Postgres 17 + a deliberately corrupted fixture) asserts: `faltantes` (row, no file) and `desajustados` (file, wrong sha256) both cause exit 1; `huerfanos` (file, no row) only warns; `total === 0` fails outright — a drill that verifies nothing must not report success. Must fail — verifier does not exist. **8.2 and 9.3 are two RED scenarios against the same module, both satisfied by 9.4's single GREEN.**
-- [ ] 9.4 GREEN: create `apps/api/prisma/restauracion/verificarRestauracion.ts` (streaming orchestrator + sha256 comparator), following `prisma/backfill/nombreDeBusqueda.ts`'s exported-pure-function-plus-jiti-CLI pattern; streams every `DocumentoContrato` row's file and compares against the stored lowercase-hex `sha256` (`schema.prisma:279`). Satisfies both 8.2 and 9.3.
-- [ ] 9.5 GREEN: create `deploy/verify-restore.sh` — thin wrapper that runs `pnpm --filter @contratos/api verify:restore` against the scratch DB/dir after `restore.sh` completes.
-- [ ] 9.6 Add `verify:restore` script to `apps/api/package.json`.
-- [ ] 9.7 Create `deploy/contratos-backup.service` + `deploy/contratos-backup.timer` (daily schedule); verify with `systemd-analyze verify` — this runs without root and without a VPS; record pass/fail.
-- [ ] 9.8 No proof available pre-VPS: real offsite transfer via a credentialed `rclone` remote, full restore drill against a real scratch host. Blocked on the `offsite-backup-destination` external dependency (`state.yaml`) — not blocked on any task in this file. Add to `deploy/README.md`'s post-VPS checklist.
+- [x] 9.1 RED: `deploy/restore.spec.ts` — target `DATABASE_URL` or `ALMACEN_DOCUMENTOS_RUTA` equal to the production value asserts `restore.sh` refuses (non-zero exit, no writes). Must fail — script does not exist.
+- [x] 9.2 GREEN: create `deploy/restore.sh` — restores into a scratch database and directory only, enforces the refusal guard, then invokes `verify-restore.sh`.
+- [x] **8.2** (relocated from Phase 8) RED: `apps/api/prisma/restauracion/verificarRestauracion.integration.spec.ts` (against CI's Postgres 17 container) — a row committed after the dump completes but before the PDF copy finishes results in a `huerfanos` warning only, never a missing row. Must fail — verifier does not exist.
+- [x] 9.3 RED: same file (CI's Postgres 17 + a deliberately corrupted fixture) asserts: `faltantes` (row, no file) and `desajustados` (file, wrong sha256) both cause exit 1; `huerfanos` (file, no row) only warns; `total === 0` fails outright — a drill that verifies nothing must not report success. Must fail — verifier does not exist. **8.2 and 9.3 are two RED scenarios against the same module, both satisfied by 9.4's single GREEN.**
+- [x] 9.4 GREEN: create `apps/api/prisma/restauracion/verificarRestauracion.ts` (streaming orchestrator + sha256 comparator), following `prisma/backfill/nombreDeBusqueda.ts`'s exported-pure-function-plus-jiti-CLI pattern; streams every `DocumentoContrato` row's file and compares against the stored lowercase-hex `sha256` (`schema.prisma:279`). Satisfies both 8.2 and 9.3.
+- [x] 9.5 GREEN: create `deploy/verify-restore.sh` — thin wrapper that runs `pnpm --filter @contratos/api verify:restore` against the scratch DB/dir after `restore.sh` completes.
+- [x] 9.6 Add `verify:restore` script to `apps/api/package.json`.
+- [x] 9.7 Create `deploy/contratos-backup.service` + `deploy/contratos-backup.timer` (daily schedule); verify with `systemd-analyze verify` — this runs without root and without a VPS; record pass/fail.
+- [x] 9.8 No proof available pre-VPS: real offsite transfer via a credentialed `rclone` remote, full restore drill against a real scratch host. Blocked on the `offsite-backup-destination` external dependency (`state.yaml`) — not blocked on any task in this file. Add to `deploy/README.md`'s post-VPS checklist.
 
 ## Phase 10 — PR8 close out & go-live gate
 
-- [ ] 10.1 `deploy/README.md`: restore drill walkthrough, retention policy, credential rotation note.
-- [ ] 10.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR8 (full chain) diff; record results.
+- [x] 10.1 `deploy/README.md`: restore drill walkthrough, retention policy, credential rotation note.
+- [x] 10.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR8 (full chain) diff; record results.
 - [ ] 10.3 Open PR #8 targeting PR #7's branch (feature-branch-chain).
-- [ ] 10.4 **Go-live gate.** Record explicitly in `deploy/README.md`: **PR7 and PR8 together** must be merged, deployed to the VPS, and pass one real backup-then-restore drill before the first real customer *comodato* is signed on that server. Until then, every signed contract on the box has no offsite copy.
+- [x] 10.4 **Go-live gate.** Record explicitly in `deploy/README.md`: **PR7 and PR8 together** must be merged, deployed to the VPS, and pass one real backup-then-restore drill before the first real customer *comodato* is signed on that server. Until then, every signed contract on the box has no offsite copy.
 
 ## Non-goals / deferred (explicit, not silent)
 
