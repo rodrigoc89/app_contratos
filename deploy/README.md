@@ -12,8 +12,11 @@ and where the one remaining question this chain cannot answer gets resolved.
 1. Provision the host once, as root: `sudo deploy/provision.sh`
 2. Deploy the application: `TAG=v1.2.3 deploy/deploy.sh`
 3. Bootstrap TLS: `sudo CONTRATOS_HOST=contratos.example.com deploy/tls-bootstrap.sh`
-4. Schedule daily backups: `deploy/backup.sh` (offsite, encrypted — see
-   "Backup" below; a systemd timer to run it automatically lands in PR8)
+4. Schedule daily backups: `sudo systemctl enable --now contratos-backup.timer`
+   (offsite, encrypted — see "Backup" below)
+5. **Before the first real customer *comodato* is signed**, run one real
+   restore drill (see "Restore drill" below) — this is the go-live gate
+   (task 10.4).
 
 Every script supports `--dry-run` and needs no VPS to preview: its Vitest
 spec `execFile`s it against a scratch temp directory (design.md D8).
@@ -26,7 +29,9 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 | 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5); the `publish` step calls `publicar-assets.sh` (D4, row 2a) | Done |
 | 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | Done |
 | 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) — see "TLS bootstrap" below | Done |
-| 4 | `backup.sh` | Dump the database, copy the PDF tree — always in that order — archive, encrypt asymmetrically, push offsite, prune (D7) — see "Backup" below | **This PR** |
+| 4 | `backup.sh` | Dump the database, copy the PDF tree — always in that order — archive, encrypt asymmetrically, push offsite, prune (D7) — see "Backup" below | Done |
+| 5 | `restore.sh` → `verify-restore.sh` | Restore a backup into a SCRATCH database and directory only (never production — guarded), then mechanically prove it via sha256 comparison (D7 cont.) — see "Restore drill" below | **This PR** |
+| 6 | `contratos-backup.timer` | Runs `backup.sh` unattended, once a day | **This PR** |
 
 `provision.sh` assumes `/opt/contratos` is (or will become) the git checkout
 `deploy.sh` operates on — see "`.cache/` and the git-exclude step" below for
@@ -612,6 +617,189 @@ a remote left over-quota by a partially failed push. It needs only
 neither `DATABASE_URL` nor an encryption recipient, since it never dumps or
 encrypts anything.
 
+## Restore drill (D7 cont.)
+
+**A backup nobody has ever restored is a belief, not a backup.** `backup.sh`
+produces an offsite, encrypted copy; `restore.sh` and
+`verificarRestauracion.ts` are the half that turns "we believe this backup
+is good" into "we mechanically proved it, by re-hashing every file against
+the sha256 `schema.prisma:279` already stores per document."
+
+### `restore.sh` — the first thing it does is refuse
+
+`restore.sh`'s entire job is to overwrite a database and a document tree
+from a backup archive. That makes it the most dangerous script in this
+repository, more dangerous than `deploy.sh` — a bad `deploy.sh` run breaks
+the running service; a bad `restore.sh` run destroys data. The **first**
+thing it checks, before touching anything, is whether its own target is
+production:
+
+```
+DATABASE_URL=<target> ALMACEN_DOCUMENTOS_RUTA=<target> ARCHIVE_FILE=<path> \
+  deploy/restore.sh
+```
+
+`restore.sh` reads its restore **target** from the exact same environment
+variable names the application, `deploy.sh` and `backup.sh` already use —
+`$DATABASE_URL` and `$ALMACEN_DOCUMENTOS_RUTA` — deliberately, not a
+differently-named "restore target" variable. The scenario this guards
+against is a tired operator at 2am running a restore drill in a shell that
+still has the **production** `$DATABASE_URL` exported from something else
+they were doing earlier. If that target equals the production value
+recorded in `$ENV_FILE` (default `/etc/contratos/api.env`, the same file
+`deploy.sh`/`backup.sh` read), `restore.sh` **refuses — non-zero exit, no
+writes** — never a warning, never a prompt to confirm. `restore.spec.ts`
+(task 9.1) proves this for both variables independently, proves the guard
+does NOT fire when the target genuinely differs from production, and
+proves it stays silent (does not fail) when `$ENV_FILE` itself does not
+exist — the ordinary case on a genuine scratch host, which has no
+production config to compare against at all.
+
+Only after that guard passes does `restore.sh` do anything: decrypt the
+archive (age or gpg, mirroring `encrypt-backup-archive.sh`'s tool
+resolution — but decrypting needs the **identity/secret key**, which by
+design never lives on the production VPS; `restore.sh` reads it from
+`$AGE_IDENTITY_FILE` or an already-imported gpg secret key on whatever
+scratch host is running the drill), extract the tar, `pg_restore --clean
+--if-exists` into the target database, copy the PDF tree into the target
+directory, then hand off to `verify-restore.sh`.
+
+### `verify-restore.sh` — a thin wrapper, on purpose
+
+```
+DATABASE_URL=<scratch target> ALMACEN_DOCUMENTOS_RUTA=<scratch target> \
+  deploy/verify-restore.sh
+```
+
+All of the actual verification logic lives in TypeScript
+(`apps/api/prisma/restauracion/verificarRestauracion.ts`), not in bash —
+same reasoning as the render verdict (D2) and the seed gate (D3): a
+falsifiable guarantee belongs where it can be unit- and integration-tested
+in CI, not re-implemented in shell. `verify-restore.sh` only sets up the
+working directory and lets `$DATABASE_URL`/`$ALMACEN_DOCUMENTOS_RUTA`
+(already in its environment, courtesy of `restore.sh`) reach
+`pnpm --filter @contratos/api verify:restore` unchanged.
+
+### `verificarRestauracion.ts` — streaming, and four outcomes, not two
+
+**Answer first:** it streams every `contrato_documentos` row's file into a
+sha256 hasher and compares it against the hash the row already carries,
+computed server-side when the PDF was sealed (`schema.prisma:279`). Two
+things stream deliberately, matching `prisma/backfill/nombreDeBusqueda.ts`'s
+established shape (exported pure function plus a thin `jiti` CLI entry):
+
+- **Rows** are paged with keyset pagination (`cursor`/`id`, 200 at a time),
+  never loaded into memory all at once.
+- **Files** are piped through `crypto.createHash("sha256")` via a readable
+  stream (`createReadStream` → `pipeline`), never read whole with
+  `readFile`. A production archive is not small, and Chromium-rendered
+  contract PDFs are not tiny — a verifier that reads every file whole would
+  OOM on exactly the archive it exists to verify.
+
+Four outcomes, not a pass/fail binary — `deploy/README.md`'s own honesty
+convention applies here too:
+
+| Outcome | Meaning | Result |
+|---|---|---|
+| `faltantes` | a row exists, its file is absent on disk | **fails** (exit 1) |
+| `desajustados` | a file exists, its real sha256 differs from the row | **fails** (exit 1) |
+| `huerfanos` | a file exists, no row references it | **warns only** — never fails on this alone |
+| `total === 0` | nothing was checked at all | **fails outright**, even with zero other findings |
+
+**Why `huerfanos` warns instead of failing.** `backup.sh` dumps the
+database BEFORE copying the PDF tree, specifically so a race between the
+two steps can only ever strand a harmless orphan file, never an
+unrecoverable row (see "Backup (D7)" above). A row committed after the
+dump completes but before the PDF copy finishes is never in the restored
+database at all — the dump already ran before it existed — but its file,
+already on disk by the time the copy step runs, DOES end up in the
+restored document tree. The restored state is exactly "a file with no row
+to reference it": `huerfanos`, never `faltantes`. Treating that as a
+failure would punish the safe direction `backup.sh`'s ordering was
+designed to take. `verificarRestauracion.integration.spec.ts`'s dedicated
+case for this (task 8.2) constructs precisely that scenario against CI's
+real Postgres 17 container and asserts `faltantes` stays empty while
+`huerfanos` carries the orphan.
+
+**Why `total === 0` fails outright.** A verifier that checks zero documents
+and exits `0` is worse than no verifier at all — it produces a green light
+nobody earned. An empty restored database (a genuinely broken restore, or
+a drill run against the wrong target) must never look identical to "every
+document verified."
+
+### Honesty about what ran for real here
+
+`restore.spec.ts` proves the production-target refusal guard for real, no
+VPS needed (task 9.1) — six scenarios, including the two "does NOT refuse"
+control cases that prove the guard evaluates real values instead of
+hardcoding a refusal. `verificarRestauracion.integration.spec.ts` proves
+the hash comparator for real against CI's live Postgres 17 container and
+real file bytes on disk — six scenarios covering all four outcomes above,
+including a deliberately corrupted fixture (task 9.3) and the dump-before-
+copy race (task 8.2). A CLI smoke run of `pnpm --filter @contratos/api
+verify:restore` against this development machine's own local database
+(zero documents, matching a genuinely empty target) exited `1` with the
+`total === 0` message — the CLI wrapper's exit-code propagation proven end
+to end, not merely the exported function in isolation.
+
+What none of that proves: `restore.sh`'s own decrypt/extract/`pg_restore`/
+copy steps invoked for real — like `backup.sh`'s `do_dump`/`do_push`, they
+are implemented per design.md D7 but never exercised in a spec, because
+neither a live encrypted archive, `pg_restore`, nor a second Postgres
+instance to restore into exists on this development machine. The **real**
+backup-then-restore drill — the one this whole PR exists to make possible —
+needs the actual VPS and the actual offsite remote; see task 9.8 below.
+
+### Credential rotation
+
+`restore.sh`'s decryption identity (`$AGE_IDENTITY_FILE`, or an imported
+gpg secret key) is the one credential in this whole chain that is
+deliberately **never** stored anywhere `backup.sh`/`deploy.sh` can reach —
+that absence from the VPS is design D7's entire property. It must be
+rotated the same way any offline secret is: generate a new `age` keypair
+(or gpg keypair), update `AGE_RECIPIENT`/`GPG_RECIPIENT` in
+`/etc/contratos/backup.env` on the VPS so **future** backups encrypt to the
+new public key, keep the OLD identity file archived offline for as long as
+any backup encrypted under it is still within the 30-day remote retention
+window (see "Retention" above), and only discard the old identity once
+every backup it could decrypt has been pruned. Rotating the identity does
+**not** re-encrypt existing backups — an old backup stays decryptable only
+by the identity that was current when it was made.
+
+## Scheduled backups (`contratos-backup.timer`)
+
+```
+sudo cp deploy/contratos-backup.service deploy/contratos-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now contratos-backup.timer
+systemctl list-timers contratos-backup.timer
+```
+
+Runs `backup.sh` once a day at 03:15 local time (a low-traffic hour,
+`RandomizedDelaySec=15m`), `Persistent=true` so a run missed while the VPS
+was down still happens as soon as the timer is next active instead of
+silently skipping that day. `Type=oneshot`, `User=root` — the same
+justification `backup.sh` itself documents above: it reads two root-owned,
+`0600` files (`api.env` for `DATABASE_URL`, `backup.env` for the rclone
+remote and encryption recipient), neither readable by the unprivileged
+`contratos` service user by design.
+
+**`systemd-analyze verify` result, recorded honestly:** against the real
+committed unit files, it reports `Command /opt/contratos/deploy/backup.sh
+is not executable: No existe el archivo o el directorio` — because
+`/opt/contratos` does not exist on this development machine. This is not a
+defect in the new units: `contratos-api.service` (already in this
+repository, already deployed nowhere yet) fails `systemd-analyze verify`
+with the exact same class of error, for the exact same reason
+(`/usr/local/bin/pnpm` does not exist here either). Substituting a
+stand-in executable path (`/usr/bin/true`) for `ExecStart` while keeping
+every other directive — `Type=oneshot`, the hardening block,
+`ReadWritePaths`, and the timer's `OnCalendar`/`RandomizedDelaySec`/
+`Persistent` — verifies clean (`systemd-analyze verify` exit `0`),
+confirming the unit **syntax and semantics** are correct; only the
+path-existence check, which genuinely needs the VPS, does not pass
+pre-VPS.
+
 ## Still-open items, and exactly where it resolves
 
 One question design.md left open is **not** blocked on any task in this
@@ -619,7 +807,7 @@ chain — it has a named home later:
 
 | Open item | Resolves in | What happens there |
 |---|---|---|
-| A real backup-then-restore drill | PR8, task 9.8 | Blocked on the `offsite-backup-destination` external dependency (`state.yaml`), not on any code task — the fixture-level tests in 8.1/8.3-8.6/9.1-9.4 do not need it |
+| A real backup-then-restore drill (task 9.8) | Post-VPS checklist, below | Blocked on the `offsite-backup-destination` external dependency (`state.yaml`) and on the VPS itself (`vps-purchase`) — not on any task in this repository. `restore.sh`, `verify-restore.sh`, and `verificarRestauracion.ts` are fully implemented and fixture-tested (tasks 9.1-9.4) and need nothing further from this codebase to run the real drill once both external dependencies resolve. This drill is also the **go-live gate** — see task 10.4 below |
 
 The other open question design.md recorded — `age` availability on the
 target Ubuntu release — is resolved above, in "Backup (D7)": confirmed
@@ -707,14 +895,29 @@ why `age` itself did not run on this machine). What none of that proves:
   installed on this machine either; `backup.spec.ts`'s retention tests mock
   it entirely. The credentialed remote is blocked on the
   `offsite-backup-destination` external dependency (`state.yaml`), same as
-  the full restore drill (PR8, task 9.8).
+  the full restore drill (task 9.8, below).
 - **The real `age` binary, encrypting for real.** Confirmed packaged for
   the target Ubuntu release (see "Backup (D7)"), but not installed on this
   development machine — the real round-trip proof here used the `gpg`
   fallback path instead. Both paths satisfy design D7's property
   identically; only one was cryptographically exercised on this machine.
-- **A scheduled, unattended run.** `contratos-backup.service`/`.timer`
-  land in PR8 (task 9.7) — this PR's `backup.sh` is invoked by hand.
+- **A scheduled, unattended run against a live backup.** `contratos-backup.service`/`.timer`
+  are installed and their unit files verify (see "Scheduled backups"
+  above); what a real daily firing actually produces on a live host is
+  unverified pre-VPS, same as `deploy.sh`'s never-really-invoked steps.
+
+`restore.sh` proves its production-target refusal guard for real, no VPS
+needed (`restore.spec.ts`, task 9.1). `verificarRestauracion.ts` proves its
+sha256 comparator for real against CI's live Postgres 17 and real file
+bytes on disk (`verificarRestauracion.integration.spec.ts`, tasks 8.2 and
+9.3). See "Restore drill (D7 cont.)" above, "Honesty about what ran for
+real here," for the full account of what is and is not proven. What none
+of it proves — because it needs the real VPS, the real offsite remote, and
+a real second host to restore onto — is the actual end-to-end drill: a
+real `backup.sh` run, pushed to the real remote, decrypted and restored by
+`restore.sh` onto a real scratch host, verified clean by
+`verify-restore.sh`. That drill is task 9.8, and it is also the **go-live
+gate** — see "Next step" below.
 
 ## Checklist (post-VPS, not yet actionable)
 
@@ -737,16 +940,51 @@ why `age` itself did not run on this machine). What none of that proves:
 - [ ] `age -d -i <the real recipient's identity file>` (kept off the VPS entirely) decrypts a real pushed archive byte-identical to the pre-encryption tar
 - [ ] After 31+ real daily runs, exactly 30 remote copies remain and the 31st-oldest is gone
 - [ ] `deploy/backup.sh --prune-only` run by hand against the real remote behaves identically to its mocked-`rclone` test — same head/tail split, no accidental deletion of a retained copy
+- [ ] `sudo systemctl enable --now contratos-backup.timer` schedules a real unattended run; `journalctl -u contratos-backup.service` shows a clean exit on its next scheduled firing (or after `sudo systemctl start contratos-backup.service` run by hand)
+- [ ] **The real backup-then-restore drill (task 9.8, and the go-live gate — task 10.4):** on a genuinely separate scratch host, `ARCHIVE_FILE=<the real pushed archive> AGE_IDENTITY_FILE=<the real identity, kept off the VPS> DATABASE_URL=<scratch> ALMACEN_DOCUMENTOS_RUTA=<scratch> deploy/restore.sh` completes, `verify-restore.sh` reports every real document `verificados` with zero `faltantes`/`desajustados`, and the exit code is `0`
+- [ ] The above drill has been run **at least once** and passed before any real customer *comodato* is signed on this server — see the go-live gate below
 
-## Next step
+## Go-live gate (task 10.4) — read this before signing anything real
 
-This PR (PR7) added `backup.sh` and `encrypt-backup-archive.sh` (row 4 of
-the install-order table, D7) — database-before-PDFs backup ordering,
-asymmetric encryption (`age`, `gpg --recipient` fallback), offsite push via
-`rclone`, and 30-remote/2-local retention pruning. PR8 adds `restore.sh`
-and the hash-based restore verifier: the mechanical proof that a restore
-actually reconstructs what this PR backs up, plus the `contratos-backup.timer`
-that runs this script on a schedule instead of by hand. **PR7 and PR8
-together are the go-live gate** — no comodato may be signed on this server
-until both have landed and a real backup-then-restore drill has passed
-(see task 10.4).
+**No real customer *comodato* may be signed on this server until every one
+of the following has happened, in this order:**
+
+1. PR #86 (asymmetric backup encryption, `encrypt-backup-archive.sh`) is
+   merged.
+2. PR #87 (backup ordering, `backup.sh`) is merged. Together, #86 and #87
+   are what this document has been calling "PR7" throughout — design.md's
+   single logical unit shipped as two separate, independently-reviewable
+   pull requests; the requirement below binds both of them, not either one
+   alone.
+3. This PR (restore, hash verification, the `contratos-backup.timer`
+   schedule — everything under "Restore drill (D7 cont.)" and "Scheduled
+   backups" above) is merged.
+4. All three are **deployed to the real VPS**.
+5. **One real backup-then-restore drill has been run on that VPS and has
+   passed** — a real `backup.sh` run, pushed to the real offsite remote, a
+   real `restore.sh` run on a genuinely separate scratch host that
+   decrypts and restores it, and a real `verify-restore.sh` run reporting
+   every document `verificados` with zero `faltantes` and zero
+   `desajustados`. This is the checklist item above under "The real
+   backup-then-restore drill" — read it as a precondition for step 5, not
+   as an optional nice-to-have.
+
+**Why this is written as a blocking rule, not left as an implied
+consequence of merge order.** Until step 5 has actually happened, every
+comodato PDF signed on this server exists in exactly one place: the VPS
+itself. `backup.sh` alone only produces a copy that is *believed* to be
+good — nobody has ever proven a restore from it actually works until step
+5 runs. A comodato is a legally-binding document; signing one before this
+gate closes means that document's only copy has an unproven recovery path.
+That is an acceptable risk for test data. It is not an acceptable risk for
+a real customer's signature.
+
+**If you are reading this months from now with no memory of this
+conversation:** check `git log` for PR #86 and #87 merged into `master`,
+check that this PR (restore + verify + timer) is merged and deployed too,
+and check for a dated record of a passed real restore drill (the
+checklist item above, or an equivalent operational log) before treating
+this server as safe to sign real contracts on. If any of the three PRs is
+missing, or a real drill has never been run and passed, **the gate is not
+closed** — treat the server as still in the pre-go-live state described in
+this README, regardless of how long it has been running.

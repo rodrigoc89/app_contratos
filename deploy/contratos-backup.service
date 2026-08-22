@@ -1,0 +1,66 @@
+# systemd unit for the daily offsite backup (design.md D7). Triggered by
+# deploy/contratos-backup.timer — never enabled directly, and never given a
+# [Install] section of its own for that reason.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Before installing, replace:
+#   - `/opt/contratos` → where the repository is deployed (matches
+#     contratos-api.service's WorkingDirectory root)
+#
+# Install:
+#   sudo cp deploy/contratos-backup.service deploy/contratos-backup.timer \
+#     /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now contratos-backup.timer
+#   systemctl list-timers contratos-backup.timer
+#   # Run once by hand to prove the whole chain before trusting the schedule:
+#   sudo systemctl start contratos-backup.service
+#   journalctl -u contratos-backup.service -n 50
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=Offsite, encrypted, retention-pruned backup of the contratos database and PDF archive (design.md D7)
+Documentation=file:///opt/contratos/deploy/README.md
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# backup.sh reads two root-owned, 0600 files by design — the SAME
+# /etc/contratos/api.env contratos-api.service already reads (DATABASE_URL,
+# never duplicated), and /etc/contratos/backup.env (the rclone remote and
+# the encryption recipient, new to this PR). Neither is readable by the
+# unprivileged `contratos` service user on purpose (deploy/README.md's
+# "backup.env — new to this PR, never committed" section), so this job
+# runs as root — the same posture provision.sh already uses for host setup.
+User=root
+WorkingDirectory=/opt/contratos
+ExecStart=/opt/contratos/deploy/backup.sh
+
+# A partial backup (a failed push, a missing recipient) must be visible —
+# the journal is enough here; there is no separate log file to rotate.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=contratos-backup
+
+# ── Hardening ────────────────────────────────────────────────────────────────
+# Mirrors contratos-api.service's posture, adjusted for a root, one-shot,
+# filesystem-and-network job rather than a long-running unprivileged
+# service: this unit needs no ProtectHome (backup.sh never touches /home or
+# /root — the age/gpg decryption key required to READ a backup back never
+# lives on this box at all, design.md D7's whole point) and needs
+# ReadWritePaths for its own local staging/retention directory, which
+# ProtectSystem=strict would otherwise make read-only.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ReadWritePaths=/var/backups/contratos-offsite
+
+# Deliberately NOT set: Restart=. A failed backup run is retried by the
+# NEXT day's timer firing, not by systemd immediately re-running a job that
+# may be failing for a reason (a full disk, an unreachable remote) an
+# immediate retry cannot fix — the same "no automatic rollback" posture
+# deploy.sh's do_start_and_verify already takes for its own failure mode.
