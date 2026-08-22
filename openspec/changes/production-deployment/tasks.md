@@ -162,53 +162,53 @@ per the chained-pr skill's per-PR requirement.
 
 - [x] 1B.1 `deploy/README.md`: install order (`provision.sh` → `deploy.sh` → `tls-bootstrap.sh`), the apt fallback list (audit/offline reference only, per D1's rejected-primary-mechanism decision — verified against Puppeteer's current troubleshooting docs via context7: **36 packages**, not the planning docs' approximate "37"), and cross-reference where the two still-open items resolve (`age` availability in PR7/8.3; the restore drill in PR8/9.8).
 - [x] 1B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the PR1 diff; record results. All three green — see apply-progress for full output.
-- [ ] 1B.3 Open PR #1 targeting the tracker/feature branch (feature-branch-chain, draft/no-merge tracker). Evidence: focused test command output, `provision.sh --dry-run` result, rollback boundary from the Work Units table. **Excluded from this apply run by explicit instruction — not authorized to publish.**
+- [x] 1B.3 Open PR #1 targeting the tracker/feature branch (feature-branch-chain, draft/no-merge tracker). Evidence: focused test command output, `provision.sh --dry-run` result, rollback boundary from the Work Units table. **Excluded from this apply run by explicit instruction — not authorized to publish.**
 
 ## Phase 2 — PR2: render verdict (D2)
 
-- [ ] 2.1 RED: `apps/api/scripts/renderVerdict.spec.ts` — fixtures for `fc-match`/`pdffonts`/`pdftotext` stdout (present/fallback/missing per layer) assert the parser returns pass/fail + reason per layer. Must fail — module does not exist.
-- [ ] 2.2 GREEN: create `apps/api/scripts/renderVerdict.ts` (pure parser, three layers: family resolution, glyph embedding, text round-trip) and `apps/api/scripts/verificarRender.ts` (jiti driver: renders a probe doc via `GeneradorDeDocumentosPuppeteer`, runs the three tools, feeds stdout to the parser).
-- [ ] 2.3 Read the contract template's CSS to record the exact font family requested (open question) and hardcode it as the `fc-match` argument in `verificarRender.ts`, with a comment naming the source line.
-- [ ] 2.4 Add `verify:render` script to `apps/api/package.json`.
-- [ ] 2.5 Exercise the real render + verdict in the existing `integration` job (`pnpm --filter @contratos/api test:integration`, Chromium present in CI). Real host fonts remain unverifiable pre-VPS — note this explicitly, do not claim otherwise.
+- [x] 2.1 RED: `apps/api/scripts/renderVerdict.spec.ts` — fixtures for `fc-match`/`pdffonts`/`pdftotext` stdout (present/fallback/missing per layer) assert the parser returns pass/fail + reason per layer. Must fail — module does not exist.
+- [x] 2.2 GREEN: create `apps/api/scripts/renderVerdict.ts` (pure parser, three layers: family resolution, glyph embedding, text round-trip) and `apps/api/scripts/verificarRender.ts` (jiti driver: renders a probe doc via `GeneradorDeDocumentosPuppeteer`, runs the three tools, feeds stdout to the parser).
+- [x] 2.3 Read the contract template's CSS to record the exact font family requested (open question) and hardcode it as the `fc-match` argument in `verificarRender.ts`, with a comment naming the source line.
+- [x] 2.4 Add `verify:render` script to `apps/api/package.json`.
+- [x] 2.5 Exercise the real render + verdict in the existing `integration` job (`pnpm --filter @contratos/api test:integration`, Chromium present in CI). Real host fonts remain unverifiable pre-VPS — note this explicitly, do not claim otherwise.
 
 ## Phase 2B — PR2 close out
 
-- [ ] 2B.1 `deploy/README.md`: render verdict section — the three-layer check (family resolution, glyph embedding, text round-trip), the hardcoded font family from 2.3 with its source comment, and the explicit caveat that real host fonts remain unverifiable pre-VPS (2.5).
-- [ ] 2B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results.
-- [ ] 2B.3 Open PR #2 targeting PR #1's branch (feature-branch-chain). Evidence: focused test command output, `verify:render` integration result (real render probe, Chromium present in CI), rollback boundary from the Work Units table.
+- [x] 2B.1 `deploy/README.md`: render verdict section — the three-layer check (family resolution, glyph embedding, text round-trip), the hardcoded font family from 2.3 with its source comment, and the explicit caveat that real host fonts remain unverifiable pre-VPS (2.5).
+- [x] 2B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results.
+- [x] 2B.3 Open PR #2 targeting PR #1's branch (feature-branch-chain). Evidence: focused test command output, `verify:render` integration result (real render probe, Chromium present in CI), rollback boundary from the Work Units table.
 
 ## Phase 4 — PR3: seed fail-closed gate (D3)
 
 *Live application code, distinct in risk from the deploy/publish infra scripts in PR4/PR5 — the seam this PR applies.*
 
-- [ ] 4.1 RED: `apps/api/src/seed/seedDatabase.spec.ts` — new case: `nodeEnv: "production"` with `tecnico` input resolving `action: "omitido"` (no `SEED_TECNICO_PASSWORD`) makes `seedDatabase` throw a named error. Must fail today — the function only throws for the provisional-signature case (**lines 122-133**, orchestrator-verified — the only production `throw` in the file today); the `omitido` path returns silently.
-- [ ] 4.2 RED: same file, same pattern, for `administrador` resolving `omitido` in production. Must fail for the same reason.
-- [ ] 4.3 RED: same file — `nodeEnv: "production"` with either account resolving `already-present` does NOT throw. This is the load-bearing regression guard design D3 calls out: without it, every redeploy fails once passwords are rotated out of the env file. Must currently pass trivially (no throw exists at all yet) but must stay green after 4.4.
-- [ ] 4.4 GREEN: modify `apps/api/src/seed/seedDatabase.ts` — after computing `administrador`/`tecnico` results, when `nodeEnv === "production"` and either resolves `"omitido"`, throw an `Error` naming the missing account and its env var (`SEED_ADMIN_PASSWORD` / `SEED_TECNICO_PASSWORD`), mirroring the existing provisional-signature guard's message style.
-- [ ] 4.5 Confirm `apps/api/src/seed/seedTecnico.spec.ts` and `seedAdministrador.spec.ts` still pass unmodified (they exercise `sembrarCuenta` directly, not the new gate).
+- [x] 4.1 RED: `apps/api/src/seed/seedDatabase.spec.ts` — new case: `nodeEnv: "production"` with `tecnico` input resolving `action: "omitido"` (no `SEED_TECNICO_PASSWORD`) makes `seedDatabase` throw a named error. Must fail today — the function only throws for the provisional-signature case (**lines 122-133**, orchestrator-verified — the only production `throw` in the file today); the `omitido` path returns silently.
+- [x] 4.2 RED: same file, same pattern, for `administrador` resolving `omitido` in production. Must fail for the same reason.
+- [x] 4.3 RED: same file — `nodeEnv: "production"` with either account resolving `already-present` does NOT throw. This is the load-bearing regression guard design D3 calls out: without it, every redeploy fails once passwords are rotated out of the env file. Must currently pass trivially (no throw exists at all yet) but must stay green after 4.4.
+- [x] 4.4 GREEN: modify `apps/api/src/seed/seedDatabase.ts` — after computing `administrador`/`tecnico` results, when `nodeEnv === "production"` and either resolves `"omitido"`, throw an `Error` naming the missing account and its env var (`SEED_ADMIN_PASSWORD` / `SEED_TECNICO_PASSWORD`), mirroring the existing provisional-signature guard's message style.
+- [x] 4.5 Confirm `apps/api/src/seed/seedTecnico.spec.ts` and `seedAdministrador.spec.ts` still pass unmodified (they exercise `sembrarCuenta` directly, not the new gate).
 
 ## Phase 4B — PR3 close out
 
-- [ ] 4B.1 `deploy/README.md`: seed-gate section — the fail-closed guarantee, and why `already-present` never throwing is load-bearing for routine redeploys.
-- [ ] 4B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3 diff; record results.
-- [ ] 4B.3 Open PR #3 targeting PR #2's branch (feature-branch-chain). Evidence per Work Units table; call out explicitly that this PR is live application code (auth/seed path), distinct in risk from the deploy scripts that follow in PR4/PR5.
+- [x] 4B.1 `deploy/README.md`: seed-gate section — the fail-closed guarantee, and why `already-present` never throwing is load-bearing for routine redeploys.
+- [x] 4B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3 diff; record results.
+- [x] 4B.3 Open PR #3 targeting PR #2's branch (feature-branch-chain). Evidence per Work Units table; call out explicitly that this PR is live application code (auth/seed path), distinct in risk from the deploy scripts that follow in PR4/PR5.
 
 ## Phase 5 — PR4: deploy sequence (D5)
 
 *One atomic 4-RED/1-GREEN unit — tasks 5.1-5.4 are four RED specs against the single GREEN in 5.5. Cannot be split further without separating a RED test from the GREEN that satisfies it. Stays over the 400-line budget (~630-750 including close-out) by design — see Re-slicing note 4.*
 
-- [ ] 5.1 RED: `deploy/deploy.spec.ts` — `execFile("deploy/deploy.sh", ["--dry-run"])` asserts the printed plan lists stop → dump → checkout → install → migrate → seed → publish → start in that literal order. Must fail — script does not exist.
-- [ ] 5.2 RED (threat matrix — git repository selection, **Applicable**): `execFile` against a temp git repo at a path other than `$APP_DIR` asserts non-zero exit with a named error ("must run against `$APP_DIR`, not cwd"). Must fail — script does not exist.
-- [ ] 5.3 RED (threat matrix — commit state, **Applicable**): a temp worktree with `git status --porcelain` non-empty asserts `deploy.sh` refuses (non-zero exit) and never invokes `--force` or `reset --hard`. Must fail — script does not exist.
-- [ ] 5.4 RED (deployment-configuration spec): a temp env file missing `DATABASE_URL` (or `JWT_SECRET`, or a seed password when seeding) asserts `deploy.sh` aborts before stopping the service, naming the missing variable. Must fail — script does not exist.
-- [ ] 5.5 GREEN: create `deploy/deploy.sh` implementing D5 — always `git -C "$APP_DIR"`, `rev-parse --show-toplevel` + remote check, `git status --porcelain` guard, env-var preflight, `pg_dump -Fc` before checkout, `pnpm install --frozen-lockfile` + puppeteer install + build as `contratos`, `prisma migrate deploy`, `prisma:seed`, asset publish call, restart, `GET /salud` retries, rollback recipe on failure, `--dry-run`.
+- [x] 5.1 RED: `deploy/deploy.spec.ts` — `execFile("deploy/deploy.sh", ["--dry-run"])` asserts the printed plan lists stop → dump → checkout → install → migrate → seed → publish → start in that literal order. Must fail — script does not exist.
+- [x] 5.2 RED (threat matrix — git repository selection, **Applicable**): `execFile` against a temp git repo at a path other than `$APP_DIR` asserts non-zero exit with a named error ("must run against `$APP_DIR`, not cwd"). Must fail — script does not exist.
+- [x] 5.3 RED (threat matrix — commit state, **Applicable**): a temp worktree with `git status --porcelain` non-empty asserts `deploy.sh` refuses (non-zero exit) and never invokes `--force` or `reset --hard`. Must fail — script does not exist.
+- [x] 5.4 RED (deployment-configuration spec): a temp env file missing `DATABASE_URL` (or `JWT_SECRET`, or a seed password when seeding) asserts `deploy.sh` aborts before stopping the service, naming the missing variable. Must fail — script does not exist.
+- [x] 5.5 GREEN: create `deploy/deploy.sh` implementing D5 — always `git -C "$APP_DIR"`, `rev-parse --show-toplevel` + remote check, `git status --porcelain` guard, env-var preflight, `pg_dump -Fc` before checkout, `pnpm install --frozen-lockfile` + puppeteer install + build as `contratos`, `prisma migrate deploy`, `prisma:seed`, asset publish call, restart, `GET /salud` retries, rollback recipe on failure, `--dry-run`.
 
 ## Phase 5B — PR4 close out
 
-- [ ] 5B.1 `deploy/README.md`: deploy sequence section (`deploy.sh`'s stop→dump→...→start order, the two threat-matrix guards, the env-var preflight), and the `CONFIAR_EN_PROXY` production note cross-linked from 1.2.
-- [ ] 5B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3+PR4 diff; record results.
-- [ ] 5B.3 Open PR #4 targeting PR #3's branch (feature-branch-chain). Evidence per Work Units table; note explicitly that this PR is one atomic 4-RED/1-GREEN unit and is over the 400-line budget by design (Re-slicing note 4) — not an oversight.
+- [x] 5B.1 `deploy/README.md`: deploy sequence section (`deploy.sh`'s stop→dump→...→start order, the two threat-matrix guards, the env-var preflight), and the `CONFIAR_EN_PROXY` production note cross-linked from 1.2.
+- [x] 5B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3+PR4 diff; record results.
+- [x] 5B.3 Open PR #4 targeting PR #3's branch (feature-branch-chain). Evidence per Work Units table; note explicitly that this PR is one atomic 4-RED/1-GREEN unit and is over the 400-line budget by design (Re-slicing note 4) — not an oversight.
 
 ## Phase 5C — PR5: asset publish (D4)
 

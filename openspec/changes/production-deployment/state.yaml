@@ -86,8 +86,8 @@ artifacts:
 
 taskProgress:
   total: 73 # 58 original tasks unchanged in content/RED-GREEN pairing/order + 15 net new close-out tasks (8 PRs need 8 close-outs)
-  completed: 37 # PR1 (1.1-1.6,1B.1-1B.2=8) + PR2 (2.1-2.5,2B.1-2B.3=8) + PR3 (4.1-4.5,4B.1-4B.2=7) + PR4 (5.1-5.5,5B.1-5B.2=7) + PR5 (5.6-5.10,5D.1-5D.2=7) = 37; each PR's own "open PR" task excluded (orchestrator's job)
-  pending: 36
+  completed: 40 # PR1 1.1-1.6,1B.1-1B.3=9 (PR #78) + PR2 2.1-2.5,2B.1-2B.3=8 (PR #80 parser, #81 driver) + PR3 4.1-4.5,4B.1-4B.3=8 (PR #82) + PR4 5.1-5.5,5B.1-5B.3=8 (PR #83) + PR5 5.6-5.10,5D.1-5D.2=7 = 40. Each *B.3/*D.3 open-PR task is ticked only where the pull request actually exists; 5D.3 stays open until PR5 is opened.
+  pending: 33
   allComplete: false
 
 nextRecommended: apply # next sdd-apply batch is PR6 (Phase 6 + 6B: TLS bootstrap, D6), on a new branch off feat/pd-05-asset-publish, after the orchestrator opens PR #5 (task 5D.3)
