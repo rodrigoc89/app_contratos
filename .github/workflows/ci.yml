@@ -1,8 +1,16 @@
 name: CI
 
 on:
+  # Chained PRs target the previous PR's branch, not master, so a bare
+  # `branches: [master]` filter silently skips every slice of a chain — the
+  # work reaches a reviewer with no typecheck, no lint and no tests behind
+  # it, and the first real signal only arrives when the tracker finally
+  # opens against master with the whole change in one diff.
   pull_request:
-    branches: [master]
+    branches:
+      - master
+      - feat/production-deployment
+      - "feat/pd-*"
   push:
     branches: [master]
 
