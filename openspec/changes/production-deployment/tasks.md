@@ -278,7 +278,7 @@ per the chained-pr skill's per-PR requirement.
 
 - [x] 10.1 `deploy/README.md`: restore drill walkthrough, retention policy, credential rotation note.
 - [x] 10.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1-PR8 (full chain) diff; record results.
-- [ ] 10.3 Open PR #8 targeting PR #7's branch (feature-branch-chain).
+- [x] 10.3 Open PR #8 targeting PR #7's branch (feature-branch-chain).
 - [x] 10.4 **Go-live gate.** Record explicitly in `deploy/README.md`: **PR7 and PR8 together** must be merged, deployed to the VPS, and pass one real backup-then-restore drill before the first real customer *comodato* is signed on that server. Until then, every signed contract on the box has no offsite copy.
 
 ## Non-goals / deferred (explicit, not silent)

@@ -86,9 +86,9 @@ artifacts:
 
 taskProgress:
   total: 73 # 58 original tasks unchanged in content/RED-GREEN pairing/order + 15 net new close-out tasks (8 PRs need 8 close-outs)
-  completed: 72 # +8B.3 (PR #86 encryption, #87 backup, both open) +PR8 8.2, 9.1-9.8, 10.1, 10.2, 10.4. PR8 split at an atomicity-safe seam the planning pass had missed: PR8a restore+verify (948 lines), PR8b timer+go-live gate (374). The chain is 11 PRs. Only 10.3 remains, and the orchestrator opens it.
-  pending: 1
-  allComplete: false
+  completed: 73 # ALL TASKS COMPLETE. Eleven chained PRs, #78 through #89. What remains is not implementation: the VPS is unpurchased, the offsite destination does not exist, and the real backup-then-restore drill that gates go-live cannot run until both do — external dependencies from the proposal onward, never tasks in this file.
+  pending: 0
+  allComplete: true
 
 nextRecommended: apply # next sdd-apply batch is PR6 (Phase 6 + 6B: TLS bootstrap, D6), on a new branch off feat/pd-05-asset-publish, after the orchestrator opens PR #5 (task 5D.3)
 blockedReasons: []
