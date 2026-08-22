@@ -180,7 +180,7 @@ per the chained-pr skill's per-PR requirement.
 
 ## Phase 4 — PR3: seed fail-closed gate (D3)
 
-*Live application code, distinct in risk from the deploy/publish infra scripts in PR4/PR5 — the seam this PR applies. Opened as the 4th PR in the chain (see the split note on 2B.3) — its own branch is `feat/pd-03-seed-fail-closed`, based on `feat/pd-02b-verdict-driver` (PR #81).*
+*Live application code, distinct in risk from the deploy/publish infra scripts in PR4/PR5 — the seam this PR applies.*
 
 - [x] 4.1 RED: `apps/api/src/seed/seedDatabase.spec.ts` — new case: `nodeEnv: "production"` with `tecnico` input resolving `action: "omitido"` (no `SEED_TECNICO_PASSWORD`) makes `seedDatabase` throw a named error. Must fail today — the function only throws for the provisional-signature case (**lines 122-133**, orchestrator-verified — the only production `throw` in the file today); the `omitido` path returns silently.
 - [x] 4.2 RED: same file, same pattern, for `administrador` resolving `omitido` in production. Must fail for the same reason.
@@ -198,16 +198,16 @@ per the chained-pr skill's per-PR requirement.
 
 *One atomic 4-RED/1-GREEN unit — tasks 5.1-5.4 are four RED specs against the single GREEN in 5.5. Cannot be split further without separating a RED test from the GREEN that satisfies it. Stays over the 400-line budget (~630-750 including close-out) by design — see Re-slicing note 4.*
 
-- [ ] 5.1 RED: `deploy/deploy.spec.ts` — `execFile("deploy/deploy.sh", ["--dry-run"])` asserts the printed plan lists stop → dump → checkout → install → migrate → seed → publish → start in that literal order. Must fail — script does not exist.
-- [ ] 5.2 RED (threat matrix — git repository selection, **Applicable**): `execFile` against a temp git repo at a path other than `$APP_DIR` asserts non-zero exit with a named error ("must run against `$APP_DIR`, not cwd"). Must fail — script does not exist.
-- [ ] 5.3 RED (threat matrix — commit state, **Applicable**): a temp worktree with `git status --porcelain` non-empty asserts `deploy.sh` refuses (non-zero exit) and never invokes `--force` or `reset --hard`. Must fail — script does not exist.
-- [ ] 5.4 RED (deployment-configuration spec): a temp env file missing `DATABASE_URL` (or `JWT_SECRET`, or a seed password when seeding) asserts `deploy.sh` aborts before stopping the service, naming the missing variable. Must fail — script does not exist.
-- [ ] 5.5 GREEN: create `deploy/deploy.sh` implementing D5 — always `git -C "$APP_DIR"`, `rev-parse --show-toplevel` + remote check, `git status --porcelain` guard, env-var preflight, `pg_dump -Fc` before checkout, `pnpm install --frozen-lockfile` + puppeteer install + build as `contratos`, `prisma migrate deploy`, `prisma:seed`, asset publish call, restart, `GET /salud` retries, rollback recipe on failure, `--dry-run`.
+- [x] 5.1 RED: `deploy/deploy.spec.ts` — `execFile("deploy/deploy.sh", ["--dry-run"])` asserts the printed plan lists stop → dump → checkout → install → migrate → seed → publish → start in that literal order. Must fail — script does not exist. Confirmed: `spawn .../deploy/deploy.sh ENOENT`.
+- [x] 5.2 RED (threat matrix — git repository selection, **Applicable**): `execFile` against a temp git repo at a path other than `$APP_DIR` asserts non-zero exit with a named error ("must run against `$APP_DIR`, not cwd"). Must fail — script does not exist. Confirmed: `expected 'ENOENT' to be 1`.
+- [x] 5.3 RED (threat matrix — commit state, **Applicable**): a temp worktree with `git status --porcelain` non-empty asserts `deploy.sh` refuses (non-zero exit) and never invokes `--force` or `reset --hard`. Must fail — script does not exist. Confirmed: `expected 'ENOENT' to be 1`.
+- [x] 5.4 RED (deployment-configuration spec): a temp env file missing `DATABASE_URL` (or `JWT_SECRET`, or a seed password when seeding) asserts `deploy.sh` aborts before stopping the service, naming the missing variable. Must fail — script does not exist. Confirmed (3 sub-cases: `DATABASE_URL`, `JWT_SECRET`, `SEED_ADMIN_PASSWORD`/`SEED_TECNICO_PASSWORD` under `FIRST_DEPLOY=true`): `expected 'ENOENT' to be 1`. **Design decision recorded at apply time:** the "seed password when seeding" qualifier is implemented as an explicit opt-in `FIRST_DEPLOY=true` env var, defaulting to unset/false — see apply-progress for the full rationale (an unconditional requirement would break D3's own redeploy-after-password-rotation regression guard from PR3).
+- [x] 5.5 GREEN: create `deploy/deploy.sh` implementing D5 — always `git -C "$APP_DIR"`, `rev-parse --show-toplevel` + remote check, `git status --porcelain` guard, env-var preflight, `pg_dump -Fc` before checkout, `pnpm install --frozen-lockfile` + puppeteer install + build as `contratos`, `prisma migrate deploy`, `prisma:seed`, asset publish call, restart, `GET /salud` retries, rollback recipe on failure, `--dry-run`. All 8 `deploy.spec.ts` tests green.
 
 ## Phase 5B — PR4 close out
 
-- [ ] 5B.1 `deploy/README.md`: deploy sequence section (`deploy.sh`'s stop→dump→...→start order, the two threat-matrix guards, the env-var preflight), and the `CONFIAR_EN_PROXY` production note cross-linked from 1.2.
-- [ ] 5B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3+PR4 diff; record results.
+- [x] 5B.1 `deploy/README.md`: deploy sequence section (`deploy.sh`'s stop→dump→...→start order, the two threat-matrix guards, the env-var preflight), and the `CONFIAR_EN_PROXY` production note cross-linked from 1.2.
+- [x] 5B.2 Run `pnpm test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3+PR4 diff; record results.
 - [ ] 5B.3 Open PR #4 targeting PR #3's branch (feature-branch-chain). Evidence per Work Units table; note explicitly that this PR is one atomic 4-RED/1-GREEN unit and is over the 400-line budget by design (Re-slicing note 4) — not an oversight.
 
 ## Phase 5C — PR5: asset publish (D4)
@@ -302,9 +302,15 @@ all three passes) + 15 net new close-out tasks = **73 tasks total** across
 
 ---
 
-**Apply progress (batch 3, PR3): 23/73 tasks complete (1.1-1.6, 1B.1-1B.2 —
+**Apply progress (batch 4, PR4): 30/73 tasks complete (1.1-1.6, 1B.1-1B.2 —
 PR1, PR #78 opened and green, 1B.3 excluded; 2.1-2.5, 2B.1-2B.3 — PR2,
 opened as PR #80 + PR #81, both green; 4.1-4.5, 4B.1-4B.2 — PR3, seed
-fail-closed gate, this batch, 4B.3 excluded — the orchestrator opens the
-PR, not `sdd-apply`). Full evidence in `apply-progress.md` and
+fail-closed gate, 4B.3 excluded; 5.1-5.5, 5B.1-5B.2 — PR4, deploy sequence,
+this batch, 5B.3 excluded — the orchestrator opens the PR, not
+`sdd-apply`). Batch 4 also reconciled a filesystem-sync gap discovered at
+the start of this batch: the local `tasks.md`/`apply-progress.md`/
+`state.yaml` had never actually been updated with Batch 2's or Batch 3's
+progress (Engram had both, the filesystem copies did not, despite a prior
+batch's own note claiming otherwise) — reconciled here so hybrid mode's two
+stores agree again. Full evidence in `apply-progress.md` and
 `sdd/production-deployment/apply-progress` (Engram).**

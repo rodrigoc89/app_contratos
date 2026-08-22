@@ -1,11 +1,9 @@
 # Apply progress: production-deployment
 
-Cumulative record across three apply batches. 23/73 tasks complete.
-
 **Batch 1 — PR1 (Phase 1 + Phase 1B), tasks 1.1-1.6 and 1B.1-1B.2.**
 Branch: `feat/pd-01-env-provisioning` (base: `feat/production-deployment`,
-which branches `master` at `efed42d`). Task 1B.3 (open PR #1) — opened as
-PR #78, open and green (done between apply batches, by the orchestrator).
+which branches `master` at `efed42d`). Task 1B.3 (open PR #1) is
+**deliberately not done** — publishing was not authorized for this run.
 
 ## Deviation from the stated ground truth (task 1.1)
 
@@ -220,132 +218,182 @@ files yet — no other PR in the chain has landed. The one exception is
 and is untouched by a revert of this branch's commits (only the additions
 this batch made are reverted).
 
+## Filesystem/Engram sync note (recorded in Batch 4)
+
+Batches 2 and 3 below were completed and persisted to Engram
+(`sdd/production-deployment/apply-progress` and `.../tasks`) at the time,
+but the corresponding updates to this file, `tasks.md`, and `state.yaml`
+on the filesystem never actually landed — a real drift between the two
+artifact stores in hybrid mode. Batch 4 (below) reconstructed the Batch
+2/3 summaries from the Engram record and reconciled all three local files
+so both stores agree again. The task-by-task record for Batches 2 and 3
+below is condensed from Engram's fuller original; nothing was re-derived
+or guessed — only trimmed for length.
+
 ---
 
-# Batch 2 — PR2 (Phase 2 + Phase 2B), tasks 2.1-2.5 and 2B.1-2B.3
+## Batch 2 — PR2 (Phase 2 + Phase 2B), tasks 2.1-2.5 and 2B.1-2B.3
 
 Branch: `feat/pd-02-render-verdict` (base: `feat/pd-01-env-provisioning`,
-PR #78). Render verdict (design.md D2): a three-layer check — `fc-match`
-(family resolves to itself, not a silent fontconfig substitute), `pdffonts`
-(a real known-good font is embedded), `pdftotext` (the `ToUnicode` map
-round-trips `ñ á é í ó ú Ñ`, though this alone never proves rasterization).
-Strict TDD throughout: RED confirmed for the right reason before every
-GREEN. Full task-by-task record, RED transcripts, and design judgment calls
-are in `sdd/production-deployment/apply-progress` (Engram, obs 559) — this
-local file condenses it since the Engram observation is the fuller source
-for this batch (a filesystem-sync gap between batches, corrected in
-Batch 3).
+PR #78). Implements design.md D2: a three-layer render verdict, each layer
+proving one thing the others cannot — `fc-match` (family resolves to
+itself, not a silent fontconfig substitute), `pdffonts` (a real known-good
+font is embedded), `pdftotext` (the `ToUnicode` map round-trips
+`ñ á é í ó ú Ñ`, though this alone never proves rasterization).
 
-**Files**: `apps/api/scripts/renderVerdict.ts` (286 lines, pure parser,
-zero I/O) + `.spec.ts` (186 lines, 13 tests); `apps/api/scripts/verificarRender.ts`
-(311 lines, jiti driver — real Chromium render + `fc-match`/`pdffonts`/`pdftotext`)
-+ `.integration.spec.ts` (101 lines); `verify:render` script added to
-`apps/api/package.json`; `vitest.config.ts`/`vitest.integration.config.ts`
-`include` extended to `scripts/**`; `tsconfig.json` `include` extended to
-`scripts/**/*.ts`; `deploy/README.md` render-verdict subsection.
+**Files**: `apps/api/scripts/renderVerdict.ts` (286 lines, pure parser, zero
+I/O, fixture-tested — `evaluateFamilyResolution`, `evaluateGlyphEmbedding`,
+`evaluateTextRoundTrip`, `buildRenderVerdict`); `renderVerdict.spec.ts` (186
+lines, 13 tests); `apps/api/scripts/verificarRender.ts` (311 lines, jiti
+driver — real Chromium probe render + `fc-match`/`pdffonts`/`pdftotext`,
+adds `verify:render` to `apps/api/package.json`);
+`verificarRender.integration.spec.ts` (101 lines); `vitest.config.ts` /
+`vitest.integration.config.ts` `include` extended to `scripts/**`;
+`tsconfig.json` `include` extended to `scripts/**/*.ts`; `deploy/README.md`
+"Render verdict" subsection.
 
-**2B.3 (open PR #2)** — opened as **two PRs**, not one, between apply
-batches: **PR #80** (`renderVerdict.ts`, the pure parser) and **PR #81**
-(`verificarRender.ts`, the jiti driver, base `feat/pd-02b-verdict-driver`,
-targeting PR #80's branch). Both open and green. The chain is now **9 PRs
-total**, not 8 — see `tasks.md`'s note on the 2B.3 checkbox and
-`state.yaml`'s `phases.apply` comment for the full renumbering record.
+**Design judgment call**: layer 1 (`fc-match`) is strict per-family — a
+substitution to the documented DejaVu fallback still fails it, because
+layer 1's specific job is proving `fonts-liberation` itself resolved.
+Layers 2-3 (`pdffonts`, `pdftotext`) are lenient across the whole
+known-good set, since `provision.sh` installs both fonts on purpose.
 
-**Diff size**: ~978 changed lines (87 insertions + 7 deletions on tracked
-files, plus 884 new-file lines) against a ~330-410 estimate — ~2.4-3x over,
-reported honestly, no scope cut. All four gates green at the time:
-`pnpm test` (1475 tests across all workspaces), `pnpm typecheck` (4/4),
-`pnpm lint` (0 errors/warnings), `pnpm --filter @contratos/api test:integration`
-(138/138).
+**2B.3 (open PR)**: applied as **two** PRs, not one — PR #80
+(`renderVerdict.ts`, the pure parser) and PR #81 (`verificarRender.ts`, the
+jiti driver, base `feat/pd-02b-verdict-driver`, targeting PR #80's branch).
+Both open and green. The chain is now **9 PRs total, not 8** — every PR
+number after PR2 shifts by one versus `tasks.md`'s original numbering
+(task labels/content unchanged; only the opened-PR count/position
+shifted).
 
-# Batch 3 — PR3 (Phase 4 + Phase 4B), tasks 4.1-4.5 and 4B.1-4B.2
+**Diff**: ~978 changed lines vs. a ~330-410 estimate (~2.4-3x over, worse
+than PR1's ~1.3-1.6x overage).
+
+**Verification**: `pnpm test`, `pnpm typecheck`, `pnpm lint` all green
+against the cumulative PR1+PR2 diff.
+
+---
+
+## Batch 3 — PR3 (Phase 4 + Phase 4B), tasks 4.1-4.5 and 4B.1-4B.2
 
 Branch: `feat/pd-03-seed-fail-closed` (base: `feat/pd-02b-verdict-driver`,
-PR #81). Seed fail-closed gate (design.md D3): production refuses to finish
-seeding when the `admin` or `tecnico` account resolves to `"omitido"` (its
-password variable was never set), and — the load-bearing regression
-guard — never refuses when an account resolves to `"already-present"`, so a
-routine redeploy that correctly rotates passwords out of the environment
-file after the accounts already exist never breaks. Strict TDD: RED
-confirmed for the right reason before GREEN.
+PR #81). Implements design.md D3: `apps/api/src/seed/seedDatabase.ts` now
+throws in `NODE_ENV=production` when the `admin` or `tecnico` account
+resolves to `action: "omitido"` (its password env var was never set), and
+— the load-bearing regression guard (task 4.3) — never throws when an
+account resolves to `"already-present"`. Without that distinction, every
+routine redeploy would fail once passwords are correctly rotated out of
+the environment file after the accounts already exist.
 
-## Task-by-task record
+**Why**: the seed report already *knew* about the defect —
+`describeSeedReport`'s own `ATENCION` warning at `seedDatabase.ts:282`
+already said skipping the técnico makes "el flujo de firma es
+inalcanzable," then the process still exited 0. The gate turns that known
+warning into a production refusal. Design D3 rejected a `deploy.sh`
+grep-based guard: the operator's actual recovery path under pressure —
+`pnpm --filter @contratos/api prisma:seed` by hand — never goes through
+`deploy.sh`, so a script-level guard would never see it.
 
-### 4.1 / 4.2 — RED: `apps/api/src/seed/seedDatabase.spec.ts`
+**Files**: `apps/api/src/seed/seedDatabase.spec.ts` (new `describe` block,
+3 tests: técnico-omitido throws, administrador-omitido throws, and the
+regression guard — seeds both accounts once with passwords, then reseeds
+in production with both passwords omitted, asserting `"already-present"`
+and no throw); `apps/api/src/seed/seedDatabase.ts` (restructured the
+return-object literal into local variables, then added the production gate
+after all four are computed); `deploy/README.md` "Seed fail-closed gate
+(D3)" section.
 
-Two new cases added to a new `describe("seedDatabase — production seed gate
-over admin/técnico accounts (D3)")` block: `nodeEnv: "production"` with
-`tecnico`/`administrador` resolving `action: "omitido"` must throw. Both
-confirmed RED for the right reason — the promise resolved instead of
-rejecting, because "omitido" only returned silently before this change:
+**Task 4.5**: confirmed `seedTecnico.spec.ts` and `seedAdministrador.spec.ts`
+diffs are empty; both suites pass unmodified (9 + 11 tests) — the gate
+landed at the right layer.
 
-```
-AssertionError: promise resolved "{ …(4) }" instead of rejecting
-  administrador: null, tecnico: { action: "omitido", nombreUsuario: "tecnico" }
-  (and the symmetric admin case)
-```
+**4B.3 (open PR)**: deliberately **not done** — the orchestrator opens
+PRs, not `sdd-apply`.
 
-776 tests passed, 2 failed — exactly the 2 new RED cases; no pre-existing
-test regressed.
+**Diff**: 222 changed lines (190 insertions + 32 deletions) vs. a ~190-220
+estimate — the closest an actual landed to its estimate across the first
+three batches, likely because this PR was scoped to one file pair plus
+docs with no infrastructure surface to expand into.
 
-### 4.3 — RED (pass trivially, then stay green): the load-bearing case
+**Verification**: `pnpm test` (778 api + 571 web + 4 deploy = 1353 tests),
+`pnpm typecheck` (4/4 packages), `pnpm lint` (exit 0) all green against the
+cumulative PR1+PR2+PR3 diff.
 
-Same file: seeds both `admin` and `tecnico` once (development, with
-passwords) so both accounts exist, then reseeds in **production** with both
-passwords omitted (simulating rotation out of the environment file after
-the accounts already exist) and asserts `seedDatabase` does **not** throw
-and both resolve `"already-present"`. Passed trivially before 4.4 (no throw
-existed yet anywhere except the provisional-signature guard); the real
-assertion is that it **stays** green after 4.4 — confirmed in the full run
-below.
+---
 
-### 4.4 — GREEN: `apps/api/src/seed/seedDatabase.ts`
+## Batch 4 — PR4 (Phase 5 + Phase 5B), tasks 5.1-5.5 and 5B.1-5B.2
 
-Restructured the function body to compute `plantilla`, `firmante`,
-`administrador`, `tecnico` into local variables (order unchanged versus the
-original inline return), then added a gate: when `nodeEnv === "production"`
-and `administrador`/`tecnico` is non-null with `action === "omitido"`, throw
-an `Error` naming the account and its env var, mirroring the file's
-existing `ATENCION` warning text and the provisional-signature guard's
-Spanish, operator-facing, actionable style (names the env var to set and the
-command to re-run). All 3 RED tests turned GREEN; full suite unaffected
-(778/778, up from 776 — the 2 new throw-path tests plus the always-passing
-4.3 case).
+Branch: `feat/pd-04-deploy-sequence` (base: `feat/pd-03-seed-fail-closed`,
+PR #82). Implements design.md D5 — the deploy sequence. This is the single
+most dangerous script in `deploy/`: its real job is to stop the running
+production service. **One atomic 4-RED/1-GREEN unit** — tasks 5.1-5.4 are
+four independent RED specs against the single GREEN in 5.5 (`deploy.sh`
+does not exist until 5.5, so no earlier RED task can pass on its own).
+Stays over the 400-line budget by design (Re-slicing note 4) — not
+shrunk to chase the ceiling.
 
-**Design note, not a deviation**: the gate fires *after* `plantilla` and
-`firmante` are already written (as directed in the task text — "after the
-`administrador`/`tecnico` results are computed"), unlike the
-provisional-signature guard, which fires before any write. This is safe
-here because template/signatory writes are idempotent by version (already
-tested); a subsequent successful seed run finds them present and skips
-them. It would not be safe for the provisional signature (writing the fake
-signature is itself the harm), which is exactly why that guard stayed
-first.
+### TDD Cycle Evidence
 
-### 4.5 — Confirm `seedTecnico.spec.ts` / `seedAdministrador.spec.ts` unmodified
+| Task | RED (confirmed failure) | GREEN |
+|---|---|---|
+| 5.1 (plan order) | `spawn .../deploy/deploy.sh ENOENT` | `deploy.sh` prints `[plan:stop]` → `[plan:dump]` → `[plan:checkout]` → `[plan:install]` → `[plan:migrate]` → `[plan:seed]` → `[plan:publish]` → `[plan:start]`, asserted by marker-index ordering |
+| 5.2 (git repo selection, threat matrix, Applicable) | `expected 'ENOENT' to be 1` | `check_git_repository()`: refuses when `$APP_DIR` does not exist / is not a git checkout / its top-level disagrees with `$APP_DIR` / it has no configured remote — always `git -C "$APP_DIR"`, never bare `git` reading cwd |
+| 5.3 (commit state, threat matrix, Applicable) | `expected 'ENOENT' to be 1` | `check_clean_worktree()`: refuses on non-empty `git status --porcelain`; the script contains no `--force` or `reset --hard` invocation anywhere — verified both by the guard's own code (nothing to grep) and behaviorally (test re-reads the dirty file's content and `git status` after the refused run and asserts byte-identical) |
+| 5.4 (deployment-configuration, 3 sub-cases) | `expected 'ENOENT' to be 1` (×3: missing `DATABASE_URL`, missing `JWT_SECRET`, missing a seed password under `FIRST_DEPLOY=true`) | `check_deploy_configuration()`: reads `$ENV_FILE` without sourcing it, requires `DATABASE_URL`/`JWT_SECRET` unconditionally, requires `SEED_ADMIN_PASSWORD`/`SEED_TECNICO_PASSWORD` only when `FIRST_DEPLOY=true` |
+| 5.5 (GREEN) | — | `deploy/deploy.sh` created; all 8 `deploy.spec.ts` tests pass |
 
-Confirmed: `git diff --stat` against both files returns empty — neither was
-touched. Both suites pass unmodified: `seedAdministrador.spec.ts` (9 tests),
-`seedTecnico.spec.ts` (11 tests). The gate lands at the right layer — these
-specs exercise `sembrarCuenta` directly, not `seedDatabase`'s new gate.
+All three guards run **before** `systemctl stop` in both `--dry-run` and a
+real deploy — confirmed structurally in `main()` (guards called, then
+`if [ "$DRY_RUN" = true ]; then print_plan; exit 0; fi`, then `do_stop`)
+and behaviorally by the three preflight-failure tests asserting
+`stdout` never contains `[plan:stop]`.
 
-### 4B.1 — `deploy/README.md`
+### Design decision: the `FIRST_DEPLOY` env var
 
-New "Seed fail-closed gate (D3)" section (English, matching the rest of the
-file): an "answer first" summary table (`omitido` → throws, `already-present`
-→ never throws, `created` → seeds normally), why the gate lives in the
-application and not `deploy.sh` (the hand-run recovery path `pnpm --filter
-@contratos/api prisma:seed` never goes through `deploy.sh`), and the
-redeploy-regression narrative that makes `already-present` never throwing
-load-bearing. "Next step" paragraph updated to point at PR4 (`deploy.sh`).
+Task 5.4's literal wording — "a seed password when seeding" — is genuinely
+ambiguous against Batch 3's own D3 regression guard: if `deploy.sh`
+unconditionally required `SEED_ADMIN_PASSWORD`/`SEED_TECNICO_PASSWORD` to
+be present in `$ENV_FILE`, it would hard-block exactly the routine
+redeploy scenario D3's regression test protects (passwords rotated out of
+the file once the accounts already exist). `deploy.sh` always runs the
+seed step (per the literal 8-step plan), so "when seeding" cannot mean
+"whenever the seed step runs" without contradicting that guarantee.
 
-### 4B.2 — Full verification run
+**Resolution**: `FIRST_DEPLOY` is an explicit opt-in env var, default
+unset/`false`. Only when `FIRST_DEPLOY=true` does the preflight require
+both seed passwords, refusing before the stop if either is missing. Left
+unset (every deploy after the first), the preflight does not require them
+— `seedDatabase.ts`'s own D3 gate remains the real guarantee either way;
+this preflight is only a convenience that turns a foreseeable failure into
+a pre-stop refusal instead of a mid-deploy one. Documented in
+`deploy/README.md`'s new "Deploy sequence (D5)" section, including a
+positive test proving the routine-redeploy path still reaches
+`[plan:seed]` with no seed passwords set and `FIRST_DEPLOY` unset.
+
+### Files
+
+| File | Action | Lines |
+|---|---|---|
+| `deploy/deploy.spec.ts` | Created | 255 |
+| `deploy/deploy.sh` | Created | 335 |
+| `deploy/README.md` | Modified — new "Deploy sequence (D5)" section (order table, the three guards, the `FIRST_DEPLOY` decision, `CONFIAR_EN_PROXY` cross-link from 1.2), updated Quick path / Install order / "What this PR cannot prove yet" / Checklist / Next step | +97/-14 |
+| `openspec/changes/production-deployment/tasks.md` | Modified — 5.1-5.5, 5B.1-5B.2 ticked; also reconciled the Batch 2/3 filesystem drift (see below) | — |
+
+### Static verification (5B.2 covers `pnpm test`/`typecheck`/`lint`; this is 5.9's sibling for PR4's own script)
+
+- `bash -n deploy/deploy.sh` — **pass**, no syntax errors.
+- `shellcheck deploy/deploy.sh` — **shellcheck is not installed** on this
+  machine (`command -v shellcheck` found nothing), same gap as PR1's
+  `provision.sh`. Reported plainly, not silently skipped, no system
+  package installed.
+
+### Verification run (5B.2, cumulative PR1+PR2+PR3+PR4 diff)
 
 ```
 $ pnpm test
-deploy test:   Test Files 1 passed (1)    Tests   4 passed (4)
-apps/api test: Test Files 58 passed (58)  Tests 778 passed (778)
-apps/web test: Test Files 72 passed (72)  Tests 571 passed (571)
+deploy test:  Test Files 2 passed (2)   Tests  12 passed (12)   (4 provision + 8 deploy)
+apps/api test: Test Files 58 passed (58) Tests 778 passed (778)
+apps/web test: Test Files 72 passed (72) Tests 571 passed (571)
 exit code: 0
 
 $ pnpm typecheck
@@ -356,44 +404,55 @@ apps/web typecheck: Done
 exit code: 0
 
 $ pnpm lint
-$ eslint . --max-warnings 0
 (no output — 0 errors, 0 warnings)
 exit code: 0
 ```
 
-No fixes were required to get any gate green this batch (unlike PR1's
-ESLint `allowDefaultProject` fix).
+### What this PR cannot prove (stated in `deploy/README.md`)
 
-## Diff size
+`--dry-run` proves the plan and all three guards for real, against a
+fabricated temp git repo. It proves nothing about `pg_dump` against a live
+database, `systemctl stop`/`start` against a real unit, `pnpm install` and
+the Puppeteer browser download as the real `contratos` user, `prisma
+migrate deploy` against production data, or a real `GET /salud` round trip
+through nginx. All of that remains unverifiable until the VPS exists.
 
-PR3's own estimate (`tasks.md`'s Review Workload Forecast) was
-**~190-220 lines**.
+### Diff size
 
 ```
- apps/api/src/seed/seedDatabase.spec.ts | 94 ++++++++++++++++++++++++
- apps/api/src/seed/seedDatabase.ts      | 81 ++++++++++++++-----------
- deploy/README.md                       | 47 +++++++++++++--
- 3 files changed, 190 insertions(+), 32 deletions(-)
+ deploy/README.md                                 |  97 ++++++-
+ deploy/deploy.sh                                  | 335 ++++++++++++++++++++
+ deploy/deploy.spec.ts                             | 255 ++++++++++++++++
+ openspec/changes/production-deployment/tasks.md   |  14 +-
+ 4 files changed, 687 insertions(+), 14 deletions(-)
 ```
 
-Total changed lines: **222** (190 insertions + 32 deletions) — the closest
-an actual has landed to its estimate across all three batches so far (PR1
-ran ~1.3-1.6x over, PR2 ran ~2.4-3x over). No task was thinned or skipped.
+Total changed lines: **701** (687 additions + 14 deletions) — inside the
+~630-750 estimate from `tasks.md`'s Review Workload Forecast, unlike PR1
+(~707-719 vs. ~450-560) and PR2 (~978 vs. ~330-410), which both ran well
+over. No task was thinned or padded to land inside the range; this is
+simply the first batch whose actual matched its plan.
 
-## Rollback boundary
+### Filesystem/Engram drift reconciled in this batch
 
-`git revert` this branch (`feat/pd-03-seed-fail-closed`) against its base
-(`feat/pd-02b-verdict-driver`, PR #81). Nothing downstream depends on these
-files yet — no later PR in the chain has landed. If a production deploy
-already ran with the seed gate live, the documented recovery is `pnpm
---filter @contratos/api prisma:seed` by hand (stated in `deploy/README.md`
-and the tasks.md Work Units table), not a code rollback.
+At the start of this batch, `openspec/changes/production-deployment/tasks.md`
+on the filesystem still showed Phase 2 (2.1-2.5, 2B.1-2B.3) and Phase 4
+(4.1-4.5, 4B.1-4B.2) as **unchecked** `- [ ]`, even though Engram's copy of
+the same tasks artifact (and a prior batch's own note) said this
+reconciliation had already happened. This file (`apply-progress.md`) had
+never been updated past Batch 1 at all. Both were corrected in this batch
+— see the "Batch 2" and "Batch 3" sections above and the `state.yaml`
+update — so hybrid mode's two stores agree again as of this batch.
+
+### Rollback boundary
+
+`git revert` this branch (`feat/pd-04-deploy-sequence`) against its base
+(`feat/pd-03-seed-fail-closed`, PR #82). Nothing in production invokes
+`deploy.sh` yet — no VPS exists — so rollback is git-only.
 
 ## Next recommended
 
-Continue `sdd-apply` with PR4 (Phase 5 + Phase 5B: `deploy.sh`, D5), on a
-new branch off `feat/pd-03-seed-fail-closed` per the feature-branch-chain
-strategy. PR4 is one atomic 4-RED/1-GREEN unit (tasks 5.1-5.5) and stays
-over the 400-line budget by design (~630-750 estimated) — not a candidate
-for further splitting without separating a RED test from the GREEN that
-satisfies it.
+Continue `sdd-apply` with PR5 (Phase 5C + Phase 5D: `publicar-assets.sh`,
+D4, tasks 5.6-5.10 and 5D.1-5D.3), on a new branch off
+`feat/pd-04-deploy-sequence` per the feature-branch-chain strategy — after
+the orchestrator opens PR #4 (task 5B.3, excluded from this batch).
