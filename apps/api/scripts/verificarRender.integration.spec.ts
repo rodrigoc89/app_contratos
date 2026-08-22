@@ -51,9 +51,26 @@ describe("verificarRender (integration, real Chromium + real render verdict — 
           esHerramientaDisponible("pdftotext", ["-v"]),
         ]);
 
+      // Which way tool availability fell decides how much this test actually
+      // proves, so it goes in the log rather than being inferable only from
+      // a green tick.
+      console.log(
+        `[verificarRender] fc-match=${fcMatchDisponible} pdffonts=${pdffontsDisponible} pdftotext=${pdftotextDisponible}`,
+      );
+
       const resultado = await verificarRender();
 
       expect(resultado.verdicto.layers).toHaveLength(3);
+
+      // On CI the three tools are installed explicitly by the workflow, so
+      // "missing" there is a regression in the workflow or the runner image,
+      // not a fact about the host — and it would otherwise degrade this test
+      // to asserting three honest failures, silently and permanently.
+      // Locally the test stays adaptive: a dev machine owes nobody poppler.
+      if (process.env["CI"] === "true") {
+        expect(resultado.herramientasFaltantes).toEqual([]);
+        expect(resultado.verdicto.pass).toBe(true);
+      }
 
       const capaFamilia = resultado.verdicto.layers.find(
         (capa) => capa.layer === "family-resolution",

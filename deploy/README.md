@@ -170,8 +170,12 @@ libcairo2            libglib2.0-0        libxi6
 ```
 
 Spanish-text rendering additionally needs `fonts-dejavu-core` and
-`fonts-liberation` plus a `fc-cache -f -v` refresh (DESIGN.md §10) — both are
-in `provision.sh`'s own package list, not just this fallback reference.
+`fonts-liberation` plus a `fc-cache -f -v` refresh (DESIGN.md §10) — all three,
+`fontconfig` included, are in `provision.sh`'s own package list, not just this
+fallback reference. `fontconfig` is listed explicitly even though
+`--install-deps` pulls it in transitively (via `libpango-1.0-0`): relying on
+that would mean relying on the stability of the very list D1 calls unstable,
+and `fc-cache` would then fail mid-run, after PostgreSQL is already installed.
 
 ## Seed fail-closed gate (D3)
 
@@ -186,6 +190,34 @@ account already exists. That distinction is the entire point:
 | `omitido` | No `SEED_ADMIN_PASSWORD` / `SEED_TECNICO_PASSWORD` was set, so the account was never created | **Throws** — deploy fails loudly, before reporting success |
 | `already-present` | The account already exists (from an earlier seed run) | **Never throws** — nothing needed to happen, so nothing did |
 | `created` | The password was set and the account did not exist yet | Seeds normally |
+
+### How `NODE_ENV=production` actually reaches the seed
+
+Every row of that table depends on `NODE_ENV` being `production` in the
+seed's own process, and nothing sets it for you. `prisma:seed` runs outside
+systemd, so it inherits nothing from the unit's `EnvironmentFile=`;
+`deploy.sh`'s `load_env_file_into_environment` exports an explicit whitelist
+and `run_as_service_user` passes an explicit `--preserve-env` list, neither
+of which carries it; and `dotenv/config` in `prisma/seed.ts` loads
+`apps/api/.env`, which does not exist on this server — the configuration
+lives in `/etc/contratos/api.env`. Writing `NODE_ENV=production` into that
+file changes nothing for the seed.
+
+`deploy.sh` therefore states it in the command itself (`seed_command`), which
+is why `--dry-run` prints the assignment as part of the plan. It is not read
+from `$ENV_FILE` on purpose: a value taken from there fails open again the
+first time an operator leaves the line out, and the guards this protects are
+exactly the ones that must never fail open.
+
+**Running the seed by hand.** The recovery path below does not go through
+`deploy.sh`, so nothing sets it for you there either — set it explicitly:
+
+```sh
+cd /opt/contratos/apps/api && NODE_ENV=production pnpm prisma:seed
+```
+
+Without it, the seed reports success while every gate in this section is
+inert, including the refusal to seed with the placeholder signature.
 
 **Why this lives in the application, not in `deploy.sh` (design.md D3).** A
 guard grepping the env file inside `deploy.sh` protects only deploys that go
@@ -370,6 +402,15 @@ writing its own manifest, the script keeps only the **2 newest** manifests
 older manifest, deletes both the manifest itself and any file it lists
 that no retained manifest also lists — an asset only an already-superseded
 release ever referenced.
+
+`RETENTION_COUNT` overrides the number, and the script refuses anything
+below 1 in its preflight. The release being published is itself one of the
+retained releases, so `RETENTION_COUNT=0` — a plausible thing to write
+meaning "keep no old releases" — would prune the manifest the run had just
+written and delete every file it lists, `index.html` and `sw.js` included,
+leaving the web root empty while still exiting 0 and reporting `published`.
+Verified before the guard existed. 1 is the floor: it keeps the current
+release and nothing else.
 
 Retaining 2, not 1, is deliberate: it gives the previous release's assets
 one full deploy cycle of grace after the newest one lands, covering a tab

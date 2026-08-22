@@ -54,16 +54,22 @@ skip() {
 
 # Names resolved by --install-deps below (D1) drift across Ubuntu releases —
 # this list is the small, stable set that mechanism does not cover:
-# PostgreSQL's own client tooling, the repo signing prerequisites, and the
-# TrueType fonts headless Chromium needs for Spanish text (ñ, á, é, í, ó, ú).
-# The full 37-package Puppeteer fallback list is an audit/offline reference
-# only, in deploy/README.md — never the primary mechanism (D1).
+# PostgreSQL's own client tooling, the repo signing prerequisites, the
+# TrueType fonts headless Chromium needs for Spanish text (ñ, á, é, í, ó, ú),
+# and `fontconfig` itself, which provides the `fc-cache` binary the font step
+# below runs. That last one is here precisely because --install-deps happens
+# to pull it in transitively (libpango-1.0-0 depends on it) — depending on
+# that would mean depending on the stability of the one list D1 calls
+# unstable, and the failure would land mid-run, after PostgreSQL is already
+# installed. The full 36-package Puppeteer fallback list is an audit/offline
+# reference only, in deploy/README.md — never the primary mechanism (D1).
 provision_packages() {
   local packages=(
     curl
     ca-certificates
     gnupg
     lsb-release
+    fontconfig
     fonts-dejavu-core
     fonts-liberation
   )
@@ -134,6 +140,29 @@ provision_fonts_cache() {
 # a slow response. Two independent guards: the file itself, and its fstab
 # entry — either can already exist without the other on a partially
 # provisioned host.
+# A substring match would read a commented-out `# /swapfile none swap sw 0 0`
+# — exactly what a half-finished provisioning run leaves behind — as an
+# active entry, skip the append, and let the swapfile vanish on the next
+# reboot without ever reporting an error. Only the first field of a
+# non-comment line is an fstab device.
+swap_entry_present() {
+  [ -f "$FSTAB_FILE" ] || return 1
+
+  # `|| [ -n "$device" ]` keeps the last line readable when the file has no
+  # trailing newline: `read` returns non-zero there but still assigns.
+  local device _
+  while read -r device _ || [ -n "$device" ]; do
+    case "$device" in
+      '' | '#'*) continue ;;
+    esac
+    if [ "$device" = "$SWAP_FILE" ]; then
+      return 0
+    fi
+  done < "$FSTAB_FILE"
+
+  return 1
+}
+
 provision_swap() {
   if [ -f "$SWAP_FILE" ]; then
     skip "swapfile '$SWAP_FILE' already exists"
@@ -150,7 +179,7 @@ provision_swap() {
     fi
   fi
 
-  if [ -f "$FSTAB_FILE" ] && grep -qF "$SWAP_FILE" "$FSTAB_FILE"; then
+  if swap_entry_present; then
     skip "fstab entry for '$SWAP_FILE' already present in '$FSTAB_FILE'"
   else
     if [ "$DRY_RUN" = true ]; then
