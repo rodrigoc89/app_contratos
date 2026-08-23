@@ -12,6 +12,8 @@ import { CampoTexto } from "../componentes/atomos/CampoTexto";
 import { Etiqueta } from "../componentes/atomos/Etiqueta";
 import { MarcaProducto } from "../componentes/atomos/MarcaProducto";
 import { Spinner } from "../componentes/atomos/Spinner";
+import { BarraDeBusqueda } from "../componentes/moleculas/BarraDeBusqueda";
+import { Paginador } from "../componentes/moleculas/Paginador";
 import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
 import { cumplePisoHorizontal, cumplePisoVertical, esControlInteractivo } from "./guardias/pisoDeToque";
 
@@ -863,5 +865,165 @@ describe("guard 8: no font-size<1rem outside the panel subtree, matched by compo
         `${rutaRelativa} attempts sub-1rem type outside the panel subtree (design.md D4) — read at arm's length in direct sunlight`,
       ).toEqual([]);
     }
+  });
+});
+
+/**
+ * Guard 13 (D6, PR10) — the estado chip's on/off state and the paginator's
+ * current-page marker both carry non-text state (WCAG 1.4.11), ported to
+ * JSX the same way guard 12 ports Guards A-D: real rendered `bg-*` classes,
+ * resolved against `@theme`, compared through the same `contraste()` the
+ * CSS-scoped guard already used (`convencionesDeEstilos.spec.ts:1097-1195`,
+ * which stays live against the frozen BEM sheet — this is the JSX-owning
+ * replacement now that `BarraDeBusqueda`/`Paginador` no longer render
+ * `.boton--filtro-activo`/`.boton--pagina-actual`).
+ *
+ * The historical defect (`panel.css:107-109`) was `#0b634a` unselected
+ * against `#094f3b` selected — 1.32:1, indistinguishable. `aria-pressed`
+ * carried the state correctly throughout, which made it worse: a screen
+ * reader knew and a sighted user did not. 3:1 is the WCAG 1.4.11 floor for
+ * non-text state.
+ */
+describe("guard 13: estado-chip and pagination current-page state resolve >=3:1, ported to JSX (D6, PR10)", () => {
+  const RATIO_ESTADO_MINIMO = 3;
+  const temaReal = readFileSync(join(DIRECTORIO_SRC, "estilos/tema.css"), "utf8");
+
+  /** The single winning `bg-*` utility in a rendered `className` — `cn()`'s tailwind-merge already dedupes conflicting backgrounds, so at most one remains. */
+  function fondoDeClases(clases: string): string | undefined {
+    const coincidencia = /\bbg-([a-z][\w-]*)\b/.exec(clases);
+    return coincidencia ? valorDeColor(`bg-${coincidencia[1]}`, temaReal) : undefined;
+  }
+
+  it("rejects the historical estado-chip pair (#0b634a vs #094f3b, 1.32:1) that shipped once and was invisible", () => {
+    const ratio = contraste("#0b634a", "#094f3b");
+
+    expect(ratio).toBeCloseTo(1.32, 1);
+    expect(
+      ratio,
+      `the historical estado-chip pair resolves to ${ratio.toFixed(2)}:1 — the exact regression guard 13 exists to reject`,
+    ).toBeLessThan(RATIO_ESTADO_MINIMO);
+  });
+
+  it("separates BarraDeBusqueda's active estado chip from an inactive one by >=3:1, resolved from real rendered classes", () => {
+    const { container, unmount } = render(
+      createElement(BarraDeBusqueda, {
+        termino: "",
+        onCambiarTermino: () => {},
+        onBuscarInmediato: () => {},
+        estados: ["vigente"],
+        onAlternarEstado: () => {},
+      }),
+    );
+
+    const chips = [...container.querySelectorAll<HTMLButtonElement>("[aria-pressed]")];
+    expect(chips.length, "BarraDeBusqueda rendered no aria-pressed chip").toBeGreaterThan(0);
+    const activo = chips.find((boton) => boton.getAttribute("aria-pressed") === "true");
+    const inactivo = chips.find((boton) => boton.getAttribute("aria-pressed") === "false");
+    expect(activo, "no active (aria-pressed=true) chip found").toBeDefined();
+    expect(inactivo, "no inactive (aria-pressed=false) chip found").toBeDefined();
+
+    const colorActivo = fondoDeClases(activo?.className ?? "");
+    const colorInactivo = fondoDeClases(inactivo?.className ?? "");
+    expect(colorActivo, `active chip's background does not resolve: ${activo?.className}`).toBeDefined();
+    expect(colorInactivo, `inactive chip's background does not resolve: ${inactivo?.className}`).toBeDefined();
+
+    const ratio = contraste(colorActivo as string, colorInactivo as string);
+    expect(
+      ratio,
+      `the active chip (${colorActivo}) and an inactive one (${colorInactivo}) differ by only ${ratio.toFixed(2)}:1 — the office cannot see which filters are active`,
+    ).toBeGreaterThanOrEqual(RATIO_ESTADO_MINIMO);
+    unmount();
+  });
+
+  it("separates Paginador's current page from the other page buttons by >=3:1, resolved from real rendered classes", () => {
+    const { container, unmount } = render(
+      createElement(Paginador, { pagina: 2, total: 30, tamanoPagina: 10, onCambiarPagina: () => {} }),
+    );
+
+    const numeros = [...container.querySelectorAll<HTMLButtonElement>("ul button")];
+    const actual = numeros.find((boton) => boton.getAttribute("aria-current") === "page");
+    const otra = numeros.find((boton) => boton.getAttribute("aria-current") !== "page");
+    expect(actual, "no current-page button found").toBeDefined();
+    expect(otra, "no other page button found").toBeDefined();
+
+    const colorActual = fondoDeClases(actual?.className ?? "");
+    const colorOtra = fondoDeClases(otra?.className ?? "");
+    expect(colorActual, `current page's background does not resolve: ${actual?.className}`).toBeDefined();
+    expect(colorOtra, `other page's background does not resolve: ${otra?.className}`).toBeDefined();
+
+    const ratio = contraste(colorActual as string, colorOtra as string);
+    expect(
+      ratio,
+      `the current page (${colorActual}) and the other page buttons (${colorOtra}) differ by only ${ratio.toFixed(2)}:1 — "you are here" has to be visible without counting`,
+    ).toBeGreaterThanOrEqual(RATIO_ESTADO_MINIMO);
+    unmount();
+  });
+});
+
+/**
+ * Guard 15 (PR10) — `position: sticky` with no `bottom` inset silently
+ * behaves as `static`; the Tailwind form is the identical trap, `sticky`
+ * alone versus `sticky bottom-0`. An opaque background keeps rows from
+ * scrolling visibly behind the controls.
+ */
+describe("guard 15: sticky paginator is armed with a bottom inset and an opaque background, ported to JSX (PR10)", () => {
+  function renderNav(): HTMLElement {
+    const { container } = render(
+      createElement(Paginador, { pagina: 1, total: 30, tamanoPagina: 10, onCambiarPagina: () => {} }),
+    );
+    const nav = container.querySelector("nav");
+    expect(nav, "Paginador did not render a <nav>").not.toBeNull();
+    return nav as HTMLElement;
+  }
+
+  it("declares sticky with a bottom inset, since sticky alone silently does nothing", () => {
+    const nav = renderNav();
+
+    expect(/\bsticky\b/.test(nav.className), `<nav> is not sticky: ${nav.className}`).toBe(true);
+    expect(
+      /\bbottom-(?:0\b|\[[^\]]+\])/.test(nav.className),
+      `<nav> declares sticky with no bottom inset — silently inert, exactly like CSS \`position: sticky\` alone: ${nav.className}`,
+    ).toBe(true);
+  });
+
+  it("gives the sticky paginator an opaque background so scrolled rows never show through it", () => {
+    const nav = renderNav();
+
+    expect(
+      /\bbg-[a-z][\w-]*\b/.test(nav.className),
+      `<nav> has no background utility — a transparent sticky footer lets rows scroll visibly behind its controls: ${nav.className}`,
+    ).toBe(true);
+  });
+});
+
+/**
+ * Guard 12 (D6, PR10) — real coverage extended to the redesigned
+ * `BarraDeBusqueda`/`Paginador`: neither renders the raw brand-blue utility,
+ * the JSX analogue of Guard D's "the raw brand blue reaches no stylesheet
+ * at all" (`convencionesDeEstilos.spec.ts`).
+ */
+describe("guard 12: BarraDeBusqueda/Paginador render no brand-blue utility class (D6, PR10)", () => {
+  it("BarraDeBusqueda's rendered markup carries no marca-azul utility", () => {
+    const { container, unmount } = render(
+      createElement(BarraDeBusqueda, {
+        termino: "",
+        onCambiarTermino: () => {},
+        onBuscarInmediato: () => {},
+        estados: ["vigente"],
+        onAlternarEstado: () => {},
+      }),
+    );
+
+    expect(container.innerHTML).not.toMatch(/\bmarca-azul\b/);
+    unmount();
+  });
+
+  it("Paginador's rendered markup carries no marca-azul utility", () => {
+    const { container, unmount } = render(
+      createElement(Paginador, { pagina: 2, total: 30, tamanoPagina: 10, onCambiarPagina: () => {} }),
+    );
+
+    expect(container.innerHTML).not.toMatch(/\bmarca-azul\b/);
+    unmount();
   });
 });

@@ -32,6 +32,13 @@ const ESTADOS: ReadonlyArray<{ readonly valor: EstadoContrato; readonly etiqueta
  * 48×48 (`base.css:81-86`) would make a filter bar that is mostly checkbox.
  * Reusing `Boton` — which already satisfies the 48px guard — sidesteps that
  * rule instead of fighting it.
+ *
+ * design-system-migration PR10 (guard 13, D6) — off is `Boton`'s
+ * `secundario` variant (outline), on is `primario` (fill): the exact fix
+ * for the historical 1.32:1 defect (`panel.css:107-109`), where two dark
+ * greens read as the same filled button. Both variants share
+ * `border-primario`, so the state is never carried by a border colour
+ * alone. `aria-pressed` is unchanged.
  */
 export function BarraDeBusqueda({
   termino,
@@ -52,7 +59,7 @@ export function BarraDeBusqueda({
   }
 
   return (
-    <form role="search" onSubmit={manejarEnvio} className="barra-de-busqueda">
+    <form role="search" onSubmit={manejarEnvio} className="mb-6 flex flex-wrap items-end gap-3">
       <Etiqueta htmlFor="busqueda-contratos">Buscar por nombre o DNI</Etiqueta>
       <CampoTexto
         id="busqueda-contratos"
@@ -61,16 +68,17 @@ export function BarraDeBusqueda({
         onCambiar={onCambiarTermino}
         onKeyDown={manejarTecla}
         placeholder="Nombre o DNI"
+        className="w-60"
       />
-      <div role="group" aria-label="Filtrar por estado" className="barra-de-busqueda__estados">
+      <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap gap-2">
         {ESTADOS.map(({ valor, etiqueta }) => {
           const activo = estados.includes(valor);
           return (
             <Boton
               key={valor}
               type="button"
+              variante={activo ? "primario" : "secundario"}
               aria-pressed={activo}
-              className={activo ? "boton--filtro-activo" : undefined}
               onClick={() => onAlternarEstado(valor)}
             >
               {etiqueta}

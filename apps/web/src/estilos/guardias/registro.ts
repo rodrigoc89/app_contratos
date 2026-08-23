@@ -217,17 +217,31 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
         titulo: "fails a fixture Tailwind class resolving to raw #008bff on text, naming the selector and ratio",
       },
       { archivo: UTILIDADES, titulo: "resolves the wordmark's brand span to >=4.5:1 against #ffffff" },
+      { archivo: UTILIDADES, titulo: "BarraDeBusqueda's rendered markup carries no marca-azul utility" },
+      { archivo: UTILIDADES, titulo: "Paginador's rendered markup carries no marca-azul utility" },
     ],
   },
   {
+    // PR10 (D6) — ownership moves to the JSX scan: BarraDeBusqueda/Paginador
+    // no longer render `.boton--filtro-activo`/`.boton--pagina-actual`, so
+    // the CSS-scoped test (`convencionesDeEstilos.spec.ts:1097-1195`) now
+    // reads only the frozen BEM sheet (`panel.css`, deleted PR16) and stays
+    // live but unowned here.
     numero: 13,
     protege: "Estado-chip 1.32:1 + pagination current-page contrast",
-    disposicion: "CSS",
-    archivoCss: "estilos/panel.css",
+    disposicion: "JSX",
     pruebas: [
       {
-        archivo: ESTILOS,
-        titulo: "separates a selected estado chip from an unselected one by at least ${RATIO_MINIMO_ESTADO}:1",
+        archivo: UTILIDADES,
+        titulo: "rejects the historical estado-chip pair (#0b634a vs #094f3b, 1.32:1) that shipped once and was invisible",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo: "separates BarraDeBusqueda's active estado chip from an inactive one by >=3:1, resolved from real rendered classes",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo: "separates Paginador's current page from the other page buttons by >=3:1, resolved from real rendered classes",
       },
     ],
   },
@@ -239,14 +253,20 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     pruebas: [{ archivo: ESTILOS, titulo: "paints the four estados in colours that are actually different from each other" }],
   },
   {
+    // PR10 — ownership moves to the JSX scan for the same reason as guard
+    // 13: `Paginador` no longer renders `.paginador`, so the CSS-scoped
+    // test now reads only the frozen BEM sheet.
     numero: 15,
     protege: "Sticky paginator armed + opaque background",
-    disposicion: "CSS",
-    archivoCss: "estilos/panel.css",
+    disposicion: "JSX",
     pruebas: [
       {
-        archivo: ESTILOS,
-        titulo: "arms the sticky paginator with a bottom inset, since sticky alone silently does nothing",
+        archivo: UTILIDADES,
+        titulo: "declares sticky with a bottom inset, since sticky alone silently does nothing",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo: "gives the sticky paginator an opaque background so scrolled rows never show through it",
       },
     ],
   },
