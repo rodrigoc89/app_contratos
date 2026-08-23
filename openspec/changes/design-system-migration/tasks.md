@@ -273,7 +273,7 @@ claiming full coverage, rather than assuming this list is exhaustive.
 ## Phase 7B — PR7 close-out
 
 - [x] 7B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
-- [x] 7B.2 User visual review of the redesigned `Boton`/`CampoTexto` — "visibly new" is a judgment this suite cannot assert (Success Criteria).
+- [ ] 7B.2 User visual review of the redesigned `Boton`/`CampoTexto` — "visibly new" is a judgment this suite cannot assert (Success Criteria).
 - [x] 7B.3 Open PR #7 targeting PR #6's branch.
 
 ## Phase 8 — PR8: `Etiqueta`/`MarcaProducto`/`Spinner`/`CabeceraDeSesion` redesign (slice C1b, guards 9–12/18/21)
