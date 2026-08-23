@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { LayoutTecnico } from "./LayoutTecnico";
 
 describe("LayoutTecnico", () => {
-  it("renders its children inside the tablet shell", () => {
+  it("renders its children inside the técnico shell", () => {
     render(
       <LayoutTecnico>
         <p>Contenido de la visita</p>
