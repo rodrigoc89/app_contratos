@@ -233,17 +233,17 @@ claiming full coverage, rather than assuming this list is exhaustive.
 
 *Third "passes by doing nothing" mechanism — a short run silently re-measures an earlier state. Its RED test must prove it rejects that, not just an empty run.*
 
-- [ ] 5.1 RED, falsification: `scripts/geometriaHandheld.spec.ts` asserts non-zero exit when the number of reached states is below the committed constant (5, pre-slice-F). Run it first against a **naive stub harness that always reports "5 states reached" regardless of what it actually measured** — confirm this RED test alone does not catch that lie (it can't, by construction); then add the companion assertion that per-state control counts must also meet a floor, and confirm *that* assertion does catch a stub reporting 5 states with 0 controls each. This documents, not hides, the limit of state-count alone.
-- [ ] 5.2 RED: dead preview server or missing `dist/` fails non-zero, naming the precondition. Must fail — script does not exist.
-- [ ] 5.3 RED: zero-measurement run (0 states or 0 controls) fails non-zero, naming the shortfall.
-- [ ] 5.4 GREEN: create `scripts/geometriaHandheld.ts` — Puppeteer at `^25.4.0` (matches `apps/api`'s pin), `vite preview` over real `dist/`, `page.setBypassServiceWorker(true)` before first navigation, `page.setRequestInterception(true)` fulfilling `/auth/*`/`/contratos/*` from committed fixtures, sessions seeded via `evaluateOnNewDocument`. Drives S1 (`/login`), S2 (`/` seeded técnico), S4 (`/panel-no-disponible`), S5 (`/panel` seeded oficina), S6 (`/panel/contratos/:id` seeded fixture) at 360/390/430px with `isMobile`/`hasTouch`.
-- [ ] 5.5 Assertions per state/width: `scrollWidth === clientWidth`; every interactive element (same tag/prop/class-token heuristics `pisoDeToque.ts` will use, PR9) ≥48px both axes; `CabeceraDeSesion`'s rendered height at 390px stays within a committed single-row budget (regression witness: the measured 104px two-row height).
-- [ ] 5.6 Commit the states-reached constant as **5** for this and every PR through PR12; add `handheld` script to `package.json`; add the handheld step to the `bundle` CI job after `pnpm size`.
+- [x] 5.1 RED, falsification: `scripts/geometriaHandheld.spec.ts` asserts non-zero exit when the number of reached states is below the committed constant (5, pre-slice-F). Run it first against a **naive stub harness that always reports "5 states reached" regardless of what it actually measured** — confirm this RED test alone does not catch that lie (it can't, by construction); then add the companion assertion that per-state control counts must also meet a floor, and confirm *that* assertion does catch a stub reporting 5 states with 0 controls each. This documents, not hides, the limit of state-count alone.
+- [x] 5.2 RED: dead preview server or missing `dist/` fails non-zero, naming the precondition. Must fail — script does not exist.
+- [x] 5.3 RED: zero-measurement run (0 states or 0 controls) fails non-zero, naming the shortfall.
+- [x] 5.4 GREEN: create `scripts/geometriaHandheld.ts` — Puppeteer at `^25.4.0` (matches `apps/api`'s pin), `vite preview` over real `dist/`, `page.setBypassServiceWorker(true)` before first navigation, `page.setRequestInterception(true)` fulfilling `/auth/*`/`/contratos/*` from committed fixtures, sessions seeded via `evaluateOnNewDocument`. Drives S1 (`/login`), S2 (`/` seeded técnico), S4 (`/panel-no-disponible`), S5 (`/panel` seeded oficina), S6 (`/panel/contratos/:id` seeded fixture) at 360/390/430px with `isMobile`/`hasTouch`.
+- [x] 5.5 Assertions per state/width: `scrollWidth === clientWidth`; every interactive element (same tag/prop/class-token heuristics `pisoDeToque.ts` will use, PR9) ≥48px both axes; `CabeceraDeSesion`'s rendered height at 390px stays within a committed single-row budget (regression witness: the measured 104px two-row height).
+- [x] 5.6 Commit the states-reached constant as **5** for this and every PR through PR12; add `handheld` script to `package.json`; add the handheld step to the `bundle` CI job after `pnpm size`.
 
 ## Phase 5B — PR5 close-out
 
-- [ ] 5B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld` locally; record the 5-state pass and any técnico-flow phone-width finding.
-- [ ] 5B.2 Open PR #5 targeting PR #4's branch.
+- [x] 5B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld` locally; record the 5-state pass and any técnico-flow phone-width finding.
+- [x] 5B.2 Open PR #5 targeting PR #4's branch.
 
 ## Phase 6 — PR6: collision cluster (guards 1/2/16, slice B)
 
