@@ -184,15 +184,15 @@ claiming full coverage, rather than assuming this list is exhaustive.
 
 ## Phase 2 — PR2: `LayoutTecnico` rename
 
-- [ ] 2.1 `git mv` `componentes/plantillas/LayoutTablet.tsx` → `LayoutTecnico.tsx`, `LayoutTablet.spec.tsx` → `LayoutTecnico.spec.tsx`; rename the component/describe-block identifiers inside.
-- [ ] 2.2 Update every importer: `rutas/rutas.tsx` (4 reference sites), `plantillas/LayoutPanel.tsx` (2 sites), `LayoutPanel.spec.tsx` (1 site), `estilos/organismos.css` (3 comment/selector references), `estilos/panel.css` (1 reference).
-- [ ] 2.3 `pnpm typecheck` — confirms no importer was missed (this is the safety net the design explicitly relies on).
-- [ ] 2.4 Grep the whole `apps/web` tree for the literal string `LayoutTablet`; confirm zero remaining occurrences (filename, identifier, or class token).
+- [x] 2.1 `git mv` `componentes/plantillas/LayoutTablet.tsx` → `LayoutTecnico.tsx`, `LayoutTablet.spec.tsx` → `LayoutTecnico.spec.tsx`; rename the component/describe-block identifiers inside.
+- [x] 2.2 Update every importer: `rutas/rutas.tsx` (4 reference sites), `plantillas/LayoutPanel.tsx` (2 sites), `LayoutPanel.spec.tsx` (1 site), `estilos/organismos.css` (3 comment/selector references), `estilos/panel.css` (1 reference).
+- [x] 2.3 `pnpm typecheck` — confirms no importer was missed (this is the safety net the design explicitly relies on).
+- [x] 2.4 Grep the whole `apps/web` tree for the literal string `LayoutTablet`; confirm zero remaining occurrences (filename, identifier, or class token).
 
 ## Phase 2B — PR2 close-out
 
-- [ ] 2B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`; record results.
-- [ ] 2B.2 Open PR #2 targeting PR #1's branch. Retarget PR #3 to PR #2's branch **before** merging PR #1 (delivery hazard note above).
+- [x] 2B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`; record results.
+- [x] 2B.2 Open PR #2 targeting PR #1's branch. Retarget PR #3 to PR #2's branch **before** merging PR #1 (delivery hazard note above).
 
 ## Phase 3 — PR3: guard scaffolding (register + JSX/compiled skeletons)
 
