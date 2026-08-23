@@ -1,0 +1,374 @@
+/**
+ * design.md D2 — the disposition register, closing the hole neither
+ * `convencionesDeEstilos.spec.ts` (CSS) nor `convencionesDeUtilidades.spec.ts`/
+ * `convencionesDeCompilado.compilado.spec.ts` (JSX/compiled) can see alone: a
+ * protection that LEFT one scanner and never ARRIVED in the other.
+ *
+ * PR3 seeded state: all 21 entries are `CSS` — nothing has converted yet.
+ * Task 3.9 flips entries 7, 9-12 to `JSX` once `convencionesDeUtilidades.spec.ts`
+ * carries their mechanism (real component coverage still lands in PR8).
+ */
+
+export type Disposicion = "CSS" | "JSX" | "AMBOS" | "MOOT" | "RESUELTA";
+
+const DISPOSICIONES_VALIDAS: ReadonlySet<Disposicion> = new Set<Disposicion>([
+  "CSS",
+  "JSX",
+  "AMBOS",
+  "MOOT",
+  "RESUELTA",
+]);
+
+/**
+ * One `it(...)`/`it.each(...)` title this entry's protection must still
+ * appear under (recorded verbatim, `${…}` syntax included, for a literal
+ * substring search), and the owning spec file, relative to `apps/web/src`.
+ */
+export interface PruebaDeGuardia {
+  readonly archivo: string;
+  readonly titulo: string;
+}
+
+export interface EntradaDeRegistro {
+  readonly numero: number;
+  readonly protege: string;
+  readonly disposicion: Disposicion;
+  /** Required for `CSS`/`AMBOS` — a `src/estilos/*.css` file the protection still reads. */
+  readonly archivoCss?: string;
+  /** Required for `CSS`/`JSX`/`AMBOS` — at least one owning test (`styling-guards` req. 2). */
+  readonly pruebas?: readonly PruebaDeGuardia[];
+  /** Required for `MOOT`/`RESUELTA` — why no scanner protects this entry. */
+  readonly porque?: string;
+}
+
+const ESTILOS = "estilos/convencionesDeEstilos.spec.ts";
+const UTILIDADES = "estilos/convencionesDeUtilidades.spec.ts";
+
+export const REGISTRO: readonly EntradaDeRegistro[] = [
+  {
+    numero: 1,
+    protege: "No overflow:hidden/clip anywhere (reading gate) + sr-only token ban",
+    disposicion: "CSS",
+    archivoCss: "estilos/base.css",
+    pruebas: [{ archivo: ESTILOS, titulo: "declares no overflow: hidden / overflow: clip anywhere" }],
+  },
+  {
+    numero: 2,
+    protege: "Exactly one !important display declaration ([hidden])",
+    disposicion: "CSS",
+    archivoCss: "estilos/base.css",
+    pruebas: [
+      {
+        archivo: ESTILOS,
+        titulo: "has exactly one !important display declaration — the [hidden] protection itself",
+      },
+    ],
+  },
+  {
+    numero: 3,
+    protege: ".boton ≥48px touch floor",
+    disposicion: "CSS",
+    archivoCss: "estilos/atomos.css",
+    pruebas: [
+      { archivo: ESTILOS, titulo: "gives .boton a minimum touch target of at least 48px in both dimensions" },
+    ],
+  },
+  {
+    numero: 4,
+    protege: "32px gap + destructive colour-not-position (signature actions)",
+    disposicion: "CSS",
+    archivoCss: "estilos/organismos.css",
+    pruebas: [
+      {
+        archivo: ESTILOS,
+        titulo:
+          "keeps at least ${SEPARACION_MINIMA_PX}px below .lienzo-de-firma__acciones before the next control, so a thumb reaching for Firmar cannot land on Borrar",
+      },
+    ],
+  },
+  {
+    numero: 5,
+    protege: "48px floor explicitly absent on table rows",
+    disposicion: "CSS",
+    archivoCss: "estilos/panel.css",
+    pruebas: [
+      {
+        archivo: ESTILOS,
+        titulo: "does NOT impose the 48px floor on table rows or cells, across every declaration of each selector",
+      },
+    ],
+  },
+  {
+    numero: 6,
+    protege: "Focus-visible never silently removed without a declared replacement",
+    disposicion: "CSS",
+    archivoCss: "estilos/panel.css",
+    pruebas: [{ archivo: ESTILOS, titulo: "never removes a focus indicator without declaring a replacement" }],
+  },
+  {
+    numero: 7,
+    // task 3.9 — mechanism now lives in convencionesDeUtilidades.spec.ts's
+    // breakpoint-prefix whitelist; the CSS-scoped min-width scan stays live
+    // for the still-BEM stylesheets until PR16 deletes them. Rebind/read-back
+    // half retires MOOT once literal utilities replace inheritance (D4).
+    protege: "Exactly the 640/1024 breakpoints (tableta/escritorio prefixes); rebind/read-back half MOOT after PR16",
+    disposicion: "JSX",
+    pruebas: [
+      {
+        archivo: UTILIDADES,
+        titulo: "rejects every real .tsx file under apps/web/src that uses a default breakpoint prefix",
+      },
+    ],
+  },
+  {
+    numero: 8,
+    protege: "No font-size<1rem outside the panel subtree",
+    disposicion: "CSS",
+    archivoCss: "estilos/panel.css",
+    pruebas: [
+      { archivo: ESTILOS, titulo: "declares no font-size below ${MINIMO_REM}rem outside estilos/panel.css" },
+    ],
+  },
+  {
+    // task 3.9 — mechanism ported to convencionesDeUtilidades.spec.ts,
+    // reading @theme class names instead of CSS declarations; real-component
+    // coverage (beyond the fixture proof) still lands in PR8.
+    numero: 9,
+    protege: "valorDeColor resolver, ported to @theme class names",
+    disposicion: "JSX",
+    pruebas: [{ archivo: UTILIDADES, titulo: "resolves a bg-* utility class against the @theme block" }],
+  },
+  {
+    numero: 10,
+    protege: "matiz (hue) resolver, ported to @theme class names",
+    disposicion: "JSX",
+    pruebas: [
+      { archivo: UTILIDADES, titulo: "resolves hue in degrees, unchanged from the CSS-scoped version" },
+    ],
+  },
+  {
+    numero: 11,
+    protege: "saturacion resolver + 50% saturation floor, ported to @theme class names",
+    disposicion: "JSX",
+    pruebas: [
+      { archivo: UTILIDADES, titulo: "resolves saturation as a percentage, unchanged from the CSS-scoped version" },
+    ],
+  },
+  {
+    numero: 12,
+    protege: "Guards A-D brand-blue contrast assertion, ported to JSX class names",
+    disposicion: "JSX",
+    pruebas: [
+      {
+        archivo: UTILIDADES,
+        titulo: "fails a fixture Tailwind class resolving to raw #008bff on text, naming the selector and ratio",
+      },
+    ],
+  },
+  {
+    numero: 13,
+    protege: "Estado-chip 1.32:1 + pagination current-page contrast",
+    disposicion: "CSS",
+    archivoCss: "estilos/panel.css",
+    pruebas: [
+      {
+        archivo: ESTILOS,
+        titulo: "separates a selected estado chip from an unselected one by at least ${RATIO_MINIMO_ESTADO}:1",
+      },
+    ],
+  },
+  {
+    numero: 14,
+    protege: "4 distinct estado-badge colours + label always present",
+    disposicion: "CSS",
+    archivoCss: "estilos/panel.css",
+    pruebas: [{ archivo: ESTILOS, titulo: "paints the four estados in colours that are actually different from each other" }],
+  },
+  {
+    numero: 15,
+    protege: "Sticky paginator armed + opaque background",
+    disposicion: "CSS",
+    archivoCss: "estilos/panel.css",
+    pruebas: [
+      {
+        archivo: ESTILOS,
+        titulo: "arms the sticky paginator with a bottom inset, since sticky alone silently does nothing",
+      },
+    ],
+  },
+  {
+    numero: 16,
+    protege: "Narrow-layout thead displaced, not clipped",
+    disposicion: "CSS",
+    archivoCss: "estilos/panel.css",
+    pruebas: [
+      { archivo: ESTILOS, titulo: "moves the narrow-layout thead off-screen instead of only clipping its pixels" },
+    ],
+  },
+  {
+    numero: 17,
+    protege: "Document-viewer iframe bounded vh (legal reading gate)",
+    disposicion: "CSS",
+    archivoCss: "estilos/organismos.css",
+    pruebas: [{ archivo: ESTILOS, titulo: "finds and constrains .visor-documento__iframe in estilos/organismos.css" }],
+  },
+  {
+    numero: 18,
+    protege: "BEM modifier never declared above the base it overrides",
+    disposicion: "CSS",
+    archivoCss: "estilos/organismos.css",
+    pruebas: [{ archivo: ESTILOS, titulo: "declares every `.%s--*` modifier after the bare `.%s`" }],
+  },
+  {
+    numero: 19,
+    protege: "Signature canvas bounded, controls never covered",
+    disposicion: "CSS",
+    archivoCss: "estilos/organismos.css",
+    pruebas: [{ archivo: ESTILOS, titulo: "bounds .lienzo-de-firma__lienzo to an explicit vh fraction" }],
+  },
+  {
+    numero: 20,
+    protege: "Universal touch-floor scan over every interactive control",
+    disposicion: "CSS",
+    archivoCss: "estilos/atomos.css",
+    pruebas: [{ archivo: ESTILOS, titulo: "declares a vertical touch floor for each of them" }],
+  },
+  {
+    numero: 21,
+    protege: "Every <a>/<Link> gets a real box",
+    disposicion: "CSS",
+    archivoCss: "estilos/organismos.css",
+    pruebas: [
+      {
+        archivo: ESTILOS,
+        titulo: "keeps the row link invisible — a bigger target, not a bigger affordance",
+      },
+    ],
+  },
+];
+
+/** `styling-guards` scenario "the register is complete". */
+export function erroresDeCompletitud(registro: readonly EntradaDeRegistro[]): string[] {
+  const errores: string[] = [];
+
+  if (registro.length !== 21) {
+    errores.push(`the register has ${registro.length} entries, expected exactly 21`);
+  }
+
+  const vistos = new Set<number>();
+  for (const entrada of registro) {
+    if (vistos.has(entrada.numero)) {
+      errores.push(`entry #${entrada.numero} is declared more than once`);
+    }
+    vistos.add(entrada.numero);
+  }
+
+  for (let esperado = 1; esperado <= 21; esperado++) {
+    if (!vistos.has(esperado)) {
+      errores.push(`entry #${esperado} is missing from the register`);
+    }
+  }
+
+  return errores;
+}
+
+/** `styling-guards` scenario "no entry is left undecided or uses a retired value". */
+export function erroresDeDisposicion(registro: readonly EntradaDeRegistro[]): string[] {
+  const errores: string[] = [];
+  for (const entrada of registro) {
+    if (!DISPOSICIONES_VALIDAS.has(entrada.disposicion)) {
+      errores.push(
+        `entry #${entrada.numero}'s disposition "${entrada.disposicion}" is not one of CSS, JSX, AMBOS, MOOT, RESUELTA`,
+      );
+    }
+  }
+  return errores;
+}
+
+/**
+ * `styling-guards` requirement "every CSS/JSX/AMBOS-dispositioned guard has
+ * a passing test in its owning scanner". `MOOT`/`RESUELTA` need no scanner
+ * (spec Purpose) and are skipped.
+ */
+export function erroresDePruebas(
+  registro: readonly EntradaDeRegistro[],
+  leerArchivo: (rutaRelativa: string) => string | undefined,
+): string[] {
+  const errores: string[] = [];
+
+  for (const entrada of registro) {
+    if (entrada.disposicion === "MOOT" || entrada.disposicion === "RESUELTA") {
+      continue;
+    }
+
+    const pruebas = entrada.pruebas ?? [];
+    if (pruebas.length === 0) {
+      errores.push(`entry #${entrada.numero} (${entrada.disposicion}) names no owning test`);
+      continue;
+    }
+
+    for (const prueba of pruebas) {
+      const contenido = leerArchivo(prueba.archivo);
+      if (contenido === undefined) {
+        errores.push(`entry #${entrada.numero} names ${prueba.archivo}, which does not exist`);
+        continue;
+      }
+      if (!contenido.includes(prueba.titulo)) {
+        errores.push(
+          `entry #${entrada.numero}'s test "${prueba.titulo}" is not present in ${prueba.archivo} — the guard may have been deleted`,
+        );
+      }
+    }
+  }
+
+  return errores;
+}
+
+/**
+ * `styling-guards` D2 register assertion 3 — every `CSS`/`AMBOS` entry
+ * names a `src/estilos/*.css` file that still exists, so a lingering `CSS`
+ * disposition fails once the last sheet is deleted, rather than silently
+ * scanning nothing.
+ */
+export function erroresDeArchivoCss(
+  registro: readonly EntradaDeRegistro[],
+  existeArchivo: (rutaRelativa: string) => boolean,
+): string[] {
+  const errores: string[] = [];
+
+  for (const entrada of registro) {
+    if (entrada.disposicion !== "CSS" && entrada.disposicion !== "AMBOS") {
+      continue;
+    }
+
+    if (!entrada.archivoCss) {
+      errores.push(`entry #${entrada.numero} (${entrada.disposicion}) names no CSS file`);
+      continue;
+    }
+
+    if (!/^estilos\/.+\.css$/.test(entrada.archivoCss)) {
+      errores.push(`entry #${entrada.numero} names "${entrada.archivoCss}", which is not a src/estilos/*.css path`);
+      continue;
+    }
+
+    if (!existeArchivo(entrada.archivoCss)) {
+      errores.push(`entry #${entrada.numero} names ${entrada.archivoCss}, which no longer exists`);
+    }
+  }
+
+  return errores;
+}
+
+/** `styling-guards` D2 register assertion 4 — every `MOOT`/`RESUELTA` entry carries a non-empty reason. */
+export function erroresDePorque(registro: readonly EntradaDeRegistro[]): string[] {
+  const errores: string[] = [];
+  for (const entrada of registro) {
+    if (entrada.disposicion === "MOOT" || entrada.disposicion === "RESUELTA") {
+      if (!entrada.porque || entrada.porque.trim() === "") {
+        errores.push(`entry #${entrada.numero} (${entrada.disposicion}) has no porque`);
+      }
+    }
+  }
+  return errores;
+}
+
