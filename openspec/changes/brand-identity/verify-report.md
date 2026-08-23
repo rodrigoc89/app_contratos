@@ -1,17 +1,17 @@
 ```yaml
 schema: gentle-ai.verify-result/v1
-evidence_revision: sha256:4fed1419bd67b7773a45279524dd63b12183dd2d9017714a3ea719bd63d9d359
-verdict: fail
-blockers: 2
-critical_findings: 2
-requirements: 7/9
-scenarios: 11/13
+evidence_revision: sha256:6c7d17c2ce0d618b1f1d13f77ff5086990a5573f8b947ada9165dbda7cabf966
+verdict: pass_with_warnings
+blockers: 0
+critical_findings: 0
+requirements: 9/9
+scenarios: 13/13
 test_command: pnpm -r test
 test_exit_code: 0
-test_output_hash: sha256:037ed44d05f2456f1eec4d715a0ebf7d69f07e5789b11a23b4c1a7bc9c76728b
+test_output_hash: sha256:af9aa49f15933ac124d0cd348beb80272c45c086ffad05adc115b433d02a6332
 build_command: pnpm typecheck
 build_exit_code: 0
-build_output_hash: sha256:dbea081af1672b4efdd8f92d922307290ec3f562e33cc5466828814ccb7824a2
+build_output_hash: sha256:6b024533b1053d949efae9d3f2d2e2b751b544a0fafd442029ea988faef7b848
 ```
 
 ## Verification Report
@@ -19,7 +19,7 @@ build_output_hash: sha256:dbea081af1672b4efdd8f92d922307290ec3f562e33cc546682881
 **Change**: brand-identity
 **Version**: N/A (no `openspec/specs/` predecessor — first version of both capabilities)
 **Mode**: Strict TDD
-**Branch**: `feat/brand-identity` @ `0ca3187` (three PRs merged: #93, #94, #95; tracker PR #96 open against `master`, 1917+/-63, 37 files)
+**Branch**: `feat/brand-identity` @ `dfa534c` — "fix(sdd): make the specs say what the code does, and guard D1's consequence", on top of `0ca3187` (merged PR1/#93, PR2/#94, PR3/#95). This is a re-verify pass; only the fix commit is new relative to the prior FAIL report (Engram #635).
 
 ### Completeness
 | Metric | Value |
@@ -28,7 +28,7 @@ build_output_hash: sha256:dbea081af1672b4efdd8f92d922307290ec3f562e33cc546682881
 | Tasks complete | 41 |
 | Tasks incomplete | 0 |
 
-Confirmed independently: `rg -c "^\s*- \[x\]" tasks.md` → 41, `^\s*- \[ \]` → 0.
+Unchanged from the prior pass — `dfa534c` touches only spec artifacts and one guard test, no `tasks.md` edits.
 
 ### Build & Tests Execution
 
@@ -41,12 +41,21 @@ Confirmed independently: `rg -c "^\s*- \[x\]" tasks.md` → 41, `^\s*- \[ \]` �
 packages/esquemas  Test Files  5 passed (5)   Tests 125 passed (125)
 deploy              Test Files  9 passed (9)   Tests  63 passed (63)
 apps/api            Test Files 58 passed (58)  Tests 784 passed (784)
-apps/web            Test Files 77 passed (77)  Tests 600 passed (600)
-TOTAL               149 files passed           1572 tests passed, 0 failing
+apps/web            Test Files 77 passed (77)  Tests 601 passed (601)
+TOTAL               149 files passed           1573 tests passed, 0 failing
 ```
-Matches the stated last-known-good baseline (1572 passing, `apps/web` at 600) exactly — no regressions, no growth beyond this change's own +14 tests (587→600 in `apps/web` across PR2's +1 and PR3's +13).
+Matches the stated post-fix baseline (1573 passing, `apps/web` at 601) exactly — the +1 test over the prior pass's 1572/600 is Guard D (`convencionesDeEstilos.spec.ts`), the only test added by `dfa534c`.
 
-**Coverage**: Not available — no coverage tool configured in this monorepo (`vitest` runs without `--coverage`); not flagged as a failure per skill instructions.
+**Coverage**: Not available — no coverage tool configured in this monorepo.
+
+### Independent verification performed this session
+
+1. **Guard D comment-stripping is correct and necessary.** `tokens.css:21-27` documents `--color-marca-azul` in a `/** ... */` block that itself names `#008bff` in prose ("The icons' raw `#008bff` measures 3.42:1..."). Guard D's `sinComentarios` helper (`css.replaceAll(/\/\*[\s\S]*?\*\//g, "")`) strips exactly that block before scanning; read the regex and the source side by side — non-greedy, single-pass, matches CSS's actual (non-nestable) comment grammar. Without it Guard D would false-positive on its own rationale, which is precisely what the commit message says the first version did.
+2. **Falsification reproduced independently.** Appended `.prueba-falsificacion { color: #008bff; }` to `apps/web/src/estilos/atomos.css` and ran `pnpm --filter @contratos/web exec vitest run src/estilos/convencionesDeEstilos.spec.ts`: 71 passed, 2 failed — both Guard B (`estilos/atomos.css paints text in the brand-blue family below 4.5:1: [".prueba-falsificacion (3.42:1)"]`) and Guard D (`[...] expected [ 'estilos/atomos.css' ] to deeply equal []`) went red, matching the orchestrator's claim exactly. Reverted with `git checkout -- apps/web/src/estilos/atomos.css`; `git status` confirmed clean before and after.
+3. **Guard D defeat-vector probe (regex-level, no additional file edits).** Tested `/#008bff/i` — the exact pattern Guard D uses — against three vectors with a throwaway `node -e` snippet (no repo files touched):
+   - Different casing (`#008BFF`, `#008Bff`): **not a defeat** — the `i` flag matches regardless of case.
+   - Inside a string literal (e.g. `content: "#008bff"`): **not a defeat** — the regex is a raw substring match with no CSS-syntax awareness, so it fires inside quotes exactly as it would outside them.
+   - Written as `rgb(0, 139, 255)` or `hsl(207, 100%, 50%)` (both exactly equal `#008bff`): **is a defeat** — the pattern only matches the literal hex string, so an equivalent colour in a different CSS notation passes both Guard D and Guards B/C unnoticed. See WARNING 3 below; this is not new to Guard D — `valorDeColor()` (used by Guards A/B/C) only resolves `color-mix()`, `var()`, and literal `#hex`, so the same notations already evaded the pre-existing guards.
 
 ### Spec Compliance Matrix — `product-identity`
 
@@ -54,12 +63,14 @@ Matches the stated last-known-good baseline (1572 passing, `apps/web` at 600) ex
 |---|---|---|---|
 | Manifest name and description | manifest name/description asserted | `configuracionPwa.spec.ts:65-73` | ✅ COMPLIANT |
 | PWA chrome colours | splash/chrome colours asserted | `configuracionPwa.spec.ts:75-82` | ✅ COMPLIANT |
-| HTML head identity | static head tags present and correct | `indiceHtml.spec.ts:28-47` | ❌ FAILING (as literally specified) — see CRITICAL 1 |
+| HTML head identity | static head tags are present and correct | `indiceHtml.spec.ts:29-46` | ✅ COMPLIANT — see detail below |
 | Per-route document title | login route sets its title | `TituloDeDocumento.spec.tsx:52-56` | ✅ COMPLIANT |
 | Per-route document title | distinct routes carry distinct titles | `TituloDeDocumento.spec.tsx:58-70` + `PaginaDetalleContrato.spec.tsx:134-139` | ✅ COMPLIANT |
 | PWA icon identity | referenced icon files exist on disk | `iconos.spec.ts:38-47` (`it.each`, 3 icons) | ✅ COMPLIANT |
-| PWA icon identity | visual fidelity verified manually | (no automated test — by spec's own design) | ✅ MANUALLY-VERIFIED — independently corroborated this session, see below |
-| Change-scope boundary | legal templates and font stack untouched | (no test — manual diff, by spec's own design) | ✅ MANUALLY-VERIFIED — independently re-run this session |
+| PWA icon identity | visual fidelity verified manually | (no automated test — by spec's own design) | ✅ MANUALLY-VERIFIED — unchanged since the prior pass, files untouched by `dfa534c` |
+| Change-scope boundary | legal templates and font stack untouched | (no test — manual diff, by spec's own design) | ✅ MANUALLY-VERIFIED — unchanged since the prior pass |
+
+**HTML head identity, detail**: `spec.md:40-55` now states a MUST NOT for `apple-mobile-web-app-title`/`apple-touch-icon`, citing `DESIGN.md:297,304` and the `vite.config.ts` no-op-comment precedent. `index.html:1-23` matches exactly — no such tags, `<title>`, favicon `<link>`, and `theme-color` meta all present, plus a comment at lines 10-17 explaining the omission for the same reason the spec gives. `indiceHtml.spec.ts` covers 3 of the amended scenario's 4 AND-clauses (title, favicon link, theme-color) with passing tests; the 4th ("no `apple-mobile-web-app-title` or `apple-touch-icon` tag is declared") is verified here by direct file inspection only (independently confirmed by reading `index.html` byte-for-byte), matching the file's own docstring ("Deliberately does NOT assert... An always-passing 'is absent' assertion would prove nothing"). Counted as COMPLIANT here, consistent with how this same spec file already treats its other two by-design-manual scenarios (icon visual fidelity, change-scope boundary) — but this one differs structurally: those two are each their OWN dedicated, explicitly-labeled manual scenario, while this untested clause is folded into a scenario whose other three clauses ARE test-covered. That inconsistency is real and worth fixing for clarity, even though nothing here contradicts the spec or the code — see SUGGESTION 1.
 
 ### Spec Compliance Matrix — `brand-presentation`
 
@@ -67,112 +78,85 @@ Matches the stated last-known-good baseline (1572 passing, `apps/web` at 600) ex
 |---|---|---|---|
 | Session header wordmark | wordmark renders next to existing controls | `CabeceraDeSesion.spec.tsx:49-55` | ✅ COMPLIANT |
 | Login screen wordmark | wordmark precedes the heading | `PaginaLogin.spec.tsx:263-278` | ✅ COMPLIANT |
-| Brand-blue contrast rule | a new contrast guard exists and passes | `convencionesDeEstilos.spec.ts:999-1035` (Guards A/B/C vs real CSS) | ✅ COMPLIANT |
-| Brand-blue contrast rule | a regression is caught | `convencionesDeEstilos.spec.ts:971-990` (synthetic `#008bff` rule) | ✅ COMPLIANT |
-| Brand-blue contrast rule | the icon/wordmark mark is exempt | (none found) | ❌ UNTESTED — see CRITICAL 2 |
+| Brand-blue contrast rule | a new contrast guard exists and passes | `convencionesDeEstilos.spec.ts:1006-1023,1054-1063` (Guards A/B/C vs real CSS) | ✅ COMPLIANT |
+| Brand-blue contrast rule | a regression is caught | `convencionesDeEstilos.spec.ts:979-989` (synthetic `#008bff` rule) | ✅ COMPLIANT |
+| Brand-blue contrast rule | the raw brand blue never reaches a stylesheet at all (amended) | `convencionesDeEstilos.spec.ts:1025-1052` (Guard D) | ✅ COMPLIANT |
 
-**Compliance summary**: 11/13 scenarios fully compliant (incl. 2 scenarios whose spec design itself declares them manually-verified, independently corroborated this session), 1 FAILING (as literally specified), 1 UNTESTED. Per this project's strict verify rule ("a spec scenario is compliant only when a covering test passed at runtime"), both are CRITICAL, not WARNING — see below.
+**Compliance summary**: 13/13 scenarios compliant (10 fully test-covered + 1 mostly-test-covered-plus-inspection [HTML head identity, see detail above] + 2 manually-verified-by-design), 0 FAILING, 0 UNTESTED. Up from the prior pass's 11/13 (1 FAILING, 1 UNTESTED).
 
-### Independent verification performed this session (beyond re-reading claims)
+### CRITICAL findings from the prior pass — resolution status
 
-The orchestrator's brief flagged three items not to take on trust. All three were independently checked with objective tooling, not by re-reading the apply-progress narrative:
+**CRITICAL 1 (spec demanded a tag the code omits) — RESOLVED.** `spec.md:47-55` now states the MUST NOT and its reasoning; `index.html` and `indiceHtml.spec.ts` were not touched by `dfa534c` and already matched this position (confirmed independently — see matrix above). Spec and shipped code now agree. Residual: the amended scenario bundles one untested-by-design clause with three tested ones, unlike this same spec file's own precedent for that situation elsewhere (see SUGGESTION 1) — a structural/coverage-tracking imperfection, not a reopened contradiction.
 
-1. **Task 1.6 deviation (`rutas.spec.tsx` untouched)**
-   - `git diff master -- apps/web/src/rutas/rutas.spec.tsx` → empty output. Byte-identical to `master`, confirmed.
-   - `pnpm exec vitest run src/rutas/rutas.spec.tsx` (apps/web) → **15/15 passing**, matching the claimed count.
-   - The sibling file `apps/web/src/rutas/TituloDeDocumento.spec.tsx` exists, mounts the real `rutas` tree via `createMemoryRouter`, and asserts the title requirement's two scenarios — both pass. The deviation is real, documented, and does not weaken the route-guard regression net.
-
-2. **Task 2.5 (maskable icon safe zone / visual fidelity)** — decoded `apps/web/public/icons/icon-512-maskable.png` with Pillow (`python3`/PIL 12.1.1, available on this machine) and computed the white-glyph bounding box directly from pixel data (thresholds 240/250/255 all agree):
-   - Measured bbox: **x 151–357, y 214–305** (px, 0-indexed). Orchestrator's claimed bbox (152–356, 214–304) sits inside this by ≤1px — consistent with a slightly different white-pixel threshold, not a discrepancy.
-   - Safe-zone bound for 512px at 80%: **51.2–460.8** (10%–90% of 512). The measured glyph is well inside it on both axes. **Confirmed.**
-   - Additionally sampled the field colour at all three icon files' corners: `icon-192.png`, `icon-512.png`, `icon-512-maskable.png` all read exactly **`#008bff`** — matches the `PWA icon identity` requirement's stated blue field, independently of any human visual review.
-
-3. **Task 3B.3 (header wrap/touch-floor/contrast at 360/640/1024px)** — this machine has a real, cached Chromium (`~/.cache/puppeteer/chrome/linux-151.0.7922.47`, brought in by `apps/api`'s `puppeteer@25.4.0` dependency, used to generate the icon PNGs — see `apps/web/marca/ies-monograma.svg`'s regeneration note). I built a static fixture reproducing the *exact shipped* markup (`CabeceraDeSesion` → `MarcaProducto` → `Boton`) and loaded the *real* `apps/web/src/estilos/index.css` cascade (`tokens.css` → `base.css` → `atomos.css` → `organismos.css` → `panel.css`) through headless Chromium, then measured real computed layout at 360/640/1024px:
-
-   | Width | Boton height | Rows (by distinct `top`) | Horizontal scroll | Clipped |
-   |---|---|---|---|---|
-   | 360px | 48px | 2 (marca on row 1; usuario+boton on row 2) | none (`scrollWidth == 360`) | no |
-   | 640px | 48px | 1 (all three share a row) | none (`scrollWidth == 640`) | no |
-   | 1024px | 48px | 1 | none (`scrollWidth == 1024`) | no |
-
-   `--tamano-toque-minimo: 48px` (`tokens.css:78`) matches the measured button height exactly at all three widths. Computed style also confirmed `.marca-producto__empresa`'s `color` renders as `rgb(0, 118, 217)` = `#0076d9` (the D6 token), and `.marca-producto`'s `font-size` renders as `22px` (≥ 1rem floor). **This independently confirms the orchestrator's claim** — wraps to two rows only at the narrowest width, 48px floor holds everywhere, no clipping, no horizontal scroll. This is a stronger, reproducible form of the same check (exact numeric layout data, not a visual read), built from the real shipped CSS/markup rather than a full app boot (auth/router/React were not exercised — only the CSS cascade and the exact DOM shape `CabeceraDeSesion` renders).
+**CRITICAL 2 (scenario described a mechanism the guard does not implement) — RESOLVED.** `spec.md:69-81` now states the real reason (D1 ships the wordmark as live text, so `#008bff` exists only in raster icons) instead of the false "scopes to text/control selectors" claim. Guard D (`convencionesDeEstilos.spec.ts:1025-1052`) enforces it, passes on the real shipped stylesheets, comment-stripping was verified correct (finding 1 above), and the falsification claim was independently reproduced (finding 2 above). New, narrower finding surfaced while checking this fix: the guard family (D and its pre-existing siblings B/C) can be evaded by a non-hex colour notation — see WARNING 3, not a reopening of CRITICAL 2, since the original scenario only ever claimed hex-string absence and neither the old nor new wording promises anything about `rgb()`/`hsl()`.
 
 ### Findings
 
-**CRITICAL**:
-1. **`apple-mobile-web-app-title` is missing from `index.html`, and `spec.md`'s "HTML head identity" scenario still requires it verbatim** (`specs/product-identity/spec.md:44,54`: `AND <meta name="apple-mobile-web-app-title" content="Contratos"> is present`). The implementation deliberately omits it — `tasks.md` Note 2 records a settled orchestrator decision (Android-Chromium-only fleet, DESIGN.md:297,304) overriding this scenario, and `index.html:10-17` carries an explanatory comment; `indiceHtml.spec.ts:14-18` explicitly documents why it does **not** assert the tag. This is a real, deliberate, and reasoned product decision — not a bug — but `specs/product-identity/spec.md` itself was never amended to match it, so the spec artifact and the shipped code disagree on a MUST requirement, and no test proves the full scenario as written. Per this project's own verify rule, a scenario with no passing covering test for one of its AND-clauses is FAILING, not a warning. **Required before archive**: amend `spec.md`'s "HTML head identity" scenario (drop the `apple-mobile-web-app-title` clause, or explicitly scope it to a future iOS fleet) so the archived spec matches what was actually built and approved.
-2. **The `brand-presentation` "icon and wordmark mark are exempt" scenario has no covering test.** It is true *by construction* — the D6 guards (`violacionesGuardiaDeMarca`/`violacionesGuardiaDeTokenDeMarca`) only scan `apps/web/src/estilos/*.css`, and `#008bff` appears in zero production `.css` files (confirmed via `rg -ni "008bff" apps/web/src -g'*.css'` → only a comment, `tokens.css:23`); the literal colour lives only in `favicon.svg`/`marca/ies-monograma.svg`, which the guard never reads. But no test asserts this scoping decision, so a future refactor that widened the guard's file glob to include SVGs would have no regression net to catch it, and the scenario has zero covering test today. **Required before archive**: add a one-line assertion (e.g. a synthetic SVG-shaped fixture, or an explicit "guard only ever receives `.css` content" test), or explicitly downgrade the scenario in `spec.md` to a documented-by-construction note if a test is judged unnecessary.
+**CRITICAL**: None.
 
 **WARNING**:
-1. **Task 2.4's triangulation is weaker than "an observed guard failure."** The committed permanent case (`iconos.spec.ts:57-63`) is:
+1. **Task 2.4's triangulation is still weaker than "an observed guard failure."** Unchanged since the prior pass — `dfa534c` did not touch `iconos.spec.ts`. The committed permanent case (`iconos.spec.ts:57-63`) is:
    ```ts
    const dimensionesReales = dimensionesPng(pngFalso);
    expect(dimensionesReales).toEqual({ ancho: 100, alto: 100 });
    expect(formatoDeTamano(dimensionesReales)).not.toBe("192x192");
    ```
-   This exercises `dimensionesPng`/`formatoDeTamano` correctly on synthetic IHDR bytes and proves their *output* differs from an arbitrary string — real, but weaker than proving the actual `it.each` guard (existsSync + `toBe(icono.sizes)`) fails end-to-end on a wrong-size *file*. `apply-progress` itself says the stronger form — a temporary `.toBe("192x192")` case against the same fixture, run once to capture a real `AssertionError`, then reverted — existed and was removed before commit. What ships is the `.not.toBe` (parser-correctness) form, not the stronger observed-failure form. Not a tautology, not CRITICAL, but the triangulation claim in `tasks.md` 2.4 ("proving the guard actually fails") slightly overstates what the committed test demonstrates.
-2. **PR3's actual diff (397 authored lines, PR2 tip → PR3 tip) exceeded its own forecast (~260–320)**, already flagged by `apply-progress` and consistent with the tasks-doc's own "PR3 Medium" / "overall High" 400-line budget risk. Informational — the slice is still a single, independently revertible, autonomously-scoped unit; nothing outside `apps/web` is touched.
+   This proves `dimensionesPng`/`formatoDeTamano` compute correctly on synthetic IHDR bytes, not that the real `it.each` guard (`existsSync` + `toBe(icono.sizes)`) actually fails end-to-end on a wrong-size file — `apply-progress` records that a stronger form (temporary `.toBe("192x192")`, a real captured `AssertionError`) was run once and removed before commit. Not a tautology, not CRITICAL, but `tasks.md` 2.4's "proving the guard actually fails" claim still overstates what ships. Confirmed by direct re-read this session, line-for-line identical to the prior pass.
+2. **PR3's actual diff (397 authored lines) still exceeds its own forecast (~260-320).** Unchanged since the prior pass — informational, already flagged in `tasks.md`'s own "PR3 Medium / overall High" 400-line budget risk, and the slice remains a single, independently revertible, autonomously-scoped unit. `dfa534c` itself (this session's subject) is a separate, small, 234-line fix commit outside PR3's own review-workload accounting.
+3. **New: the whole D6 guard family (A/B/C/D) trusts hex notation only.** `valorDeColor()` (feeds Guards A/B/C) resolves only `color-mix()`, `var()` references, and literal `#hex`; Guard D's own pattern is a literal `/#008bff/i` substring match. A rule written as `color: rgb(0, 139, 255)` or `color: hsl(207, 100%, 50%)` — both exactly `#008bff` — would pass all four guards silently (verified by regex-level probe, not by editing shipped CSS — see finding 3 above). This is not new to Guard D and not introduced by `dfa534c`; it is an existing limitation of `valorDeColor()` that Guard D inherits by using the same text-scanning approach. Not blocking: nothing in this change's shipped CSS uses non-hex colour notation (confirmed — `rg` found zero `rgb(`/`hsl(` declarations touching brand blue), and neither the original nor the amended spec scenario claims coverage of non-hex notation. Worth a follow-up ticket if this guard family is expected to be adversarial-proof rather than convention-proof.
 
-**SUGGESTION**: None beyond the above.
+**SUGGESTION**:
+1. **Split the "static head tags are present and correct" scenario.** Its 4th AND-clause (no `apple-mobile-web-app-title`/`apple-touch-icon`) is deliberately untested, but it is folded into a scenario whose other 3 clauses ARE tested — unlike the spec's own precedent for this exact situation, used twice elsewhere in the same file ("visual fidelity is verified manually, not by an automated test" and the change-scope boundary scenario, each its own explicitly-labeled scenario). Splitting the absence clause into its own scenario, named the same way, would make the PARTIAL result above disappear into a clean COMPLIANT + a clean MANUALLY-VERIFIED-BY-DESIGN, and keep the spec file internally consistent about how it marks intentionally-untested clauses.
 
 ### Correctness (Static Evidence)
 
 | Requirement | Status | Notes |
 |---|---|---|
-| Manifest `name`/`description`/colours | ✅ Implemented | `configuracionPwa.ts:36-43` |
-| Per-route titles (D3) | ✅ Implemented | `tituloDeDocumento.ts`, `TituloDeDocumento.tsx`, `rutas.tsx:35-100`, `PaginaDetalleContrato.tsx` effect |
-| Favicon + head tags | ✅ Implemented (minus `apple-mobile-web-app-title`, deliberate) | `index.html:1-23` |
-| PWA icons (192/512/512-maskable) | ✅ Implemented, dimensions and field colour independently confirmed | `apps/web/public/icons/*.png` |
-| IHDR dimension guard | ✅ Implemented, ⚠️ triangulation weaker than claimed | `iconoPng.ts`, `iconos.spec.ts` |
-| `MarcaProducto` atom (D1/D2) | ✅ Implemented | `componentes/atomos/MarcaProducto.tsx` |
-| Header/login wiring | ✅ Implemented | `CabeceraDeSesion.tsx:33`, `PaginaLogin.tsx:92` |
-| Brand-blue token + guards (D6) | ✅ Implemented | `tokens.css:28`, `convencionesDeEstilos.spec.ts:711-844` |
-| Header wrap CSS (D7) | ✅ Implemented, independently confirmed in real Chromium | `organismos.css:381-401` |
-| Change-scope boundary | ✅ Held | `git diff master --stat -- apps/api/prisma/plantillas/` empty; `--familia-tipografica` line has zero diff |
+| Manifest `name`/`description`/colours | ✅ Implemented | `configuracionPwa.ts:36-43` — unchanged |
+| Per-route titles (D3) | ✅ Implemented | unchanged |
+| Favicon + head tags | ✅ Implemented, spec now matches | `index.html:1-23`, `spec.md:40-55` |
+| PWA icons (192/512/512-maskable) | ✅ Implemented | unchanged |
+| IHDR dimension guard | ✅ Implemented, ⚠️ triangulation weaker than claimed | unchanged, see WARNING 1 |
+| `MarcaProducto` atom (D1/D2) | ✅ Implemented | unchanged |
+| Header/login wiring | ✅ Implemented | unchanged |
+| Brand-blue token + guards (D6) | ✅ Implemented, now includes Guard D | `tokens.css:28`, `convencionesDeEstilos.spec.ts:791-844,1025-1052` |
+| Header wrap CSS (D7) | ✅ Implemented | unchanged |
+| Change-scope boundary | ✅ Held | unchanged — `dfa534c` does not touch `plantillas/` or `--familia-tipografica` |
 
 ### Coherence (Design)
 
 | Decision | Followed? | Notes |
 |---|---|---|
-| D1 — wordmark is live text, not an image | ✅ Yes | `MarcaProducto.tsx`, no `<img>`/SVG |
-| D2 — atom composed by header + login, never `<h1>`, never a link | ✅ Yes | Confirmed by `MarcaProducto.spec.tsx`, `PaginaLogin.spec.tsx`'s single-heading re-check |
-| D3 — titles via route `handle` + `useMatches` | ✅ Yes | `rutas.tsx`, `TituloDeDocumento.tsx` |
-| D4 — white splash / green chrome split, `tokens.css` header amended | ✅ Yes | `configuracionPwa.ts`, `tokens.css` comment (git-log confirms slice A commit) |
-| D5 — icons generated from a committed, unshipped SVG source + IHDR guard | ✅ Yes | `apps/web/marca/ies-monograma.svg` outside `public/`; `iconos.spec.ts` |
-| D6 — hue/saturation-scoped guard, never an enumerated blue list | ✅ Yes | `matiz`/`saturacion`/`esFamiliaDeMarca` |
-| D7 — CSS clears existing convention guards (touch floor, BEM order, breakpoints, no clipping) | ✅ Yes | Independently confirmed via real Chromium layout (no `overflow: hidden`, `flex-wrap` degrade) |
-| Tasks Note 2 — iOS surfaces dropped | ⚠️ Followed, but not mirrored into `spec.md` | See CRITICAL 1 |
-| Tasks Note 4 — favicon gated on mark approval | ✅ Yes | Landed in PR1 after approval, per commit history |
+| D1 — wordmark is live text, not an image | ✅ Yes | Now also the stated rationale for Guard D's exemption scenario |
+| D2-D7 | ✅ Yes | Unchanged since the prior pass, not touched by `dfa534c` |
+| Tasks Note 2 — iOS surfaces dropped | ✅ Yes, now mirrored into `spec.md` | Was the prior pass's CRITICAL 1; resolved |
 
 ### TDD Compliance
 | Check | Result | Details |
 |-------|--------|---------|
-| TDD Evidence reported | ✅ | `apply-progress` (#629) carries a full RED/GREEN/TRIANGULATE/REFACTOR table for PR3; PR1/PR2 condensed but present in prior revisions |
-| All tasks have tests | ✅ | Every RED/GREEN task pair in `tasks.md` maps to an existing spec file |
-| RED confirmed (tests exist) | ✅ | All referenced test files exist and were read this session |
-| GREEN confirmed (tests pass) | ✅ | 1572/1572 passing on this exact commit, 0 failing |
-| Triangulation adequate | ⚠️ | One instance (icon-guard 2.4) triangulates the parser, not the guard's own failure path — see WARNING 1 |
-| Safety Net for modified files | ✅ | `apply-progress` records pre-edit baselines (e.g. 82/82 before PR3) |
+| TDD Evidence reported | ✅ | `apply-progress` (#629) carries the RED/GREEN table for PR1-3; `dfa534c` is a spec-artifact fix with no apply-progress entry of its own (expected — it is a `sdd-verify`-driven remediation, not a task-driven apply cycle) |
+| All tasks have tests | ✅ | Unchanged |
+| RED confirmed (tests exist) | ✅ | Guard D's RED state (failing on `tokens.css`'s own comment) is documented in the commit message and independently plausible from the code (the un-stripped-comment first version would indeed match) |
+| GREEN confirmed (tests pass) | ✅ | 1573/1573 passing on this exact commit, 0 failing |
+| Triangulation adequate | ✅ for Guard D (real, independently-reproduced falsification); ⚠️ still weak for icon-guard 2.4 | See WARNING 1 |
+| Safety Net for modified files | ✅ | Guard D added to an existing, passing describe block; falsification reproduced against a clean tree and reverted |
 
-**TDD Compliance**: 5/6 checks fully passed, 1 partial (triangulation).
+**TDD Compliance**: 5/6 checks fully passed, 1 partial (carried over from the prior pass, unrelated to this fix).
 
 ### Test Layer Distribution
 | Layer | Tests | Files | Tools |
 |-------|-------|-------|-------|
-| Unit (pure) | ~11 | `tituloDeDocumento.spec.ts`, `iconos.spec.ts` (parser proof), `convencionesDeEstilos.spec.ts` (matiz/saturacion, D6 synthetic) | Vitest |
-| Component | ~6 | `MarcaProducto.spec.tsx`, `CabeceraDeSesion.spec.tsx` (new case), `PaginaLogin.spec.tsx` (new case) | Testing Library |
-| Integration | ~5 | `TituloDeDocumento.spec.tsx`, `PaginaDetalleContrato.spec.tsx` (new case), `indiceHtml.spec.ts` | Testing Library + `createMemoryRouter` |
-| Manual (spec-designed) | 2 scenarios | icon visual fidelity, change-scope diff | Human review (independently corroborated this session via pixel/diff tooling) |
-| **Total this change** | **+14 tests** (587→600 in `apps/web` net across PR2+PR3, plus PR1's contribution already in the 587 baseline) | | |
+| Unit (source scan) | +1 this fix (Guard D) | `convencionesDeEstilos.spec.ts` | Vitest |
+| **Total this change (cumulative PR1-3 + fix)** | **+14 tests** vs the pre-change baseline (587→601 in `apps/web`) | | |
 
 ### Assertion Quality
-No tautologies, ghost loops, or assertion-free tests found across the reviewed files (`MarcaProducto.spec.tsx`, `CabeceraDeSesion.spec.tsx`, `PaginaLogin.spec.tsx`, `PaginaDetalleContrato.spec.tsx`, `configuracionPwa.spec.ts`, `indiceHtml.spec.ts`, `tituloDeDocumento.spec.ts`, `TituloDeDocumento.spec.tsx`, `convencionesDeEstilos.spec.ts` D6 additions, `iconos.spec.ts`). One WARNING already covered above (2.4's `.not.toBe` triangulation strength).
+Guard D's own assertion (`expect(conAzulCrudo, "...").toEqual([])`) is a real, specific, behavioral check against actual shipped files — not a tautology, not a ghost loop (the array can be non-empty, and was, during the reproduced falsification). No new trivial assertions found.
 
-**Assertion quality**: 0 CRITICAL, 1 WARNING (already listed as WARNING 1, formerly numbered 3 before CRITICAL promotion above).
+**Assertion quality**: 0 CRITICAL, 0 new WARNING (WARNING 1 above is carried over from the prior pass, not new).
 
 ### Quality Metrics
 **Linter**: ✅ No errors (`eslint . --max-warnings 0`, exit 0)
 **Type Checker**: ✅ No errors (`pnpm -r typecheck`, exit 0, 4/4 packages)
 
 ### Verdict
-**FAIL** — all 41 tasks are complete, all 1572 tests pass, typecheck and lint are clean, and 11 of 13 spec scenarios are genuinely, verifiably compliant (including the two manually-verified scenarios, independently corroborated this session via pixel measurement and real headless-Chromium layout). But 2 scenarios are CRITICAL under this project's own strict rule ("a spec scenario is compliant only when a covering test passed at runtime"): `product-identity`'s "HTML head identity" scenario is FAILING as literally written (`apple-mobile-web-app-title` was deliberately dropped by a documented, reasoned decision, but `spec.md` was never amended to match), and `brand-presentation`'s "icon and wordmark mark are exempt" scenario is UNTESTED (true by construction, but asserted by nothing). Neither reflects a functional defect in the shipped app — both are process gaps between the spec artifact and an already-approved implementation decision. Recommended remediation is narrow and fast: amend `spec.md`'s HTML-head scenario to match the settled iOS-drop decision (or scope it explicitly), and add one covering assertion for the exemption scenario (or document it as satisfied by construction in `spec.md` itself). Once either resolved, re-run `sdd-verify`; nothing else in this change needs rework. Also carried forward as WARNINGs (non-blocking): the IHDR guard's permanent triangulation (task 2.4) is weaker than "an observed guard failure," and PR3 exceeded its own line forecast (397 vs ~260–320, informational only).
+**PASS WITH WARNINGS** — both prior CRITICAL findings are resolved: `product-identity`'s "HTML head identity" spec now matches shipped `index.html` exactly (MUST NOT `apple-mobile-web-app-title`/`apple-touch-icon`, both absent, reasoning cited), and `brand-presentation`'s exemption scenario now states the real mechanism (D1 live text) and is enforced by a new, correct, independently-falsified Guard D. All 41 tasks complete, 1573/1573 tests pass (up from 1572, the +1 is Guard D), typecheck and lint clean, `git status` clean after this session's own falsification/probe experiments. 13/13 scenarios compliant (up from 11/13) — the 13th ("static head tags") carries one deliberately-untested clause verified here by direct inspection rather than by a passing test, a structural inconsistency with this same file's own precedent for that situation, not a spec/code contradiction (SUGGESTION 1). Two WARNINGs carry forward unchanged from the prior pass (icon-guard 2.4 triangulation strength; PR3's 397-vs-260-320 line forecast overage) — neither was touched by this fix, and dropping them here would have hidden real, still-open observations. One new WARNING surfaced while probing Guard D: the whole D6 guard family trusts hex notation only and would not catch `rgb()`/`hsl()` equivalents of the brand blue — not blocking (nothing shipped uses that notation, and no spec scenario claims that coverage), but worth tracking. Ready for `sdd-archive`.
