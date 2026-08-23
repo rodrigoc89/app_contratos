@@ -8,7 +8,18 @@
  * comes last: it only adds spacing/sizing/reflow around the shared atoms,
  * the same rule organisms.css already follows, and it is the one file that
  * introduces `@media` queries into this stylesheet.
+ *
+ * design-system-migration (slice A) adds `@import "tailwindcss"` first —
+ * it expands to the `theme`/`base`/`components`/`utilities` cascade
+ * layers, which stay lower-priority than every unlayered rule below by
+ * construction, so the still-BEM sheets keep winning until each is
+ * converted. Preflight (Tailwind's reset) therefore ships globally the
+ * moment this import lands — see the design's collision-cluster note.
+ * `tema.css` (the `@theme` token layer, D3) follows immediately so its
+ * tokens are available to every utility class compiled from here on.
  */
+@import "tailwindcss";
+@import "./tema.css";
 @import "./tokens.css";
 @import "./base.css";
 @import "./atomos.css";

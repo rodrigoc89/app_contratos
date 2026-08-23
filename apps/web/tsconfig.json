@@ -19,7 +19,19 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
 
-    "noEmit": true
+    "noEmit": true,
+
+    /**
+     * design-system-migration (slice A) — required by `shadcn`'s own CLI
+     * validation, which refuses to init without a resolvable path alias.
+     * This project's own code keeps using relative imports throughout;
+     * `@/*` exists for shadcn-vendored files only (components.json's
+     * `aliases` point it at the existing Spanish component tiers).
+     */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vitest.config.ts"]
 }

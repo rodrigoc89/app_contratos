@@ -35,4 +35,38 @@ describe("Boton", () => {
 
     expect(screen.getByRole("button", { name: "Guardar" })).toHaveClass("boton");
   });
+
+  /**
+   * design-system-migration PR1 (design-system-foundation: "conflicting
+   * utilities resolve to one winner") — `Boton` merges an incoming
+   * `className` through `cn()` (`clsx` + `tailwind-merge`), not string
+   * concatenation, so a caller's `bg-*` utility deterministically wins over
+   * the atom's own default `bg-*` class instead of both landing in the DOM.
+   */
+  it("resolves a conflicting bg-* utility to exactly the incoming one", () => {
+    render(
+      <Boton onClick={() => {}} className="bg-error">
+        Guardar
+      </Boton>,
+    );
+
+    const clasesBg = screen
+      .getByRole("button", { name: "Guardar" })
+      .className.split(/\s+/)
+      .filter((clase) => clase.startsWith("bg-"));
+
+    expect(clasesBg).toEqual(["bg-error"]);
+  });
+
+  it("keeps a non-conflicting incoming class alongside the default bg-primario", () => {
+    render(
+      <Boton onClick={() => {}} className="mt-4">
+        Guardar
+      </Boton>,
+    );
+
+    const boton = screen.getByRole("button", { name: "Guardar" });
+    expect(boton).toHaveClass("bg-primario");
+    expect(boton).toHaveClass("mt-4");
+  });
 });
