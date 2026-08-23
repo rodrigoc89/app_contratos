@@ -4,10 +4,16 @@ import { fileURLToPath } from "node:url";
 
 import { render } from "@testing-library/react";
 import { createElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { Boton, TAMANOS_BOTON, VARIANTES_BOTON } from "../componentes/atomos/Boton";
+import { CampoTexto } from "../componentes/atomos/CampoTexto";
+import { Etiqueta } from "../componentes/atomos/Etiqueta";
 import { MarcaProducto } from "../componentes/atomos/MarcaProducto";
+import { Spinner } from "../componentes/atomos/Spinner";
+import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
+import { cumplePisoHorizontal, cumplePisoVertical, esControlInteractivo } from "./guardias/pisoDeToque";
 
 // This file is `.spec.ts`, not `.spec.tsx` — `createElement` renders guard
 // 3/4's fixtures below without JSX syntax this loader does not parse.
@@ -736,6 +742,126 @@ describe("guard 21: every <a>/<Link> gets a real box, ported to JSX class names 
           `${rutaRelativa} carries an <a>/<Link> class list ("${clases}") that attempts a vertical sizing utility while staying inline (design.md guard 21)`,
         ).toBe(true);
       }
+    }
+  });
+});
+
+/** Guard 20 (task 9.3/9.4) — `pisoDeToque.ts`, proven on fixtures first
+ * (D5), confirmed against every already-converted PR7/PR8 atom. Walks the
+ * rendered DOM for every element `esControlInteractivo` classifies, not
+ * only a hand-picked `getByRole` query. */
+function controlesInteractivosDe(contenedor: HTMLElement): readonly HTMLElement[] {
+  return [...contenedor.querySelectorAll<HTMLElement>("*")].filter((elemento) =>
+    esControlInteractivo({ tag: elemento.tagName.toLowerCase(), clases: elemento.className }),
+  );
+}
+
+function esperaControlesEnElPiso(contenedor: HTMLElement): void {
+  for (const { className: clases, tagName } of controlesInteractivosDe(contenedor)) {
+    const mensaje = `<${tagName.toLowerCase()}> fails the touch floor: ${clases}`;
+    expect(cumplePisoVertical(clases) && cumplePisoHorizontal(clases), mensaje).toBe(true);
+  }
+}
+
+describe("guard 20: pisoDeToque confirms every PR7/PR8-converted atom, zero pre-existing violations (D5, PR9)", () => {
+  it("finds and clears CampoTexto's and Boton's (every variante x tamano) rendered controls", () => {
+    const { container: campo, unmount: cerrar1 } = render(createElement(CampoTexto, { value: "", onCambiar: () => {} }));
+    expect(controlesInteractivosDe(campo).length, "CampoTexto rendered no classified control").toBeGreaterThan(0);
+    esperaControlesEnElPiso(campo);
+    cerrar1();
+
+    for (const variante of VARIANTES_BOTON) {
+      for (const tamano of TAMANOS_BOTON) {
+        const { container, unmount } = render(createElement(Boton, { variante, tamano, children: "Guardar" }));
+        expect(controlesInteractivosDe(container)).toHaveLength(1);
+        esperaControlesEnElPiso(container);
+        unmount();
+      }
+    }
+  });
+
+  it("finds and clears CabeceraDeSesion's one interactive control — its logout Boton, not the username or wordmark", () => {
+    const cabecera = createElement<{ nombreUsuario?: string }>(CabeceraDeSesion, { nombreUsuario: "ana" });
+    const { container, unmount } = render(createElement(MemoryRouter, null, cabecera));
+    expect(controlesInteractivosDe(container)).toHaveLength(1);
+    esperaControlesEnElPiso(container);
+    unmount();
+  });
+
+  it("classifies zero controls in the non-interactive atoms — the engine does not over-flag", () => {
+    for (const elemento of [createElement(Etiqueta, { children: "Nombre" }), createElement(MarcaProducto), createElement(Spinner, { etiqueta: "Cargando" })]) {
+      const { container, unmount } = render(elemento);
+      expect(controlesInteractivosDe(container)).toEqual([]);
+      unmount();
+    }
+  });
+});
+
+/**
+ * Guard 8's rebuild (task 9.5/9.6, D4) — the ≥1rem floor's exemption axis
+ * moves from a CSS filename (`panel.css`) to a component-path matcher.
+ * Deliberately narrower than a blanket `componentes/**`: `componentes/atomos/`
+ * is the cross-cutting layer PR7/PR8 confirmed renders under BOTH layouts —
+ * exempting it site-wide would let a técnico screen regress below the
+ * sunlit-arm's-length floor `tokens.css` states, the "too broad" failure
+ * this task warns against. `organismos/`, `moleculas/` and
+ * `funcionalidades/contratos/` are real panel-heavy subtrees instead —
+ * narrow enough to hold the line on shared atoms, wide enough not to
+ * false-fail an office component once one converts.
+ */
+const PREFIJOS_RUTA_PANEL = ["componentes/organismos/", "componentes/moleculas/", "funcionalidades/contratos/"] as const;
+
+export function esRutaDelSubarbolDelPanel(rutaRelativa: string): boolean {
+  return PREFIJOS_RUTA_PANEL.some((prefijo) => rutaRelativa.startsWith(prefijo));
+}
+
+const MINIMO_REM_JSX = 1;
+const TAMANOS_TEXTO_TAILWIND_BAJO_PISO: ReadonlyMap<string, number> = new Map([
+  ["text-xs", 0.75],
+  ["text-sm", 0.875],
+]);
+const PATRON_TEXTO_ARBITRARIO_REM = /\btext-\[(\d+(?:\.\d+)?)rem\]/g;
+
+/** Every sub-1rem font-size value a class list attempts, named-scale or arbitrary. */
+export function tamanosDeTextoBajoElPiso(clases: string): readonly number[] {
+  const encontrados: number[] = [];
+  for (const [clase, valor] of TAMANOS_TEXTO_TAILWIND_BAJO_PISO) {
+    if (valor < MINIMO_REM_JSX && new RegExp(`\\b${clase}\\b`).test(clases)) encontrados.push(valor);
+  }
+  for (const coincidencia of clases.matchAll(PATRON_TEXTO_ARBITRARIO_REM)) {
+    const valor = Number(coincidencia[1]);
+    if (valor < MINIMO_REM_JSX) encontrados.push(valor);
+  }
+  return encontrados;
+}
+
+describe("guard 8: no font-size<1rem outside the panel subtree, matched by component path (D4, PR9)", () => {
+  it.each<[string, string, boolean]>([
+    ["a panel-subtree organism", "componentes/organismos/TablaDeContratos.tsx", true],
+    ["a técnico-rooted path — path-based, not a blanket allowance", "funcionalidades/auth/contenedores/InicioTecnico.tsx", false],
+    ["the shared atoms layer, even nested under componentes/ (the too-broad trap)", "componentes/atomos/Boton.tsx", false],
+  ])("classifies %s", (_motivo, ruta, esperado) => {
+    expect(esRutaDelSubarbolDelPanel(ruta)).toBe(esperado);
+  });
+
+  it("flags sub-1rem type — named scale or arbitrary value alike — and clears the floor otherwise", () => {
+    expect(tamanosDeTextoBajoElPiso("text-sm").length).toBeGreaterThan(0);
+    expect(tamanosDeTextoBajoElPiso("text-[0.8125rem]")).toEqual([0.8125]);
+    expect(tamanosDeTextoBajoElPiso("text-base text-grande")).toEqual([]);
+  });
+
+  it("rejects every real .tsx file outside the panel subtree that attempts sub-1rem type", () => {
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    expect(fuentes.length, "no .tsx files found — the scan matched nothing").toBeGreaterThan(3);
+
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      if (esRutaDelSubarbolDelPanel(rutaRelativa)) continue;
+
+      expect(
+        tamanosDeTextoBajoElPiso(contenido),
+        `${rutaRelativa} attempts sub-1rem type outside the panel subtree (design.md D4) — read at arm's length in direct sunlight`,
+      ).toEqual([]);
     }
   });
 });

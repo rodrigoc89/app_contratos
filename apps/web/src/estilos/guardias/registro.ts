@@ -165,12 +165,13 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
+    // PR9 (task 9.5/9.7, D4) — axis moves from CSS filename (`panel.css`,
+    // deleted PR16) to a component-path matcher.
     numero: 8,
     protege: "No font-size<1rem outside the panel subtree",
-    disposicion: "CSS",
-    archivoCss: "estilos/panel.css",
+    disposicion: "JSX",
     pruebas: [
-      { archivo: ESTILOS, titulo: "declares no font-size below ${MINIMO_REM}rem outside estilos/panel.css" },
+      { archivo: UTILIDADES, titulo: "rejects every real .tsx file outside the panel subtree that attempts sub-1rem type" },
     ],
   },
   {
@@ -285,11 +286,15 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     pruebas: [{ archivo: ESTILOS, titulo: "bounds .lienzo-de-firma__lienzo to an explicit vh fraction" }],
   },
   {
+    // PR9 (task 9.1-9.4/9.7, D5) — `pisoDeToque.ts` lands, proven on
+    // fixtures first; TablaDeContratos (primary target) converts in PR15,
+    // site-wide confirm PR16.
     numero: 20,
     protege: "Universal touch-floor scan over every interactive control",
-    disposicion: "CSS",
-    archivoCss: "estilos/atomos.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "declares a vertical touch floor for each of them" }],
+    disposicion: "JSX",
+    pruebas: [
+      { archivo: UTILIDADES, titulo: "finds and clears CampoTexto's and Boton's (every variante x tamano) rendered controls" },
+    ],
   },
   {
     // PR8 (task 8.1/8.5) — JSX mechanism now exists (guard 21's ported
