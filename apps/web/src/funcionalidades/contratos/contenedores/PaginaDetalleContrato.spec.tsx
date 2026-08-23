@@ -123,4 +123,18 @@ describe("PaginaDetalleContrato", () => {
       "/panel",
     );
   });
+
+  /**
+   * DESIGN.md D3, Note 3 — the contract number is not available in a static
+   * route `handle` at match time (it comes from `usarContrato`), so this
+   * screen sets its own `document.title` once the query resolves, reusing
+   * `conSufijo` for the exact same `· IES.NET Contratos` suffix every other
+   * route uses.
+   */
+  it("sets the document title to the contract number once it loads", async () => {
+    obtener.mockResolvedValue(contrato());
+    renderizar();
+
+    await waitFor(() => expect(document.title).toBe("Contrato 42 · IES.NET Contratos"));
+  });
 });

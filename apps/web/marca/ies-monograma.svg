@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  DESIGN.md D5 — master mark source, committed OUTSIDE apps/web/public/ so
+  vite-plugin-pwa's globPatterns (svg,png,...) never precaches it onto a
+  técnico's tablet: it is an input to icon generation, never shipped itself.
+
+  Recreated (no vector source exists — approved by the user from a
+  screenshot): a #008bff field with a white "IES" monogram in a bold
+  grotesque (Arial/Helvetica Black-weight). 512x512 canvas so this same
+  source can seed every raster derivative: the 32x32 favicon (this PR) and,
+  later, the 192/512/512-maskable manifest icons (Phase 2 / PR2), which must
+  keep the monogram inside the maskable icon's center 80% safe zone
+  (409.6px of 512px) — the glyph block below already sits well inside that
+  bound.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#008bff" />
+  <text
+    x="256"
+    y="323"
+    text-anchor="middle"
+    font-family="Arial, Helvetica, sans-serif"
+    font-weight="800"
+    font-size="176"
+    letter-spacing="6"
+    fill="#ffffff"
+  >IES</text>
+</svg>

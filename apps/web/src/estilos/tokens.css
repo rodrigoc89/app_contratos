@@ -1,11 +1,18 @@
 /**
  * Design tokens for the field-technician tablet UI (PR24a).
  *
- * One committed palette, built around the brand colour already declared in
- * `pwa/configuracionPwa.ts`'s manifest (`#0b634a`). No dark-mode variant is
- * defined on purpose — a técnico signs contracts standing in a customer's
- * house, often in direct Santiago del Estero sunlight, never in the dark,
- * and a second theme is a second thing that can be unreadable outdoors.
+ * One committed palette. It no longer maps 1:1 onto the manifest's own
+ * colours (DESIGN.md D4, brand-identity change): `background_color` is
+ * `#ffffff` — the splash screen, where the blue IES.NET mark needs to read
+ * against white — while `theme_color` stays `#0b634a`, the green that tints
+ * the OS chrome around the app's actual green interior. `--color-primario`
+ * below is that same green, still the app's one interactive colour; it is
+ * simply no longer the same value as `background_color`.
+ *
+ * No dark-mode variant is defined on purpose — a técnico signs contracts
+ * standing in a customer's house, often in direct Santiago del Estero
+ * sunlight, never in the dark, and a second theme is a second thing that can
+ * be unreadable outdoors.
  */
 :root {
   /* Brand */
