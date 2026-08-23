@@ -54,4 +54,30 @@ describe("OPCIONES_VITE_PLUGIN_PWA", () => {
     expect(tamanos).toContain("192x192");
     expect(tamanos).toContain("512x512");
   });
+
+  /**
+   * DESIGN.md D4 / spec `product-identity` — "manifest name and description"
+   * and "PWA chrome colours". The manifest is the app's own account of
+   * itself: before this, `name` never said "IES.NET" and `background_color`
+   * matched the green chrome instead of the white splash the blue mark needs
+   * to read against.
+   */
+  it("names the app IES.NET Contratos, with a description that mentions IES.NET", () => {
+    const manifest = OPCIONES_VITE_PLUGIN_PWA.manifest;
+    if (manifest === false || manifest === undefined) {
+      throw new Error("manifest must be a real object, not disabled");
+    }
+    expect(manifest.name).toBe("IES.NET Contratos");
+    expect(manifest.description).toBeTruthy();
+    expect(manifest.description).toContain("IES.NET");
+  });
+
+  it("splashes white (D4: the blue mark reads against the splash, not the green chrome) and keeps the green theme_color", () => {
+    const manifest = OPCIONES_VITE_PLUGIN_PWA.manifest;
+    if (manifest === false || manifest === undefined) {
+      throw new Error("manifest must be a real object, not disabled");
+    }
+    expect(manifest.background_color).toBe("#ffffff");
+    expect(manifest.theme_color).toBe("#0b634a");
+  });
 });

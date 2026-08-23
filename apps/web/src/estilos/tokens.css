@@ -1,16 +1,31 @@
 /**
  * Design tokens for the field-technician tablet UI (PR24a).
  *
- * One committed palette, built around the brand colour already declared in
- * `pwa/configuracionPwa.ts`'s manifest (`#0b634a`). No dark-mode variant is
- * defined on purpose — a técnico signs contracts standing in a customer's
- * house, often in direct Santiago del Estero sunlight, never in the dark,
- * and a second theme is a second thing that can be unreadable outdoors.
+ * One committed palette. It no longer maps 1:1 onto the manifest's own
+ * colours (DESIGN.md D4, brand-identity change): `background_color` is
+ * `#ffffff` — the splash screen, where the blue IES.NET mark needs to read
+ * against white — while `theme_color` stays `#0b634a`, the green that tints
+ * the OS chrome around the app's actual green interior. `--color-primario`
+ * below is that same green, still the app's one interactive colour; it is
+ * simply no longer the same value as `background_color`.
+ *
+ * No dark-mode variant is defined on purpose — a técnico signs contracts
+ * standing in a customer's house, often in direct Santiago del Estero
+ * sunlight, never in the dark, and a second theme is a second thing that can
+ * be unreadable outdoors.
  */
 :root {
   /* Brand */
   --color-primario: #0b634a;
   --color-primario-oscuro: #094f3b;
+  /**
+   * The wordmark's blue (brand-identity change, D1/D6). The icons' raw
+   * `#008bff` measures 3.42:1 on white and fails WCAG for text — it stays a
+   * large, non-text mark in the raster icons only. `#0076d9` is the same hue
+   * family lifted to 4.57:1, the value this file's own D6 contrast guard
+   * (`convencionesDeEstilos.spec.ts`) requires of it.
+   */
+  --color-marca-azul: #0076d9;
 
   /* Neutrals — dark text on a white background maximises contrast in sun */
   --color-fondo: #ffffff;

@@ -134,3 +134,25 @@
     transform: rotate(360deg);
   }
 }
+
+/**
+ * The IES.NET Contratos wordmark (D1, D2, D7 — brand-identity change).
+ * A `<span>`, never a control: no `:hover`/`:focus`/`:disabled`, no
+ * `cursor: pointer`, so `convencionesDeEstilos.spec.ts`'s touch-floor scan
+ * — which covers anything that LOOKS interactive rather than an enumerated
+ * list — has no reason to include it, and no `EXENCIONES` entry is needed.
+ *
+ * Declared before `.marca-producto__empresa`, matching the BEM ordering rule
+ * this stylesheet already enforces for `.etiqueta`/`.boton`.
+ */
+.marca-producto {
+  font-size: var(--fuente-grande);
+  font-weight: 700;
+  color: var(--color-texto);
+}
+
+/* The company name reads in brand blue; "Contratos" stays the neutral text
+   colour above — D6's contrast guard only has to clear THIS colour. */
+.marca-producto__empresa {
+  color: var(--color-marca-azul);
+}

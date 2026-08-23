@@ -1,16 +1,16 @@
 name: CI
 
 on:
-  # Chained PRs target the previous PR's branch, not master, so a bare
-  # `branches: [master]` filter silently skips every slice of a chain — the
-  # work reaches a reviewer with no typecheck, no lint and no tests behind
-  # it, and the first real signal only arrives when the tracker finally
-  # opens against master with the whole change in one diff.
+  # No `branches:` filter, deliberately. A bare `branches: [master]` silently
+  # skips every slice of a chained PR, which target the previous PR's branch:
+  # the work reaches a reviewer with no typecheck, no lint and no tests behind
+  # it. That was first hit by the `production-deployment` chain and patched
+  # with an allowlist naming that chain's own branches — which failed again
+  # the very next time, on `feat/brand-identity`, because an enumerated list
+  # is a fix that needs maintenance to keep working and reports nothing when
+  # it stops. There is no pull request worth merging without CI, so every
+  # pull request gets it regardless of its base.
   pull_request:
-    branches:
-      - master
-      - feat/production-deployment
-      - "feat/pd-*"
   push:
     branches: [master]
 

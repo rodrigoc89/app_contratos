@@ -703,8 +703,144 @@ function contraste(a: string, b: string): number {
   return (claro + 0.05) / (oscuro + 0.05);
 }
 
+/**
+ * HSL hue, in degrees [0, 360). D6 scopes the brand-blue family by hue AND
+ * saturation rather than by an enumerated list of blues — this is the "which
+ * direction is this colour" half of that rule.
+ */
+function matiz(hex: string): number {
+  const [r, g, b] = canales(hex).map((v) => v / 255) as [number, number, number];
+  const maximo = Math.max(r, g, b);
+  const minimo = Math.min(r, g, b);
+  const delta = maximo - minimo;
+  if (delta === 0) return 0;
+
+  let h: number;
+  if (maximo === r) h = ((g - b) / delta) % 6;
+  else if (maximo === g) h = (b - r) / delta + 2;
+  else h = (r - g) / delta + 4;
+
+  h *= 60;
+  return h < 0 ? h + 360 : h;
+}
+
+/**
+ * HSL saturation, as a percentage [0, 100]. The load-bearing half of D6's
+ * family test: `--color-estado-borrador-texto` (#39454c) and `--color-borde`
+ * (#4b5563) both sit inside the 190°-230° hue window at ~14% saturation —
+ * without this floor, a hue-only guard would flag both existing neutrals.
+ */
+function saturacion(hex: string): number {
+  const [r, g, b] = canales(hex).map((v) => v / 255) as [number, number, number];
+  const maximo = Math.max(r, g, b);
+  const minimo = Math.min(r, g, b);
+  const delta = maximo - minimo;
+  if (delta === 0) return 0;
+
+  const l = (maximo + minimo) / 2;
+  return (delta / (1 - Math.abs(2 * l - 1))) * 100;
+}
+
 function fondoDeclarado(cuerpo: string): string | undefined {
   return /background(?:-color)?\s*:\s*([^;}]+)/.exec(cuerpo)?.[1]?.trim();
+}
+
+function colorDeclarado(cuerpo: string): string | undefined {
+  return /(?:^|[;\s])color\s*:\s*([^;}]+)/.exec(cuerpo)?.[1]?.trim();
+}
+
+/**
+ * D6 — "brand-blue family" = resolved hue 190°-230° with HSL saturation
+ * ≥50%. The saturation floor is load-bearing: `--color-estado-borrador-texto`
+ * (#39454c, hue 202°, 14%) and `--color-borde` (#4b5563, hue 215°, 14%) are
+ * existing neutrals inside that hue window; a hue-only test would flag both.
+ */
+const FAMILIA_MARCA_HUE_MIN = 190;
+const FAMILIA_MARCA_HUE_MAX = 230;
+const FAMILIA_MARCA_SATURACION_MINIMA = 50;
+const RATIO_MARCA_MINIMO = 4.5;
+
+function esFamiliaDeMarca(hex: string): boolean {
+  const h = matiz(hex);
+  return h >= FAMILIA_MARCA_HUE_MIN && h <= FAMILIA_MARCA_HUE_MAX && saturacion(hex) >= FAMILIA_MARCA_SATURACION_MINIMA;
+}
+
+/** Every top-level CSS rule as `{selector, cuerpo}`, comments stripped and
+ * selector lists split — the same innermost-rule shape the touch-floor scan
+ * below (`reglasDeclaradas`) uses. */
+function reglasConColor(contenido: string): ReadonlyArray<{ selector: string; cuerpo: string }> {
+  const sinComentarios = contenido.replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...sinComentarios.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap((coincidencia) => {
+    const cuerpo = coincidencia[2] ?? "";
+    return (coincidencia[1] ?? "")
+      .split(",")
+      .map((selector) => selector.trim().replace(/\s+/g, " "))
+      .filter((selector) => selector !== "" && !selector.startsWith("@"))
+      .map((selector) => ({ selector, cuerpo }));
+  });
+}
+
+/**
+ * Guards B/C (D6), a single shared shape for both directions: every rule
+ * whose `propiedad` resolves into the brand-blue family, checked against
+ * whatever the SAME rule declares for `propiedadOpuesta` — falling back to
+ * `--color-fondo` when reading `color` (Guard B) or `--color-texto` when
+ * reading `background` (Guard C), matching the fallback the resolved colour
+ * would actually render against.
+ */
+function violacionesGuardiaDeMarca(
+  contenido: string,
+  tokens: string,
+  propiedad: "color" | "background",
+  propiedadOpuesta: "color" | "background",
+): ReadonlyArray<{ readonly selector: string; readonly ratio: number }> {
+  const leerDeclarada = propiedad === "color" ? colorDeclarado : fondoDeclarado;
+  const leerOpuesta = propiedadOpuesta === "color" ? colorDeclarado : fondoDeclarado;
+  const variableDeReserva = propiedad === "color" ? "var(--color-fondo)" : "var(--color-texto)";
+
+  const violaciones: Array<{ selector: string; ratio: number }> = [];
+  for (const { selector, cuerpo } of reglasConColor(contenido)) {
+    const declaracion = leerDeclarada(cuerpo);
+    if (declaracion === undefined) continue;
+
+    const color = valorDeColor(declaracion, tokens);
+    if (color === undefined || !esFamiliaDeMarca(color)) continue;
+
+    const opuestaCruda = leerOpuesta(cuerpo) ?? variableDeReserva;
+    const opuesta = valorDeColor(opuestaCruda, tokens);
+    if (opuesta === undefined) continue;
+
+    const ratio = contraste(color, opuesta);
+    if (ratio < RATIO_MARCA_MINIMO) {
+      violaciones.push({ selector, ratio });
+    }
+  }
+  return violaciones;
+}
+
+/**
+ * Guard A (D6): every `--color-marca-*` token declared in `tokens.css`
+ * clears 4.5:1 against `--color-fondo` — the next brand colour cannot ship
+ * as illegible text even before any rule consumes it.
+ */
+function violacionesGuardiaDeTokenDeMarca(
+  tokens: string,
+): ReadonlyArray<{ readonly selector: string; readonly ratio: number }> {
+  const fondo = valorDeColor("var(--color-fondo)", tokens);
+  if (fondo === undefined) return [];
+
+  const violaciones: Array<{ selector: string; ratio: number }> = [];
+  for (const coincidencia of tokens.matchAll(/(--color-marca-[\w-]+)\s*:\s*(#[0-9a-f]{3,8})/gi)) {
+    const nombre = coincidencia[1];
+    const valor = coincidencia[2]?.toLowerCase();
+    if (nombre === undefined || valor === undefined) continue;
+
+    const ratio = contraste(valor, fondo);
+    if (ratio < RATIO_MARCA_MINIMO) {
+      violaciones.push({ selector: nombre, ratio });
+    }
+  }
+  return violaciones;
 }
 
 describe("the tablet's stylesheets never shrink type below the device floor", () => {
@@ -795,6 +931,135 @@ describe("valorDeColor resolves what renders, not what is written", () => {
     expect(valorDeColor("var(--no-existe)", TOKENS)).toBeUndefined();
     expect(valorDeColor("rgb(11 99 74)", TOKENS)).toBeUndefined();
     expect(valorDeColor("transparent", TOKENS)).toBeUndefined();
+  });
+});
+
+/**
+ * D6 — the brand-blue contrast guard scopes itself by hue AND saturation,
+ * never an enumerated list of blues, so both dimensions get direct
+ * assertions here rather than being trusted only through the guard that
+ * consumes them.
+ *
+ * `#39454c` (`--color-estado-borrador-texto`) sits inside the 190°-230° hue
+ * window at only ~14% saturation — proof the saturation floor is what
+ * excludes it, not the hue window alone.
+ */
+describe("matiz/saturacion resolve HSL hue and saturation", () => {
+  it("resolves hue in degrees", () => {
+    expect(matiz("#0076d9")).toBeCloseTo(207, 0);
+    expect(matiz("#39454c")).toBeCloseTo(202, 0);
+  });
+
+  it("resolves saturation as a percentage", () => {
+    expect(saturacion("#0076d9")).toBeCloseTo(100, 0);
+    expect(saturacion("#39454c")).toBeCloseTo(14, 0);
+  });
+
+  it("resolves an achromatic grey to zero saturation, an independent hue/saturation code path", () => {
+    expect(saturacion("#808080")).toBe(0);
+    expect(matiz("#808080")).toBe(0);
+  });
+});
+
+/**
+ * D6, spec `brand-presentation` — "a regression is caught". `#008bff`
+ * (3.42:1 on white) is the raw brand blue the icons use; the moment it — or
+ * anything else in the same hue/saturation family — carries readable text,
+ * this must name the offending selector and its computed ratio rather than
+ * merely fail.
+ */
+describe("brand-blue tokens and rules never carry illegible text (D6)", () => {
+  const TOKENS_SINTETICOS = `
+    :root {
+      --color-fondo: #ffffff;
+      --color-texto: #14181b;
+    }
+  `;
+
+  it("fails a synthetic rule that paints text in raw #008bff, naming the selector and its ratio", () => {
+    const cssSintetico = ".enlace-ejemplo { color: #008bff; }";
+
+    const violaciones = violacionesGuardiaDeMarca(cssSintetico, TOKENS_SINTETICOS, "color", "background");
+
+    expect(violaciones).toHaveLength(1);
+    expect(violaciones[0]?.selector).toBe(".enlace-ejemplo");
+    // #008bff on white (the fallback background) is the spec's own stated
+    // figure — the case this guard exists to reject.
+    expect(violaciones[0]?.ratio).toBeCloseTo(3.42, 1);
+  });
+});
+
+/**
+ * The same checking function, wired against the real shipped stylesheets.
+ * Passes vacuously until 3.5/3.8 introduce a real `--color-marca-*` token
+ * and a real brand-blue rule — this only confirms the wiring, per D6's own
+ * table; 3.13 triangulates it against the real `.marca-producto__empresa`
+ * rule once it exists.
+ */
+describe("Guards A/B/C scan the shipped stylesheets for illegible brand-blue text (D6)", () => {
+  const tokens = archivo("estilos/tokens.css");
+
+  it("finds estilos/tokens.css", () => {
+    expect(tokens).toBeDefined();
+  });
+
+  it("Guard A: every --color-marca-* token clears 4.5:1 against --color-fondo", () => {
+    const violaciones = violacionesGuardiaDeTokenDeMarca(tokens?.contenido ?? "");
+    expect(
+      violaciones.map((v) => `${v.selector}: ${v.ratio.toFixed(2)}:1`),
+      "a --color-marca-* token fails 4.5:1 against --color-fondo",
+    ).toEqual([]);
+  });
+
+  it("Guard B: a rule's declared `color:` in the brand-blue family clears 4.5:1 against its own background", () => {
+    for (const { ruta, contenido } of archivosCss(DIRECTORIO_SRC)) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      const violaciones = violacionesGuardiaDeMarca(contenido, tokens?.contenido ?? "", "color", "background");
+      expect(
+        violaciones.map((v) => `${v.selector} (${v.ratio.toFixed(2)}:1)`),
+        `${rutaRelativa} paints text in the brand-blue family below 4.5:1`,
+      ).toEqual([]);
+    }
+  });
+
+  it("Guard D: the raw brand blue reaches no stylesheet at all, so the mark stays out of reach by construction", () => {
+    // `brand-presentation` spec.md, amended after verification. The scenario
+    // used to claim the guard "scopes to text/control selectors" — it does
+    // not: `violacionesGuardiaDeMarca` walks every rule carrying a colour
+    // declaration. The exemption is real, but it holds because D1 ships the
+    // wordmark as live text, leaving #008bff only inside the raster icons,
+    // which are not CSS and were never scannable.
+    //
+    // That reason is worth a guard of its own: if #008bff ever lands in a
+    // stylesheet it fails 4.5:1 on white at 3.42:1, and this catches it at
+    // the source rather than waiting for it to be paired with a background
+    // that happens to make Guard B pass.
+    // Comments are stripped first: `tokens.css` names #008bff in prose to
+    // explain why it is banned, and a guard that fires on its own rationale
+    // teaches the next person to delete the explanation instead of the
+    // violation. Caught by running this — the first version failed on that
+    // comment.
+    const sinComentarios = (css: string): string => css.replaceAll(/\/\*[\s\S]*?\*\//g, "");
+
+    const conAzulCrudo = archivosCss(DIRECTORIO_SRC)
+      .filter(({ contenido }) => /#008bff/i.test(sinComentarios(contenido)))
+      .map(({ ruta }) => relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/"));
+
+    expect(
+      conAzulCrudo,
+      "the raw brand blue belongs in the raster icons only; use --color-marca-azul (#0076d9) for anything a person reads",
+    ).toEqual([]);
+  });
+
+  it("Guard C (inverted): a rule's declared `background:` in the brand-blue family clears 4.5:1 against its own text", () => {
+    for (const { ruta, contenido } of archivosCss(DIRECTORIO_SRC)) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      const violaciones = violacionesGuardiaDeMarca(contenido, tokens?.contenido ?? "", "background", "color");
+      expect(
+        violaciones.map((v) => `${v.selector} (${v.ratio.toFixed(2)}:1)`),
+        `${rutaRelativa} fills a control in the brand-blue family below 4.5:1 against its own text`,
+      ).toEqual([]);
+    }
   });
 });
 

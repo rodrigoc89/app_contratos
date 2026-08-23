@@ -37,6 +37,23 @@ describe("CabeceraDeSesion", () => {
     expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
   });
 
+  /**
+   * D2, spec `brand-presentation` — "wordmark renders next to the existing
+   * controls". Both `técnico` and office shells share this header, so this
+   * is the one place the mark has to render for every authenticated screen.
+   *
+   * `getByText`'s default matcher reads only a node's OWN direct text-node
+   * children ("IES.NET" lives in a nested `<span>`), so the full rendered
+   * name is read from `.marca-producto`'s `textContent` instead.
+   */
+  it("shows the IES.NET Contratos wordmark, without displacing the username or the logout button", () => {
+    const { container } = render(<CabeceraDeSesion nombreUsuario="oficina" />);
+
+    expect(container.querySelector(".marca-producto")?.textContent).toBe("IES.NET Contratos");
+    expect(screen.getByText("oficina")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
+  });
+
   it("revokes the session and returns to the login screen", async () => {
     cerrar.mockResolvedValue(undefined);
     render(<CabeceraDeSesion nombreUsuario="oficina" />);

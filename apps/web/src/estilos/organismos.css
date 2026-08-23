@@ -380,11 +380,24 @@
  */
 .cabecera-sesion {
   display: flex;
+  /* Brand-identity change (D7): the wordmark, the username and the logout
+     button now share this row. `flex-wrap` is the fix that neither clips
+     (banned by convencionesDeEstilos.spec.ts) nor shrinks any of the three
+     below the touch/type floors — it degrades by wrapping to a second line
+     on a narrow viewport instead. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--espacio-3);
   padding: var(--espacio-2) var(--espacio-4);
   border-bottom: 1px solid var(--color-borde-suave);
+}
+
+/* Pins the wordmark to the row's start while the username/logout stay
+   flush right — the header's existing `justify-content: flex-end` is left
+   untouched, so this is the one rule that has to move. */
+.cabecera-sesion .marca-producto {
+  margin-right: auto;
 }
 
 /* Base size, not panel size: this header is shared with the tablet, read at

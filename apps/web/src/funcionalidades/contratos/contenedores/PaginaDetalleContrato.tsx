@@ -1,5 +1,5 @@
 import type { DatosDocumentoDisponible } from "@contratos/esquemas";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { Boton } from "../../../componentes/atomos/Boton";
@@ -9,6 +9,7 @@ import { DetalleDeContrato } from "../../../componentes/organismos/DetalleDeCont
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { descargarDocumento } from "../../../datos/descargaDeArchivo";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
+import { conSufijo } from "../../../rutas/tituloDeDocumento";
 import { usarContrato } from "../usarContrato";
 import { usarTransicionDeContrato } from "../usarTransicionDeContrato";
 
@@ -31,6 +32,18 @@ export function PaginaDetalleContrato() {
     useState<DatosDocumentoDisponible["documento"] | undefined>(undefined);
   const [errorDeDescarga, establecerErrorDeDescarga] = useState<string | null>(null);
   const transicion = usarTransicionDeContrato(id);
+
+  /*
+    DESIGN.md D3, Note 3 — the contract number is not known at route-match
+    time (`rutas.tsx`'s static `handle`), only once `usarContrato` resolves,
+    so this is the one call site outside `TituloDeDocumento` allowed to set
+    `document.title` directly — reusing `conSufijo` for the same suffix.
+  */
+  useEffect(() => {
+    if (data !== undefined) {
+      document.title = conSufijo(`Contrato ${data.numero}`);
+    }
+  }, [data]);
 
   async function manejarDescarga(documento: DatosDocumentoDisponible): Promise<void> {
     establecerDescargando(documento.documento);
