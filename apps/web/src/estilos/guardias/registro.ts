@@ -98,7 +98,7 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     pruebas: [
       {
         archivo: UTILIDADES,
-        titulo: "resolves every tamano variant Boton declares to >=48px on both axes",
+        titulo: "resolves every variante x tamano Boton declares to >=48px on both axes",
       },
     ],
   },

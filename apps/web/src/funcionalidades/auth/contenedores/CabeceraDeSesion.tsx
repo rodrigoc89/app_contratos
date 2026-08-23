@@ -89,13 +89,13 @@ export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: s
       </span>
       <Boton
         type="button"
-        variante="secundario"
+        variante="fantasma"
         className="shrink-0 px-0"
         aria-label="Cerrar sesión"
         title="Cerrar sesión"
         onClick={() => void salir()}
       >
-        <Power size={22} aria-hidden="true" />
+        <Power size={20} aria-hidden="true" />
       </Boton>
     </header>
   );

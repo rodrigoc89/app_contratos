@@ -6,7 +6,7 @@ import { render } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 
-import { Boton, TAMANOS_BOTON } from "../componentes/atomos/Boton";
+import { Boton, TAMANOS_BOTON, VARIANTES_BOTON } from "../componentes/atomos/Boton";
 import { MarcaProducto } from "../componentes/atomos/MarcaProducto";
 
 // This file is `.spec.ts`, not `.spec.tsx` — `createElement` renders guard
@@ -484,12 +484,26 @@ describe("guard 3: Boton's cva variant map resolves >=48px on both axes (D5 earl
     expect(satisfaceToqueEnAmbosEjes("h-8 w-8")).toBe(false);
   });
 
-  it("resolves every tamano variant Boton declares to >=48px on both axes", () => {
-    for (const tamano of TAMANOS_BOTON) {
-      const { getByRole, unmount } = render(createElement(Boton, { tamano, children: "Guardar" }));
-      const clases = getByRole("button", { name: "Guardar" }).className;
-      expect(satisfaceToqueEnAmbosEjes(clases), `tamano="${tamano}" fails the touch floor: ${clases}`).toBe(true);
-      unmount();
+  /**
+   * Every variante crossed with every tamano, not tamano alone. The floor
+   * lives in `tamano`, but `cn()` merges a variante's utilities on top of
+   * it, so a style variant carrying `min-h-0` would silently win — and the
+   * previous loop rendered only the default variante, so it could not see
+   * that. The gap became reachable when `fantasma` was added for the
+   * icon-only logout control; iterating the cross product closes it by
+   * construction, for every variant added after this one too.
+   */
+  it("resolves every variante x tamano Boton declares to >=48px on both axes", () => {
+    for (const variante of VARIANTES_BOTON) {
+      for (const tamano of TAMANOS_BOTON) {
+        const { getByRole, unmount } = render(createElement(Boton, { variante, tamano, children: "Guardar" }));
+        const clases = getByRole("button", { name: "Guardar" }).className;
+        expect(
+          satisfaceToqueEnAmbosEjes(clases),
+          `variante="${variante}" tamano="${tamano}" fails the touch floor: ${clases}`,
+        ).toBe(true);
+        unmount();
+      }
     }
   });
 });

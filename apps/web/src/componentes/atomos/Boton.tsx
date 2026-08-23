@@ -24,6 +24,16 @@ const varianteBoton = cva(
         primario: "border-primario bg-primario text-white hover:border-primario-oscuro hover:bg-primario-oscuro",
         secundario: "border-primario bg-fondo text-primario hover:border-primario-oscuro hover:text-primario-oscuro",
         destructivo: "border-error bg-error text-white hover:border-error hover:bg-error",
+        /**
+         * No border, no fill — for an icon-only control that must not
+         * compete with the wordmark beside it. This is a *style* variant,
+         * not a size one: `tamano` still supplies `min-h-toque min-w-toque`,
+         * so the box a gloved thumb has to hit is unchanged at 48x48 while
+         * the ink inside it drops to the glyph alone. Guard 3 iterates
+         * `TAMANOS_BOTON`, so no style variant can weaken that floor by
+         * construction.
+         */
+        fantasma: "border-transparent bg-transparent text-primario hover:text-primario-oscuro",
       },
       tamano: {
         estandar: "min-h-toque min-w-toque px-5 py-3",
@@ -35,6 +45,15 @@ const varianteBoton = cva(
 
 /** Every `tamano` key `varianteBoton` declares — guard 3 iterates this, so a future size stays covered by construction. */
 export const TAMANOS_BOTON = ["estandar"] as const;
+
+/**
+ * Every `variante` key, for the same reason. Guard 3 iterates variants
+ * crossed with sizes rather than sizes alone: the touch floor lives in
+ * `tamano`, but `cn()` merges a variant's utilities over it, so a style
+ * variant carrying `min-h-0` would win. That was reachable the moment a
+ * fourth variant existed — it is checked now instead of argued about.
+ */
+export const VARIANTES_BOTON = ["primario", "secundario", "destructivo", "fantasma"] as const;
 
 interface PropiedadesBoton extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof varianteBoton> {
   readonly children: ReactNode;
