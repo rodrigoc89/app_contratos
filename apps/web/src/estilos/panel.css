@@ -165,7 +165,8 @@
    the shared sheet, where it would land on a screen read at arm's length in
    direct sunlight (`convencionesDeEstilos.spec.ts` enforces that split). */
 .layout-panel .cabecera-sesion__usuario,
-.layout-panel .cabecera-sesion .boton {
+.layout-panel .cabecera-sesion .boton,
+.layout-panel .marca-producto {
   font-size: 0.875rem;
 }
 
