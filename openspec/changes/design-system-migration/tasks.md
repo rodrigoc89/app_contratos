@@ -306,18 +306,18 @@ finding; that window is three draft PRs, none of which gate anything.*
 
 *Guard 8 is real work, not a line item — its filename-based exemption (`panel.css`) ceases to exist; the replacement is a component-path matcher, sized and tested on its own.*
 
-- [ ] 9.1 RED: `estilos/guardias/pisoDeToque.spec.ts` — fixture cases mirroring the CSS engine's table (tag/prop/class-token interactive classification, `*-toque`/`h-N`≥48 sizing, `inline` veto without a flex/block/grid companion, `w-full`/block-display equivalents, `EXENCIONES` carried verbatim with its anti-rot floor). Must fail — module does not exist.
-- [ ] 9.2 GREEN: create `estilos/guardias/pisoDeToque.ts` — exported pure functions, satisfying 9.1 on fixtures before any real scan uses them (D5's explicit ordering).
-- [ ] 9.3 RED: `convencionesDeUtilidades.spec.ts`'s guard 20 integration — every interactive element in already-converted JSX (atoms from PR7/PR8) resolves ≥48px, using 9.2's functions. Must fail if any converted atom regressed.
-- [ ] 9.4 GREEN: wire the integration scan; confirm all PR7/PR8 atoms pass with zero pre-existing violations.
-- [ ] 9.5 RED: guard 8 case — a fixture component rendered under a `LayoutPanel`-rooted path (`componentes/**`/`funcionalidades/contratos/**`) is exempted from the ≥1rem floor; the same component rendered under `LayoutTecnico` is **not** exempted. Must fail — no path-based matcher exists (only the retired filename check).
-- [ ] 9.6 GREEN: implement the component-path exemption axis (path-pattern matcher, not filename), replacing `panel.css`-name-based logic; add its own regression test proving a técnico-path component with sub-1rem type still fails.
-- [ ] 9.7 Update `registro.ts` entries 8, 20 to `JSX`.
+- [x] 9.1 RED: `estilos/guardias/pisoDeToque.spec.ts` — fixture cases mirroring the CSS engine's table (tag/prop/class-token interactive classification, `*-toque`/`h-N`≥48 sizing, `inline` veto without a flex/block/grid companion, `w-full`/block-display equivalents, `EXENCIONES` carried verbatim with its anti-rot floor). Must fail — module does not exist.
+- [x] 9.2 GREEN: create `estilos/guardias/pisoDeToque.ts` — exported pure functions, satisfying 9.1 on fixtures before any real scan uses them (D5's explicit ordering).
+- [x] 9.3 RED: `convencionesDeUtilidades.spec.ts`'s guard 20 integration — every interactive element in already-converted JSX (atoms from PR7/PR8) resolves ≥48px, using 9.2's functions. Must fail if any converted atom regressed.
+- [x] 9.4 GREEN: wire the integration scan; confirm all PR7/PR8 atoms pass with zero pre-existing violations.
+- [x] 9.5 RED: guard 8 case — a fixture component rendered under a `LayoutPanel`-rooted path (`componentes/**`/`funcionalidades/contratos/**`) is exempted from the ≥1rem floor; the same component rendered under `LayoutTecnico` is **not** exempted. Must fail — no path-based matcher exists (only the retired filename check).
+- [x] 9.6 GREEN: implement the component-path exemption axis (path-pattern matcher, not filename), replacing `panel.css`-name-based logic; add its own regression test proving a técnico-path component with sub-1rem type still fails.
+- [x] 9.7 Update `registro.ts` entries 8, 20 to `JSX`.
 
 ## Phase 9B — PR9 close-out
 
-- [ ] 9B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
-- [ ] 9B.2 Open PR #9 targeting PR #8's branch.
+- [x] 9B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 9B.2 Open PR #9 targeting PR #8's branch.
 
 ## Phase 10 — PR10: `BarraDeBusqueda`/`Paginador` redesign (slice D1, guards 12/13/15)
 
