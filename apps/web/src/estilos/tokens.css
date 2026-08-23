@@ -18,6 +18,14 @@
   /* Brand */
   --color-primario: #0b634a;
   --color-primario-oscuro: #094f3b;
+  /**
+   * The wordmark's blue (brand-identity change, D1/D6). The icons' raw
+   * `#008bff` measures 3.42:1 on white and fails WCAG for text — it stays a
+   * large, non-text mark in the raster icons only. `#0076d9` is the same hue
+   * family lifted to 4.57:1, the value this file's own D6 contrast guard
+   * (`convencionesDeEstilos.spec.ts`) requires of it.
+   */
+  --color-marca-azul: #0076d9;
 
   /* Neutrals — dark text on a white background maximises contrast in sun */
   --color-fondo: #ffffff;

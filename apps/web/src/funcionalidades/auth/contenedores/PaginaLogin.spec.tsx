@@ -249,4 +249,31 @@ describe("PaginaLogin — encabezado", () => {
 
     expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
   });
+
+  /**
+   * D2, spec `brand-presentation` — "wordmark precedes the heading". Document
+   * order, not just presence: the mark has to be a real predecessor of the
+   * `<h1>`, checked with `compareDocumentPosition` rather than assuming
+   * insertion order from the JSX alone.
+   *
+   * Also re-confirms D2's constraint 1 from the component's own side of the
+   * wiring: exactly one `heading` still resolves once `MarcaProducto` is
+   * rendered above it — a second heading would make `getByRole` throw.
+   */
+  it("shows the product wordmark above the Ingresar heading", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <PaginaLogin />
+      </MemoryRouter>,
+    );
+
+    const marca = container.querySelector(".marca-producto");
+    const encabezado = screen.getByRole("heading", { level: 1 });
+
+    expect(marca?.textContent).toBe("IES.NET Contratos");
+    expect(encabezado).toHaveTextContent("Ingresar");
+    expect(
+      (marca?.compareDocumentPosition(encabezado) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
 });

@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Boton } from "../../../componentes/atomos/Boton";
 import { CampoTexto } from "../../../componentes/atomos/CampoTexto";
 import { Etiqueta } from "../../../componentes/atomos/Etiqueta";
+import { MarcaProducto } from "../../../componentes/atomos/MarcaProducto";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import type { MotivoCierreDeSesion } from "../../../datos/sesion/estadoSesion";
 import { iniciarSesion } from "../../../datos/sesion/sesion";
@@ -88,6 +89,7 @@ export function PaginaLogin() {
       onSubmit={(evento: FormEvent<HTMLFormElement>) => void manejarEnvio(evento)}
       className="formulario"
     >
+      <MarcaProducto />
       <h1>Ingresar</h1>
       {motivo !== null && <p role="status">{MENSAJE_POR_MOTIVO[motivo]}</p>}
       <Etiqueta htmlFor="nombreUsuario">Usuario</Etiqueta>

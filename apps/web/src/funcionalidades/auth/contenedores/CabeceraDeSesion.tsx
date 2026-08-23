@@ -1,4 +1,5 @@
 import { Boton } from "../../../componentes/atomos/Boton";
+import { MarcaProducto } from "../../../componentes/atomos/MarcaProducto";
 import { usarCierreDeSesion } from "../usarCierreDeSesion";
 import { usarSesionActual } from "../usarSesionActual";
 
@@ -29,6 +30,7 @@ export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: s
 
   return (
     <header className="cabecera-sesion">
+      <MarcaProducto />
       <span className="cabecera-sesion__usuario">{nombre}</span>
       <Boton type="button" onClick={() => void salir()}>
         Cerrar sesión
