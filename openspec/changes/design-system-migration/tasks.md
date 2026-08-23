@@ -321,17 +321,17 @@ finding; that window is three draft PRs, none of which gate anything.*
 
 ## Phase 10 — PR10: `BarraDeBusqueda`/`Paginador` redesign (slice D1, guards 12/13/15)
 
-- [ ] 10.1 RED: guard 13 case — a fixture filter chip styled via `data-[state=on]`/`aria-pressed` at <3:1 on/off contrast fails, naming the offending token; this is the exact 1.32:1 defect class. Must fail against pre-redesign markup.
-- [ ] 10.2 RED: guard 13's pagination half — the current-page indicator at <3:1 contrast fails.
-- [ ] 10.3 RED: guard 15 case — `sticky` present without a `bottom-*` utility (the same silent-no-op shape as CSS `position:sticky` with no `bottom`) fails.
-- [ ] 10.4 GREEN: redesign `BarraDeBusqueda.tsx`/`Paginador.tsx`; filter-chip and current-page states resolved ≥3:1 via 3.6/3.7's resolvers (explicitly override shadcn's default `--border` at 1.26:1 where state depends on it, per D-appendix on shadcn defaults); paginator ships `sticky bottom-0` with opaque background.
-- [ ] 10.5 Update `registro.ts` entries 12 (real coverage), 13, 15 to `JSX`.
+- [x] 10.1 RED: guard 13 case — a fixture filter chip styled via `data-[state=on]`/`aria-pressed` at <3:1 on/off contrast fails, naming the offending token; this is the exact 1.32:1 defect class. Must fail against pre-redesign markup.
+- [x] 10.2 RED: guard 13's pagination half — the current-page indicator at <3:1 contrast fails.
+- [x] 10.3 RED: guard 15 case — `sticky` present without a `bottom-*` utility (the same silent-no-op shape as CSS `position:sticky` with no `bottom`) fails.
+- [x] 10.4 GREEN: redesign `BarraDeBusqueda.tsx`/`Paginador.tsx`; filter-chip and current-page states resolved ≥3:1 via 3.6/3.7's resolvers (explicitly override shadcn's default `--border` at 1.26:1 where state depends on it, per D-appendix on shadcn defaults); paginator ships `sticky bottom-0` with opaque background.
+- [x] 10.5 Update `registro.ts` entries 12 (real coverage), 13, 15 to `JSX`.
 
 ## Phase 10B — PR10 close-out
 
-- [ ] 10B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld` (S5/S6 exercise these components); record results.
+- [x] 10B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld` (S5/S6 exercise these components); record results.
 - [ ] 10B.2 User visual review of the redesigned search/pagination.
-- [ ] 10B.3 Open PR #10 targeting PR #9's branch.
+- [x] 10B.3 Open PR #10 targeting PR #9's branch.
 
 ## Phase 11 — PR11: remaining molecules/organisms (slice D2, guards 9–11/14)
 
