@@ -249,17 +249,17 @@ claiming full coverage, rather than assuming this list is exhaustive.
 
 *Highest single-PR legal-adjacent risk — Tailwind's own defaults reproduce two regressions this project already paid to fix once.*
 
-- [ ] 6.1 RED: `convencionesDeCompilado.compilado.spec.ts`'s guard 2 case — Preflight's `[hidden]` rule plus a hypothetical project-authored `!important display` rule both present in compiled output fails, naming both rules. Must fail — no real assertion yet (PR3 left this a skeleton).
-- [ ] 6.2 GREEN: delete `base.css`'s `[hidden] { display: none !important }` duplicate (D3); confirm Preflight's own rule is the sole `!important display` rule in compiled output.
-- [ ] 6.3 RED: guard 1/16 compiled-scan case — a vendored component's internals applying `.sr-only` to a reading-gate-relevant label fails, naming the `overflow:hidden`/`clip-path` rule found. Must fail — no assertion yet.
-- [ ] 6.4 GREEN: implement the compiled-CSS scan for `overflow:hidden|clip`/`clip-path` reachable by shipped markup; keep the narrow-layout `thead` displacement recipe (`panel.css:254-256`/`:303-305`) as a project utility so guard 16's protection survives through the swap.
-- [ ] 6.5 RED then GREEN: guard 1's JSX token ban — a first-party component's JSX containing the literal `sr-only` class token fails, independent of whether a build has run; add to `convencionesDeUtilidades.spec.ts`.
-- [ ] 6.6 Update `registro.ts` entries 1, 2, 16 to `AMBOS`.
+- [x] 6.1 RED: `convencionesDeCompilado.compilado.spec.ts`'s guard 2 case — Preflight's `[hidden]` rule plus a hypothetical project-authored `!important display` rule both present in compiled output fails, naming both rules. Must fail — no real assertion yet (PR3 left this a skeleton).
+- [x] 6.2 GREEN: delete `base.css`'s `[hidden] { display: none !important }` duplicate (D3); confirm Preflight's own rule is the sole `!important display` rule in compiled output.
+- [x] 6.3 RED: guard 1/16 compiled-scan case — a vendored component's internals applying `.sr-only` to a reading-gate-relevant label fails, naming the `overflow:hidden`/`clip-path` rule found. Must fail — no assertion yet.
+- [x] 6.4 GREEN: implement the compiled-CSS scan for `overflow:hidden|clip`/`clip-path` reachable by shipped markup; keep the narrow-layout `thead` displacement recipe (`panel.css:254-256`/`:303-305`) as a project utility so guard 16's protection survives through the swap.
+- [x] 6.5 RED then GREEN: guard 1's JSX token ban — a first-party component's JSX containing the literal `sr-only` class token fails, independent of whether a build has run; add to `convencionesDeUtilidades.spec.ts`.
+- [x] 6.6 Update `registro.ts` entries 1, 2, 16 to `AMBOS`.
 
 ## Phase 6B — PR6 close-out
 
-- [ ] 6B.1 Run `pnpm --filter @contratos/web test:compilado` after `vite build`, plus `pnpm size && pnpm handheld`; record results.
-- [ ] 6B.2 Open PR #6 targeting PR #5's branch. Flag explicitly in the PR body: this is the collision cluster proposal risk row 1 names as highest-likelihood.
+- [x] 6B.1 Run `pnpm --filter @contratos/web test:compilado` after `vite build`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 6B.2 Open PR #6 targeting PR #5's branch. Flag explicitly in the PR body: this is the collision cluster proposal risk row 1 names as highest-likelihood.
 
 ## Phase 7 — PR7: `Boton` + `CampoTexto` redesign (slice C1, guards 3/4/6)
 
