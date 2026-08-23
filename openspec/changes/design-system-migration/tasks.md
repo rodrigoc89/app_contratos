@@ -263,18 +263,18 @@ claiming full coverage, rather than assuming this list is exhaustive.
 
 ## Phase 7 — PR7: `Boton` + `CampoTexto` redesign (slice C1, guards 3/4/6)
 
-- [ ] 7.1 RED: `convencionesDeUtilidades.spec.ts`'s guard 3 case — `Boton`'s `cva` variant map resolves every size variant to ≥48px on both axes. Must fail against pre-redesign `Boton` (still BEM-classed at this point, no `cva` size floor to find).
-- [ ] 7.2 RED: guard 4 case — the `destructivo` variant differs from default by colour token, not DOM position, and sits with a ≥32px gap from adjacent controls in a fixture composition. Must fail — no `destructivo` variant exists yet.
-- [ ] 7.3 RED: guard 6 case — a `focus-visible:ring-*`/`shadow-*` token with non-zero width and ≥3:1 resolved contrast against its adjacent background passes; bare `outline-none` with no ring fails. Must fail — no ring-aware judgment exists yet.
-- [ ] 7.4 GREEN: redesign `Boton.tsx`'s and `CampoTexto.tsx`'s markup/variants (composition open per proposal In Scope 4) — `cva` variant map including `destructivo`, focus-visible ring per D6, all satisfying 7.1–7.3.
-- [ ] 7.5 Update `registro.ts` entries 3, 4 (variant half), 6 to `JSX`.
-- [ ] 7.6 Confirm PR1's `Boton.spec.tsx` `cn()`-merge scenario still passes unmodified.
+- [x] 7.1 RED: `convencionesDeUtilidades.spec.ts`'s guard 3 case — `Boton`'s `cva` variant map resolves every size variant to ≥48px on both axes. Must fail against pre-redesign `Boton` (still BEM-classed at this point, no `cva` size floor to find).
+- [x] 7.2 RED: guard 4 case — the `destructivo` variant differs from default by colour token, not DOM position, and sits with a ≥32px gap from adjacent controls in a fixture composition. Must fail — no `destructivo` variant exists yet.
+- [x] 7.3 RED: guard 6 case — a `focus-visible:ring-*`/`shadow-*` token with non-zero width and ≥3:1 resolved contrast against its adjacent background passes; bare `outline-none` with no ring fails. Must fail — no ring-aware judgment exists yet.
+- [x] 7.4 GREEN: redesign `Boton.tsx`'s and `CampoTexto.tsx`'s markup/variants (composition open per proposal In Scope 4) — `cva` variant map including `destructivo`, focus-visible ring per D6, all satisfying 7.1–7.3.
+- [x] 7.5 Update `registro.ts` entries 3, 4 (variant half), 6 to `JSX`.
+- [x] 7.6 Confirm PR1's `Boton.spec.tsx` `cn()`-merge scenario still passes unmodified.
 
 ## Phase 7B — PR7 close-out
 
-- [ ] 7B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
-- [ ] 7B.2 User visual review of the redesigned `Boton`/`CampoTexto` — "visibly new" is a judgment this suite cannot assert (Success Criteria).
-- [ ] 7B.3 Open PR #7 targeting PR #6's branch.
+- [x] 7B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 7B.2 User visual review of the redesigned `Boton`/`CampoTexto` — "visibly new" is a judgment this suite cannot assert (Success Criteria).
+- [x] 7B.3 Open PR #7 targeting PR #6's branch.
 
 ## Phase 8 — PR8: `Etiqueta`/`MarcaProducto`/`Spinner`/`CabeceraDeSesion` redesign (slice C1b, guards 9–12/18/21)
 
