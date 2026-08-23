@@ -128,4 +128,27 @@ describe("CabeceraDeSesion", () => {
       process.off("unhandledRejection", anotarEscapada);
     }
   });
+
+  /**
+   * The logout control is a `Power` glyph with no text, so its name has to
+   * come from an attribute — and `aria-label` is the only acceptable source
+   * here. `title` is not: screen readers treat it as a last-resort fallback
+   * and several do not announce it at all, yet it *does* satisfy the
+   * accessible-name computation `getByRole({ name })` uses.
+   *
+   * That is not theoretical. Deleting `aria-label` from the component was
+   * tried, and all 691 web specs still passed — every existing
+   * `getByRole("button", { name: "Cerrar sesión" })` was being satisfied by
+   * `title` alone. The suite looked like it guarded the label and did not.
+   *
+   * This test closes that gap by asserting the attribute itself, so removing
+   * `aria-label` fails here even while the accessible name survives.
+   */
+  it("names the icon-only logout control with aria-label, not only title", () => {
+    render(<CabeceraDeSesion nombreUsuario="oficina" />);
+
+    const salir = screen.getByRole("button", { name: "Cerrar sesión" });
+
+    expect(salir.getAttribute("aria-label")).toBe("Cerrar sesión");
+  });
 });

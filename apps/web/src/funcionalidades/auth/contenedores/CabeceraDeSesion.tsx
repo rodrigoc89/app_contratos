@@ -1,3 +1,5 @@
+import { Power } from "lucide-react";
+
 import { Boton } from "../../../componentes/atomos/Boton";
 import { MarcaProducto } from "../../../componentes/atomos/MarcaProducto";
 import { usarCierreDeSesion } from "../usarCierreDeSesion";
@@ -40,7 +42,26 @@ import { usarSesionActual } from "../usarSesionActual";
  * `test:compilado` against this exact redesign — so a name too long for its
  * box scrolls inside its own local scrolling context instead, never
  * widening the document. `title={nombre}` still exposes the full value on
- * hover regardless. The panel's previous 0.875rem header shrink
+ * hover regardless.
+ *
+ * The way out is a `Power` glyph rather than the words "Cerrar sesión", at
+ * the user's request — it also buys back the width the username needs on a
+ * 360px screen. An icon carries no accessible name of its own, so the name
+ * moves to `aria-label` and the glyph is `aria-hidden`: a screen reader
+ * still announces "Cerrar sesión, botón", and `title` gives a pointer user
+ * the same words on hover.
+ *
+ * The existing `getByRole("button", { name: "Cerrar sesión" })` queries do
+ * NOT guard that label, which was checked rather than assumed: deleting
+ * `aria-label` here left all 691 web specs passing, because `title` also
+ * satisfies the accessible-name computation those queries use. A suite that
+ * looks like it protects the name while resting on the weaker attribute is
+ * the failure this project keeps finding, so `CabeceraDeSesion.spec.tsx`
+ * asserts the `aria-label` attribute itself and fails without it. The touch
+ * floor is
+ * untouched: `min-h-toque min-w-toque` still applies and `px-0` only
+ * removes the horizontal padding the text needed, leaving a 48x48 square
+ * for a gloved thumb. The panel's previous 0.875rem header shrink
  * (`panel.css:170`, a direct declaration on the old BEM classes) has no
  * replacement here: it depended on selectors this redesign removes, and a
  * real per-shell exemption axis is guard 8's job (PR9, design.md D4), not
@@ -66,8 +87,15 @@ export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: s
       <span className="min-w-0 flex-1 overflow-x-auto text-right font-semibold text-texto-suave" title={nombre}>
         {nombre}
       </span>
-      <Boton type="button" variante="secundario" className="shrink-0 px-3" onClick={() => void salir()}>
-        Cerrar sesión
+      <Boton
+        type="button"
+        variante="secundario"
+        className="shrink-0 px-0"
+        aria-label="Cerrar sesión"
+        title="Cerrar sesión"
+        onClick={() => void salir()}
+      >
+        <Power size={22} aria-hidden="true" />
       </Boton>
     </header>
   );
