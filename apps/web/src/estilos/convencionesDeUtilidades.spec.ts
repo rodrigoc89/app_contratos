@@ -1005,6 +1005,38 @@ describe("guard 15: sticky paginator is armed with a bottom inset and an opaque 
       `<nav> has no background utility — a transparent sticky footer lets rows scroll visibly behind its controls: ${nav.className}`,
     ).toBe(true);
   });
+
+  /**
+   * The paginator is not the only thing this project pins. The office
+   * header was made sticky on request, and nothing caught it when its
+   * `top-0` was removed — verified by deleting the inset and watching all
+   * 750 specs stay green. Guard 15 named one component, so it could not.
+   *
+   * This is guard 20's lesson applied here: an enumerated list already
+   * failed this codebase once, and let two real 24px links ship. So the
+   * rule is stated over the whole tree instead — any first-party source
+   * that declares `sticky` must also declare an inset on the axis it
+   * sticks to, and carry a background. `sticky` with no inset computes to
+   * `static` and does nothing, silently, in both CSS and Tailwind.
+   */
+  it("every first-party sticky element declares an inset and a background", () => {
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    expect(fuentes.length, "no .tsx files found — the scan matched nothing").toBeGreaterThan(3);
+
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      for (const [clases] of contenido.matchAll(/className="([^"]*\bsticky\b[^"]*)"/g)) {
+        expect(
+          /\b(?:top|bottom|inset-y|inset)-(?:0\b|\[[^\]]+\])/.test(clases ?? ""),
+          `${rutaRelativa} declares sticky with no inset — it computes to static and does nothing: ${clases}`,
+        ).toBe(true);
+        expect(
+          /\bbg-[a-z][\w-]*\b/.test(clases ?? ""),
+          `${rutaRelativa} declares sticky with no background — content scrolls visibly through it: ${clases}`,
+        ).toBe(true);
+      }
+    }
+  });
 });
 
 /**

@@ -79,7 +79,7 @@ export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: s
   return (
     <header
       data-cabecera-de-sesion
-      className="flex items-center gap-1 border-b border-borde-suave px-2 py-2"
+      className="sticky top-0 z-10 flex items-center gap-1 border-b border-borde-suave bg-fondo px-2 py-2"
     >
       <div className="shrink-0">
         <MarcaProducto />
