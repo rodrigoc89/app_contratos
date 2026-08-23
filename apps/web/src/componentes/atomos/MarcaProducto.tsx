@@ -16,12 +16,20 @@
  *    touch floors of any `<a>`/`<Link>` carrying a `className`, and the
  *    wordmark names the product, it does not navigate anywhere.
  *
- * No props, no state — a pure name, styled entirely through `atomos.css`.
+ * No props, no state — a pure name.
+ *
+ * design-system-migration PR8 — visual redesign; guards 9-12 real coverage.
+ * `text-marca-azul` resolves `--color-marca-azul` (`#0076d9`, `tema.css`) —
+ * 4.57:1 against `#ffffff`, never the raw `#008bff` the icon's raster asset
+ * still carries (D1: that fill sits outside this guard's reach on purpose,
+ * because only live text is in scope). `data-marca-producto` replaces
+ * `.marca-producto` as the selector tests/callers hook into — the class
+ * name itself is retired with the rest of this atom's BEM styling.
  */
 export function MarcaProducto() {
   return (
-    <span className="marca-producto">
-      <span className="marca-producto__empresa">IES.NET</span> Contratos
+    <span data-marca-producto className="text-grande font-bold text-texto">
+      <span className="text-marca-azul">IES.NET</span> Contratos
     </span>
   );
 }

@@ -7,6 +7,7 @@ import { createElement } from "react";
 import { describe, expect, it } from "vitest";
 
 import { Boton, TAMANOS_BOTON } from "../componentes/atomos/Boton";
+import { MarcaProducto } from "../componentes/atomos/MarcaProducto";
 
 // This file is `.spec.ts`, not `.spec.tsx` — `createElement` renders guard
 // 3/4's fixtures below without JSX syntax this loader does not parse.
@@ -406,6 +407,43 @@ describe("guard 12: Guards A-D brand-blue contrast assertion, ported to JSX clas
 });
 
 /**
+ * Guards 9-12 (design.md task 8.3) — real component coverage against the
+ * actual `MarcaProducto`, not only a fixture: its wordmark's `text-marca-azul`
+ * span, checked against the real compiled `tema.css`. `#0076d9` (4.57:1) is
+ * the value that satisfies both requirements at once — brand-presentation's
+ * amended spec, "the raw brand blue never reaches the token layer or a
+ * stylesheet at all", already confirms the literal `#008bff` string appears
+ * in no CSS file (`convencionesDeEstilos.spec.ts`); the icon's raster asset
+ * is a binary image this text-only scanner never reads, which is the D1
+ * decision itself, not a scoping rule bolted on afterward.
+ */
+describe("guards 9-12: MarcaProducto's wordmark resolves real brand-blue contrast (D1/D6, PR8)", () => {
+  const temaReal = readFileSync(join(DIRECTORIO_SRC, "estilos/tema.css"), "utf8");
+
+  function claseDeMarca(): string {
+    const { container, unmount } = render(createElement(MarcaProducto));
+    const marca = container.querySelector("[data-marca-producto] span");
+    expect(marca, "MarcaProducto's brand-coloured span was not found").not.toBeNull();
+    const clases = marca?.className ?? "";
+    unmount();
+    return clases;
+  }
+
+  it("never resolves the wordmark's brand span to the raw #008bff value", () => {
+    expect(valorDeColor(claseDeMarca(), temaReal)).not.toBe("#008bff");
+  });
+
+  it("resolves the wordmark's brand span to >=4.5:1 against #ffffff", () => {
+    const violaciones = violacionesGuardiaDeMarcaJsx(
+      [{ selector: "MarcaProducto wordmark", claseTexto: claseDeMarca(), claseFondo: "bg-fondo" }],
+      temaReal,
+    );
+
+    expect(violaciones).toEqual([]);
+  });
+});
+
+/**
  * Guard 3 (design.md D5's future engine, scoped to `Boton` in PR7 — the
  * general `pisoDeToque.ts` scan over every interactive element lands in
  * PR9) — the same heuristic that engine will generalise: `*-toque` (D3's
@@ -630,6 +668,60 @@ describe("guard 6: ring-based focus replacements pass, bare outline-none with no
         tieneReemplazoDeFocoJsx(contenido, temaReal),
         `${rutaRelativa} removes focus with outline-none but declares no valid focus-visible ring/outline/shadow replacement (design.md D6)`,
       ).toBe(true);
+    }
+  });
+});
+
+const PATRON_ENLACE_CON_CLASE_JSX = /<(?:a|Link)\b[^>]*\bclassName="([^"]+)"/g;
+const PATRON_INTENTO_VERTICAL_ENLACE = /\b(?:min-h|h)-(?:toque|\d+)\b/;
+const PATRON_CAJA_ENLACE = /\b(?:inline-flex|inline-grid|inline-block|flex|grid|block|w-full|min-w-full)\b/;
+
+/**
+ * Guard 21 (task 8.1/8.5) — `<a>`/`<Link>` gets a real box, ported to JSX
+ * class names. `<a>` defaults to `display: inline`, the one box a
+ * `min-height` utility cannot arm — `convencionesDeEstilos.spec.ts`'s
+ * CSS-scoped version measured this at 24px in Chrome for both office links
+ * it still protects (`TablaDeContratos`/`PaginaDetalleContrato`, unconverted
+ * until PR15/PR11). Only a link that ATTEMPTS a vertical Tailwind sizing
+ * utility is in this scanner's scope: an element with no such attempt (a
+ * bare BEM classname, or no className at all) has no silently-inert
+ * declaration for this scanner to catch, and stays covered by the
+ * still-live CSS-scoped scan until it converts — the same partial-coverage
+ * shape guard 4's variant half took in PR7.
+ */
+export function tieneCajaRealDeEnlace(clases: string): boolean {
+  if (!PATRON_INTENTO_VERTICAL_ENLACE.test(clases)) {
+    return true;
+  }
+  return PATRON_CAJA_ENLACE.test(clases);
+}
+
+describe("guard 21: every <a>/<Link> gets a real box, ported to JSX class names (PR8)", () => {
+  it("flags a fixture link that attempts a min-height utility but stays inline", () => {
+    expect(tieneCajaRealDeEnlace("min-h-toque px-4")).toBe(false);
+  });
+
+  it("accepts the same attempt once a block/flex/grid companion is present", () => {
+    expect(tieneCajaRealDeEnlace("inline-flex min-h-toque px-4")).toBe(true);
+  });
+
+  it("does not flag a link with no vertical sizing attempt — nothing silently inert to catch yet", () => {
+    expect(tieneCajaRealDeEnlace("tabla-de-contratos__enlace")).toBe(true);
+  });
+
+  it("rejects every real .tsx file under apps/web/src whose <a>/<Link> attempts a vertical utility without a box", () => {
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    expect(fuentes.length, "no .tsx files found — the scan matched nothing").toBeGreaterThan(3);
+
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      for (const coincidencia of contenido.matchAll(PATRON_ENLACE_CON_CLASE_JSX)) {
+        const clases = coincidencia[1] ?? "";
+        expect(
+          tieneCajaRealDeEnlace(clases),
+          `${rutaRelativa} carries an <a>/<Link> class list ("${clases}") that attempts a vertical sizing utility while staying inline (design.md guard 21)`,
+        ).toBe(true);
+      }
     }
   });
 });

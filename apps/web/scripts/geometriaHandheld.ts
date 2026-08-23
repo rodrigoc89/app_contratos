@@ -48,12 +48,18 @@ export const PISO_DE_CONTROLES_POR_ESTADO = 1;
  * `CabeceraDeSesion` at 390px: `--tamano-toque-minimo` (48px) plus its
  * `padding: var(--espacio-2)` (8px top+bottom) is ~64px for one row, with
  * headroom. The 104px figure design.md cites is the two-row regression this
- * rejects. Real end-to-end run against production `dist/` (this PR):
- * `CabeceraDeSesion` currently measures 110px (técnico) / 98px (oficina) at
- * 390px — a genuine, content-length-independent two-row wrap, reproduced
- * even with a 1-character username. Pre-existing, not introduced by this
- * PR; `CabeceraDeSesion` converts in PR11 (tasks.md Phase 11) — disclosed
- * here rather than hidden by inflating this budget to match today's defect.
+ * rejects.
+ *
+ * PR8 (task 8.6/8.7) fixed this: `CabeceraDeSesion` measured 117px
+ * (técnico) / 105px (oficina) at 390px before the redesign — a genuine,
+ * content-length-independent two-row wrap, reproduced even with a
+ * 1-character username — and stays within budget after it. The selector
+ * below moved from `.cabecera-sesion` to `[data-cabecera-de-sesion]` in the
+ * same PR: the old class's CSS rule (`estilos/organismos.css`) is
+ * unlayered, hand-authored `flex-wrap: wrap`, which always outranks
+ * Tailwind's `@layer`-wrapped utilities of equal specificity regardless of
+ * source order — keeping the old class as an inert hook would have
+ * silently reinstated the exact wrap this fix removes.
  */
 export const ALTURA_MAXIMA_CABECERA_PX = 72;
 
@@ -263,7 +269,7 @@ async function medirEstado(
           const caja = elemento.getBoundingClientRect();
           return { ancho: caja.width, alto: caja.height };
         });
-      const cabecera = document.querySelector(".cabecera-sesion");
+      const cabecera = document.querySelector("[data-cabecera-de-sesion]");
 
       return {
         scrollWidth: document.documentElement.scrollWidth,

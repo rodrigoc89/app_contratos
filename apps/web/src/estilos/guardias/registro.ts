@@ -177,10 +177,16 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // task 3.9 — mechanism ported to convencionesDeUtilidades.spec.ts,
     // reading @theme class names instead of CSS declarations; real-component
     // coverage (beyond the fixture proof) still lands in PR8.
+    // PR8 (task 8.3/8.5) — real coverage lands: MarcaProducto's wordmark
+    // exercises valorDeColor/matiz/saturacion/contraste together against
+    // the real compiled tema.css, not only a fixture.
     numero: 9,
     protege: "valorDeColor resolver, ported to @theme class names",
     disposicion: "JSX",
-    pruebas: [{ archivo: UTILIDADES, titulo: "resolves a bg-* utility class against the @theme block" }],
+    pruebas: [
+      { archivo: UTILIDADES, titulo: "resolves a bg-* utility class against the @theme block" },
+      { archivo: UTILIDADES, titulo: "resolves the wordmark's brand span to >=4.5:1 against #ffffff" },
+    ],
   },
   {
     numero: 10,
@@ -188,6 +194,7 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     disposicion: "JSX",
     pruebas: [
       { archivo: UTILIDADES, titulo: "resolves hue in degrees, unchanged from the CSS-scoped version" },
+      { archivo: UTILIDADES, titulo: "resolves the wordmark's brand span to >=4.5:1 against #ffffff" },
     ],
   },
   {
@@ -196,6 +203,7 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     disposicion: "JSX",
     pruebas: [
       { archivo: UTILIDADES, titulo: "resolves saturation as a percentage, unchanged from the CSS-scoped version" },
+      { archivo: UTILIDADES, titulo: "resolves the wordmark's brand span to >=4.5:1 against #ffffff" },
     ],
   },
   {
@@ -207,6 +215,7 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
         archivo: UTILIDADES,
         titulo: "fails a fixture Tailwind class resolving to raw #008bff on text, naming the selector and ratio",
       },
+      { archivo: UTILIDADES, titulo: "resolves the wordmark's brand span to >=4.5:1 against #ffffff" },
     ],
   },
   {
@@ -283,14 +292,18 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     pruebas: [{ archivo: ESTILOS, titulo: "declares a vertical touch floor for each of them" }],
   },
   {
+    // PR8 (task 8.1/8.5) — JSX mechanism now exists (guard 21's ported
+    // scan). The still-unconverted TablaDeContratos/PaginaDetalleContrato
+    // links stay covered by the still-live CSS-scoped scan (D2) until
+    // PR11/PR15 convert them — the same partial-coverage shape guard 4's
+    // variant half took in PR7.
     numero: 21,
     protege: "Every <a>/<Link> gets a real box",
-    disposicion: "CSS",
-    archivoCss: "estilos/organismos.css",
+    disposicion: "JSX",
     pruebas: [
       {
-        archivo: ESTILOS,
-        titulo: "keeps the row link invisible — a bigger target, not a bigger affordance",
+        archivo: UTILIDADES,
+        titulo: "rejects every real .tsx file under apps/web/src whose <a>/<Link> attempts a vertical utility without a box",
       },
     ],
   },

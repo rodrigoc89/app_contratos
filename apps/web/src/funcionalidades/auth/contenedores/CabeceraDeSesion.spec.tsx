@@ -44,12 +44,13 @@ describe("CabeceraDeSesion", () => {
    *
    * `getByText`'s default matcher reads only a node's OWN direct text-node
    * children ("IES.NET" lives in a nested `<span>`), so the full rendered
-   * name is read from `.marca-producto`'s `textContent` instead.
+   * name is read from `[data-marca-producto]`'s `textContent` instead
+   * (PR8 — `.marca-producto` is retired along with the atom's BEM styling).
    */
   it("shows the IES.NET Contratos wordmark, without displacing the username or the logout button", () => {
     const { container } = render(<CabeceraDeSesion nombreUsuario="oficina" />);
 
-    expect(container.querySelector(".marca-producto")?.textContent).toBe("IES.NET Contratos");
+    expect(container.querySelector("[data-marca-producto]")?.textContent).toBe("IES.NET Contratos");
     expect(screen.getByText("oficina")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
   });
