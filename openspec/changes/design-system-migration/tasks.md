@@ -198,20 +198,20 @@ claiming full coverage, rather than assuming this list is exhaustive.
 
 *The disposition register is one of the three "passes by doing nothing" mechanisms. Its RED test must be demonstrated failing against a naive stub, not just against an absent file.*
 
-- [ ] 3.1 RED: `estilos/guardias/registro.spec.ts` asserts exactly 21 entries, numbered 1–21 no gaps, each disposition in `{CSS, JSX, AMBOS, MOOT, RESUELTA}` (never blank/`TBD`/`REBUILD`). Must fail — `registro.ts` does not exist.
-- [ ] 3.2 RED, falsification case: add a fixture entry whose disposition is `JSX` but whose named `it(...)` title is **absent** from its named spec file; assert the register validator fails on it. Run this fixture against a **naive stub validator that always returns valid** first, confirm the fixture case fails to catch the gap (proving the stub is unsafe), then proceed to 3.3.
-- [ ] 3.3 RED, second falsification case: a `CSS`-dispositioned entry naming a `src/estilos/*.css` file that does not exist; assert the validator fails. Same naive-stub falsification as 3.2.
-- [ ] 3.4 GREEN: create `estilos/guardias/registro.ts` — 21 entries seeded to `CSS` (the true starting state, nothing has converted), plus the real validator satisfying 3.1–3.3.
-- [ ] 3.5 RED: `estilos/convencionesDeUtilidades.spec.ts`'s vendor-import guard — a fixture file importing `radix-ui`/`@radix-ui/*` fails the scan. Must fail — scanner does not exist.
-- [ ] 3.6 GREEN: create `convencionesDeUtilidades.spec.ts` skeleton with the vendor-import guard live (D1), plus guard 7's breakpoint-whitelist scan (`sm:`/`lg:` only) and the ported `valorDeColor`/`matiz`/`saturacion` resolvers (guards 9–11) as exported, fixture-unit-tested functions reading `@theme` class names instead of CSS selectors.
-- [ ] 3.7 RED then GREEN: guard 12 (Guards A–D brand-blue contrast) — a fixture Tailwind class resolving to `#008bff` on text fails at <4.5:1; implement the assertion using 3.6's resolvers.
-- [ ] 3.8 Create `estilos/convencionesDeCompilado.compilado.spec.ts` skeleton (empty guard 1/2/16 `describe` blocks, real assertions land in PR6) and `apps/web/vitest.compilado.config.ts`; add the `test:compilado` script; add `src/**/*.compilado.spec.ts` to `vitest.config.ts`'s `exclude`.
-- [ ] 3.9 Update `registro.ts` entries 7, 9, 10, 11, 12 to `JSX` (mechanism now exists, even though real-component coverage lands in PR8).
+- [x] 3.1 RED: `estilos/guardias/registro.spec.ts` asserts exactly 21 entries, numbered 1–21 no gaps, each disposition in `{CSS, JSX, AMBOS, MOOT, RESUELTA}` (never blank/`TBD`/`REBUILD`). Must fail — `registro.ts` does not exist.
+- [x] 3.2 RED, falsification case: add a fixture entry whose disposition is `JSX` but whose named `it(...)` title is **absent** from its named spec file; assert the register validator fails on it. Run this fixture against a **naive stub validator that always returns valid** first, confirm the fixture case fails to catch the gap (proving the stub is unsafe), then proceed to 3.3.
+- [x] 3.3 RED, second falsification case: a `CSS`-dispositioned entry naming a `src/estilos/*.css` file that does not exist; assert the validator fails. Same naive-stub falsification as 3.2.
+- [x] 3.4 GREEN: create `estilos/guardias/registro.ts` — 21 entries seeded to `CSS` (the true starting state, nothing has converted), plus the real validator satisfying 3.1–3.3.
+- [x] 3.5 RED: `estilos/convencionesDeUtilidades.spec.ts`'s vendor-import guard — a fixture file importing `radix-ui`/`@radix-ui/*` fails the scan. Must fail — scanner does not exist.
+- [x] 3.6 GREEN: create `convencionesDeUtilidades.spec.ts` skeleton with the vendor-import guard live (D1), plus guard 7's breakpoint-whitelist scan (`sm:`/`lg:` only) and the ported `valorDeColor`/`matiz`/`saturacion` resolvers (guards 9–11) as exported, fixture-unit-tested functions reading `@theme` class names instead of CSS selectors.
+- [x] 3.7 RED then GREEN: guard 12 (Guards A–D brand-blue contrast) — a fixture Tailwind class resolving to `#008bff` on text fails at <4.5:1; implement the assertion using 3.6's resolvers.
+- [x] 3.8 Create `estilos/convencionesDeCompilado.compilado.spec.ts` skeleton (empty guard 1/2/16 `describe` blocks, real assertions land in PR6) and `apps/web/vitest.compilado.config.ts`; add the `test:compilado` script; add `src/**/*.compilado.spec.ts` to `vitest.config.ts`'s `exclude`.
+- [x] 3.9 Update `registro.ts` entries 7, 9, 10, 11, 12 to `JSX` (mechanism now exists, even though real-component coverage lands in PR8).
 
 ## Phase 3B — PR3 close-out
 
-- [ ] 3B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`; record results.
-- [ ] 3B.2 Open PR #3 targeting PR #2's branch.
+- [x] 3B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`; record results.
+- [x] 3B.2 Open PR #3 targeting PR #2's branch.
 
 ## Phase 4 — PR4: `dist/` size ceiling (D7)
 
