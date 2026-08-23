@@ -249,3 +249,47 @@ jobs:
         # test artifact is exactly the wrong place for Ley 25.326 data. The
         # step log is the whole diagnostic surface, by design.
         run: pnpm --filter @contratos/api test:integration
+
+  bundle:
+    name: dist/ size ceiling and compiled-output guards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # No `needs:` — this job is independent of `verify`/`lint`/`integration`
+    # and serialising them buys nothing (design.md D7 "New CI job").
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          # Jobs get fresh runners, so this pnpm store cache is this job's
+          # own — it does not inherit `verify`'s or `integration`'s.
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build apps/web
+        # No other job in this workflow runs `vite build` — this job exists
+        # because the ceiling and the compiled-output guards (guards 1, 2
+        # and 16, landing in PR6) both need a real `dist/`.
+        run: pnpm --filter @contratos/web build
+
+      - name: Check the dist/ size ceiling
+        # design.md D7 — fails closed on a missing/empty/undersized dist/,
+        # and on a build over 650 KiB (665,600 raw bytes). Runs before the
+        # compiled-CSS scan so a breach fails in about a second.
+        run: pnpm --filter @contratos/web size
+
+      - name: Compiled-output style guards
+        # design.md D2 — guards 1, 2 and 16, scanned against the real
+        # compiled CSS. Currently an empty skeleton from PR3 (real
+        # assertions land in PR6); kept in this job's step order now so the
+        # job's shape is stable once PR6 fills it in.
+        run: pnpm --filter @contratos/web test:compilado
