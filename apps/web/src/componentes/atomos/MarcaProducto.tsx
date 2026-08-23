@@ -28,8 +28,9 @@
  */
 export function MarcaProducto() {
   return (
-    <span data-marca-producto className="text-grande font-bold text-texto">
-      <span className="text-marca-azul">IES.NET</span> Contratos
+    <span data-marca-producto className="font-bold text-texto">
+      <span className="text-grande tracking-tight text-marca-azul">IES.NET</span>{" "}
+      <span className="text-base font-semibold">Contratos</span>
     </span>
   );
 }
