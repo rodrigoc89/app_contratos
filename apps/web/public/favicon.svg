@@ -1,20 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  DESIGN.md D5 — favicon. A simplified variant of `apps/web/marca/ies-
-  monograma.svg`: tighter letter-spacing and a larger glyph-to-canvas ratio
-  than the master source, because the browser tab renders this at ~16px,
-  where three letters are only ~5px wide each. Legibility at 16px is the
-  criterion here, not fidelity to the full mark.
+  DESIGN.md D5 — favicon. Two letters, not the three in
+  `apps/web/marca/ies-monograma.svg`, because a favicon is not the app icon
+  scaled down: the browser tab renders it at ~16px, and three letters there
+  are ~5px wide each. Rendered and measured at real size before choosing —
+  "IES" collapses into an unreadable smear, "IE" stays legible, and a lone
+  "I" is legible but says nothing. Legibility at 16px is the criterion, not
+  fidelity to the full mark; the 192 and 512 icons carry "IES" because they
+  have the room for it.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
   <rect width="32" height="32" fill="#008bff" />
   <text
     x="16"
-    y="21.5"
+    y="22.5"
     text-anchor="middle"
     font-family="Arial, Helvetica, sans-serif"
     font-weight="800"
-    font-size="15"
+    font-size="19"
     fill="#ffffff"
-  >IES</text>
+  >IE</text>
 </svg>
