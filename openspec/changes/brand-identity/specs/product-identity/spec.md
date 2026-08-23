@@ -41,9 +41,18 @@ has an assertion today.
 
 `apps/web/index.html` MUST declare `<title>IES.NET Contratos</title>`, a
 `<link rel="icon">` pointing to a favicon asset that exists under
-`apps/web/public/`, an `apple-mobile-web-app-title` meta tag equal to
-`"Contratos"` (mirrors `short_name`, the home-screen label), and a
-`theme-color` meta tag equal to `"#0b634a"` (mirrors the manifest).
+`apps/web/public/`, and a `theme-color` meta tag equal to `"#0b634a"`
+(mirrors the manifest).
+
+It MUST NOT declare `apple-mobile-web-app-title` or `apple-touch-icon`.
+Both are iOS-only surfaces, and `DESIGN.md:297,304` establish the fleet as
+Chromium-on-Android and name the trigger if that ever changes. This
+requirement originally called for the title meta; it was amended after the
+orchestrator settled the decision, because a spec that contradicts shipped
+code is a spec nobody can trust — and the absence is recorded as a comment
+in `index.html` rather than a test asserting it, since an always-passing
+assertion is worse than the comment (the same precedent `vite.config.ts`
+already sets for a removed no-op).
 
 #### Scenario: static head tags are present and correct
 
@@ -51,8 +60,8 @@ has an assertion today.
 - WHEN a test parses its `<head>`
 - THEN `<title>` reads `"IES.NET Contratos"`
 - AND a `<link rel="icon">` element exists whose `href` resolves to a file under `apps/web/public/`
-- AND `<meta name="apple-mobile-web-app-title" content="Contratos">` is present
 - AND `<meta name="theme-color" content="#0b634a">` is present
+- AND no `apple-mobile-web-app-title` or `apple-touch-icon` tag is declared
 
 ### Requirement: Per-route document title
 

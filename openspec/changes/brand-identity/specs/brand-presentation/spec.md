@@ -66,10 +66,17 @@ selectors, not to decorative marks.
 - WHEN the guard runs
 - THEN the test fails, naming the offending selector and its computed ratio
 
-#### Scenario: the icon and wordmark mark are exempt
+#### Scenario: the raw brand blue never reaches a stylesheet at all
 
-- GIVEN the icon asset and any wordmark rendered as a large, non-text mark
-  (an image, not live CSS text)
-- WHEN the guard scans CSS
-- THEN it MUST NOT flag `#008bff` used only as that mark's fill — the guard
-  scopes to text/control selectors, not to decorative or image-based marks
+Amended after verification: the earlier wording claimed the guard "scopes to
+text/control selectors", which `violacionesGuardiaDeMarca` does not do — it
+walks every rule carrying a colour declaration. The exemption is real but
+holds for a different and stronger reason, and a scenario that describes a
+mechanism the code does not implement is worse than no scenario.
+
+- GIVEN D1's decision that the wordmark ships as live text, leaving the raw
+  `#008bff` to exist only inside the raster icons
+- WHEN any stylesheet under `apps/web/src/estilos/` is read
+- THEN none of them contains `#008bff` in any form — so the mark is outside
+  the guard's reach by construction, not by a scoping rule the guard would
+  have to implement and could silently lose

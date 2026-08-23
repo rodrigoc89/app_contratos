@@ -1022,6 +1022,35 @@ describe("Guards A/B/C scan the shipped stylesheets for illegible brand-blue tex
     }
   });
 
+  it("Guard D: the raw brand blue reaches no stylesheet at all, so the mark stays out of reach by construction", () => {
+    // `brand-presentation` spec.md, amended after verification. The scenario
+    // used to claim the guard "scopes to text/control selectors" — it does
+    // not: `violacionesGuardiaDeMarca` walks every rule carrying a colour
+    // declaration. The exemption is real, but it holds because D1 ships the
+    // wordmark as live text, leaving #008bff only inside the raster icons,
+    // which are not CSS and were never scannable.
+    //
+    // That reason is worth a guard of its own: if #008bff ever lands in a
+    // stylesheet it fails 4.5:1 on white at 3.42:1, and this catches it at
+    // the source rather than waiting for it to be paired with a background
+    // that happens to make Guard B pass.
+    // Comments are stripped first: `tokens.css` names #008bff in prose to
+    // explain why it is banned, and a guard that fires on its own rationale
+    // teaches the next person to delete the explanation instead of the
+    // violation. Caught by running this — the first version failed on that
+    // comment.
+    const sinComentarios = (css: string): string => css.replaceAll(/\/\*[\s\S]*?\*\//g, "");
+
+    const conAzulCrudo = archivosCss(DIRECTORIO_SRC)
+      .filter(({ contenido }) => /#008bff/i.test(sinComentarios(contenido)))
+      .map(({ ruta }) => relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/"));
+
+    expect(
+      conAzulCrudo,
+      "the raw brand blue belongs in the raster icons only; use --color-marca-azul (#0076d9) for anything a person reads",
+    ).toEqual([]);
+  });
+
   it("Guard C (inverted): a rule's declared `background:` in the brand-blue family clears 4.5:1 against its own text", () => {
     for (const { ruta, contenido } of archivosCss(DIRECTORIO_SRC)) {
       const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
