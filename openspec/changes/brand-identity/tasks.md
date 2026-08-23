@@ -73,16 +73,16 @@ Only the tracker merges to master.
 
 ## Phase 2 — PR2: replacement PWA icons (D5)
 
-- [ ] 2.1 [BLOCKED until the recreated mark is approved — proposal Dependencies #1] Commit `apps/web/marca/*.svg` (source, outside `public/` — never globbed or precached) plus a short regeneration note recording the 80% maskable safe-zone parameter and the steps to regenerate the three PNGs and the favicon SVG.
-- [ ] 2.2 RED: create `apps/web/src/pwa/iconos.spec.ts` — reads each PNG `OPCIONES_VITE_PLUGIN_PWA.manifest.icons` references, parses IHDR bytes (offset 16-24, no image dependency), asserts real width/height equal the promised `sizes` string; asserts every `icons[].src` resolves to a file that exists under `apps/web/public/`. Must fail — no such guard exists today (the existing `configuracionPwa.spec.ts` assertions check only the manifest string, never the file bytes).
-- [ ] 2.3 GREEN: regenerate `apps/web/public/icons/icon-192.png`, `icon-512.png`, `icon-512-maskable.png` from the source in 2.1, preserving the maskable icon's existing 80% safe zone. Confirm 2.2 passes and the two existing size-string assertions in `configuracionPwa.spec.ts` still pass unmodified.
-- [ ] 2.4 Triangulate 2.2: add a deliberately mismatched-dimension fixture (a temp PNG whose real bytes are 100×100 asserted against a `"192x192"` manifest entry) proving the guard actually fails on a wrong-size file — not merely passing because the real files happen to match.
-- [ ] 2.5 Manual verification (not a test, stated plainly): user visually confirms the blue-field/white-"IES"-monogram appearance and the maskable safe zone on the three regenerated PNGs before merge — spec `product-identity`, "visual fidelity is verified manually, not by an automated test"; this suite cannot decode PNG pixel content.
+- [x] 2.1 [BLOCKED until the recreated mark is approved — proposal Dependencies #1] Commit `apps/web/marca/*.svg` (source, outside `public/` — never globbed or precached) plus a short regeneration note recording the 80% maskable safe-zone parameter and the steps to regenerate the three PNGs and the favicon SVG.
+- [x] 2.2 RED: create `apps/web/src/pwa/iconos.spec.ts` — reads each PNG `OPCIONES_VITE_PLUGIN_PWA.manifest.icons` references, parses IHDR bytes (offset 16-24, no image dependency), asserts real width/height equal the promised `sizes` string; asserts every `icons[].src` resolves to a file that exists under `apps/web/public/`. Must fail — no such guard exists today (the existing `configuracionPwa.spec.ts` assertions check only the manifest string, never the file bytes).
+- [x] 2.3 GREEN: regenerate `apps/web/public/icons/icon-192.png`, `icon-512.png`, `icon-512-maskable.png` from the source in 2.1, preserving the maskable icon's existing 80% safe zone. Confirm 2.2 passes and the two existing size-string assertions in `configuracionPwa.spec.ts` still pass unmodified.
+- [x] 2.4 Triangulate 2.2: add a deliberately mismatched-dimension fixture (a temp PNG whose real bytes are 100×100 asserted against a `"192x192"` manifest entry) proving the guard actually fails on a wrong-size file — not merely passing because the real files happen to match.
+- [x] 2.5 Manual verification (not a test, stated plainly): user visually confirms the blue-field/white-"IES"-monogram appearance and the maskable safe zone on the three regenerated PNGs before merge — spec `product-identity`, "visual fidelity is verified manually, not by an automated test"; this suite cannot decode PNG pixel content.
 
 ## Phase 2B — PR2 close out
 
-- [ ] 2B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results.
-- [ ] 2B.2 Manual: confirm `apps/api/prisma/plantillas/*.html` and `tokens.css`'s font stack remain byte-identical (same check as 1B.2, cumulative).
+- [x] 2B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results.
+- [x] 2B.2 Manual: confirm `apps/api/prisma/plantillas/*.html` and `tokens.css`'s font stack remain byte-identical (same check as 1B.2, cumulative).
 - [ ] 2B.3 Open PR #2 targeting PR #1's branch (feature-branch-chain). Evidence per Work Units table; note the reinstall/home-screen-icon caveat from the proposal's Rollback Plan.
 
 ## Phase 3 — PR3: wordmark, CSS, brand-blue contrast guard (D1, D2, D6, D7)
