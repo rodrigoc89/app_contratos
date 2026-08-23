@@ -107,7 +107,7 @@ Only the tracker merges to master.
 - [x] 3B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2+PR3 diff; record results.
 - [x] 3B.2 Manual (final, authoritative check): diff `apps/api/prisma/plantillas/*.html` and `tokens.css`'s `--familia-tipografica` across the whole change — confirm byte-identical (spec `product-identity`, "Change-scope boundary").
 - [x] 3B.3 Manual: real browser at 640px and 1024px, confirm `.cabecera-sesion` wraps rather than clips and rendered contrast reads correctly.
-- [ ] 3B.4 Open PR #3 targeting PR #2's branch (feature-branch-chain). Evidence per Work Units table.
+- [x] 3B.4 Open PR #3 (opened as #95) targeting PR #2's branch (feature-branch-chain). Evidence per Work Units table.
 
 ## Non-goals / deferred (explicit, not silent)
 
