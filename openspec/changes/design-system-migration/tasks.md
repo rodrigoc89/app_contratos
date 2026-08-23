@@ -288,19 +288,19 @@ red nobody reads. It lands here because it composes `Boton` (PR7) and
 `MarcaProducto` (this PR) and cannot precede them. PR5–PR7 still report the
 finding; that window is three draft PRs, none of which gate anything.*
 
-- [ ] 8.1 RED: guard 21 case — a fixture `<a>`/`<Link className="…">` without a block/flex/full-width utility is flagged as an inline box with silently-inert `min-height`. Must fail against pre-redesign markup (still CSS-rule-body scanned).
-- [ ] 8.2 GREEN: redesign `Etiqueta.tsx`, `MarcaProducto.tsx`, `Spinner.tsx`; every `<a>`/`<Link>` in scope gets a real box (block/flex/full-width), satisfying 8.1.
-- [ ] 8.3 RED then GREEN: brand-presentation's rebuilt contrast guard — `MarcaProducto`'s wordmark text/control usage resolves ≥4.5:1 against `#ffffff` and never equals `#008bff`; the icon's raster `#008bff` fill is confirmed **outside** the guard's reach (D1's "wordmark as live text" decision) rather than exempted by a scoping rule.
-- [ ] 8.4 Guard 18 confirmed structurally MOOT for these 3 converted atoms — no `@apply`-based custom class introduced; note in the PR body, register stays `CSS` for entry 18 until PR16's full-codebase confirmation.
-- [ ] 8.5 Update `registro.ts` entries 9, 10, 11, 12 real-coverage confirmed on `MarcaProducto`; entry 21 to `JSX`.
-- [ ] 8.6 RED: extend `geometriaHandheld.ts`'s committed single-row budget assertion to fail on the **current** `CabeceraDeSesion` at 390px in both shells. Confirm it fails at the measured 110px (técnico) and 98px (oficina) — the pre-existing defect PR5 surfaced — before any redesign, so the GREEN below is proven to be what fixed it.
-- [ ] 8.7 GREEN: redesign `CabeceraDeSesion.tsx` so it renders in a single row at 360–430px in both `LayoutTecnico` and `LayoutPanel`, within the committed budget, with every control still ≥48px on both axes. Re-run `pnpm handheld` and confirm the step now passes — do not weaken the assertion to reach green.
+- [x] 8.1 RED: guard 21 case — a fixture `<a>`/`<Link className="…">` without a block/flex/full-width utility is flagged as an inline box with silently-inert `min-height`. Must fail against pre-redesign markup (still CSS-rule-body scanned).
+- [x] 8.2 GREEN: redesign `Etiqueta.tsx`, `MarcaProducto.tsx`, `Spinner.tsx`; every `<a>`/`<Link>` in scope gets a real box (block/flex/full-width), satisfying 8.1.
+- [x] 8.3 RED then GREEN: brand-presentation's rebuilt contrast guard — `MarcaProducto`'s wordmark text/control usage resolves ≥4.5:1 against `#ffffff` and never equals `#008bff`; the icon's raster `#008bff` fill is confirmed **outside** the guard's reach (D1's "wordmark as live text" decision) rather than exempted by a scoping rule.
+- [x] 8.4 Guard 18 confirmed structurally MOOT for these 3 converted atoms — no `@apply`-based custom class introduced; note in the PR body, register stays `CSS` for entry 18 until PR16's full-codebase confirmation.
+- [x] 8.5 Update `registro.ts` entries 9, 10, 11, 12 real-coverage confirmed on `MarcaProducto`; entry 21 to `JSX`.
+- [x] 8.6 RED: extend `geometriaHandheld.ts`'s committed single-row budget assertion to fail on the **current** `CabeceraDeSesion` at 390px in both shells. Confirm it fails at the measured 110px (técnico) and 98px (oficina) — the pre-existing defect PR5 surfaced — before any redesign, so the GREEN below is proven to be what fixed it.
+- [x] 8.7 GREEN: redesign `CabeceraDeSesion.tsx` so it renders in a single row at 360–430px in both `LayoutTecnico` and `LayoutPanel`, within the committed budget, with every control still ≥48px on both axes. Re-run `pnpm handheld` and confirm the step now passes — do not weaken the assertion to reach green.
 
 ## Phase 8B — PR8 close-out
 
-- [ ] 8B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 8B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
 - [ ] 8B.2 User visual review of the redesigned atoms.
-- [ ] 8B.3 Open PR #8 targeting PR #7's branch.
+- [x] 8B.3 Open PR #8 targeting PR #7's branch.
 
 ## Phase 9 — PR9: guard 20 engine + guard 8 rebuild (slice C2)
 
