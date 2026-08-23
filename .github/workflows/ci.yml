@@ -293,3 +293,29 @@ jobs:
         # assertions land in PR6); kept in this job's step order now so the
         # job's shape is stable once PR6 fills it in.
         run: pnpm --filter @contratos/web test:compilado
+
+      - name: Restore the Puppeteer browser cache
+        # design.md D8 / D7 "New CI job" — this job's own cache, independent
+        # of the `integration` job's: jobs get fresh runners, so nothing
+        # here is inherited from `ci.yml:187-191`.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Chromium for Puppeteer
+        # Same reasoning as the `integration` job's own install step
+        # (`ci.yml:193-199`): a warm pnpm store does not re-run puppeteer's
+        # postinstall, so the browser download can silently not happen
+        # without this. Idempotent — a no-op when the cache above already
+        # restored it.
+        run: pnpm --filter @contratos/web exec puppeteer browsers install chrome
+
+      - name: Handheld geometry harness
+        # design.md D8 — real Puppeteer over `vite preview` serving the
+        # `dist/` built above, intercepted `/auth/*`/`/contratos/*` fixtures,
+        # no API and no Postgres. Placed last in this job's step order
+        # (design.md D7: "ceiling → compiled-CSS guards → browser, so a
+        # breach fails in about a second without paying for Chrome") — a
+        # step failure above already stops the job before this one runs.
+        run: pnpm --filter @contratos/web handheld

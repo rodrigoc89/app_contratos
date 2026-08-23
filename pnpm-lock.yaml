@@ -157,6 +157,9 @@ importers:
       jsdom:
         specifier: ^30.0.0
         version: 30.0.1(@noble/hashes@1.8.0)
+      puppeteer:
+        specifier: ^25.4.0
+        version: 25.4.0(yauzl@3.4.0)
       shadcn:
         specifier: ^4.19.0
         version: 4.19.0(typescript@5.9.3)

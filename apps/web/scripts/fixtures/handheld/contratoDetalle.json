@@ -1,0 +1,32 @@
+{
+  "id": "fixture-contrato-1",
+  "estado": "vigente",
+  "numero": 1001,
+  "comodatario": {
+    "nombreCompleto": "Cliente Demostración Uno",
+    "dni": "30.111.222",
+    "domicilioCalle": "Av. Fixture 123",
+    "ciudad": "Córdoba",
+    "provincia": "Córdoba",
+    "whatsapp": "+5493511234567"
+  },
+  "equipos": {
+    "antenaModelo": "Ubiquiti LiteBeam",
+    "antenaMac": "AA:BB:CC:DD:EE:FF",
+    "poe": true,
+    "canoMetros": 12
+  },
+  "plazo": {
+    "meses": 12,
+    "fechaInicio": "2026-01-15",
+    "fechaVencimiento": "2027-01-15"
+  },
+  "fechaFirma": "2026-01-15",
+  "plantillaVersionId": "fixture-plantilla-v1",
+  "documentos": [
+    { "documento": "comodato", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "enlace": "/contratos/fixture-contrato-1/documentos/comodato" },
+    { "documento": "condiciones_generales", "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "enlace": "/contratos/fixture-contrato-1/documentos/condiciones_generales" }
+  ],
+  "eventos": [],
+  "equiposPendientesDeRestitucion": false
+}

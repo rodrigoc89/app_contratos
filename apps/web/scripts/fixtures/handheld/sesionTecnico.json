@@ -1,0 +1,13 @@
+{
+  "tokenDeAcceso": "fixture-token-acceso-tecnico",
+  "expiraEnSegundos": 900,
+  "tokenDeRefresco": "fixture-token-refresco-tecnico",
+  "refrescoExpiraEnSegundos": 2592000,
+  "usuario": {
+    "id": "fixture-usuario-tecnico",
+    "nombreUsuario": "tecnico.demo",
+    "nombreCompleto": "Técnico de Demostración",
+    "rol": "tecnico",
+    "activo": true
+  }
+}
