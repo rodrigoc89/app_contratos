@@ -181,12 +181,21 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // PR8 (task 8.3/8.5) — real coverage lands: MarcaProducto's wordmark
     // exercises valorDeColor/matiz/saturacion/contraste together against
     // the real compiled tema.css, not only a fixture.
+    // PR11 (task 11.4) — coverage extends to InsigniaDeEstado's four estado
+    // tokens: the first real target outside the brand palette. matiz and
+    // saturacion need no separate estado-specific test — both already have
+    // real coverage via the wordmark, and none of the four estado colours
+    // sits near the 190-230 brand-blue hue window their resolvers police.
     numero: 9,
     protege: "valorDeColor resolver, ported to @theme class names",
     disposicion: "JSX",
     pruebas: [
       { archivo: UTILIDADES, titulo: "resolves a bg-* utility class against the @theme block" },
       { archivo: UTILIDADES, titulo: "resolves the wordmark's brand span to >=4.5:1 against #ffffff" },
+      {
+        archivo: UTILIDADES,
+        titulo: "resolves every estado's rendered bg-* utility to the exact hex value tema.css declares",
+      },
     ],
   },
   {
@@ -246,11 +255,27 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
+    // PR11 — ownership moves to the JSX scan: InsigniaDeEstado no longer
+    // renders `.insignia-estado[data-estado=...]`, so the CSS-scoped test
+    // (`convencionesDeEstilos.spec.ts:1210-1240`) now reads only the frozen
+    // BEM sheet (`panel.css`, deleted PR16) and stays live but unowned here.
     numero: 14,
     protege: "4 distinct estado-badge colours + label always present",
-    disposicion: "CSS",
-    archivoCss: "estilos/panel.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "paints the four estados in colours that are actually different from each other" }],
+    disposicion: "JSX",
+    pruebas: [
+      {
+        archivo: UTILIDADES,
+        titulo: "renders a [data-estado=...] hook whose background resolves to a real colour, for every estado",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo: "paints the four estados in colours that are actually different from each other, resolved from real rendered classes",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo: "keeps the Spanish label as the badge's entire accessible text, for every estado — colour is never the only channel",
+      },
+    ],
   },
   {
     // PR10 — ownership moves to the JSX scan for the same reason as guard

@@ -7,6 +7,8 @@ import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
+import type { EstadoContrato } from "@contratos/esquemas";
+
 import { Boton, TAMANOS_BOTON, VARIANTES_BOTON } from "../componentes/atomos/Boton";
 import { CampoTexto } from "../componentes/atomos/CampoTexto";
 import { Etiqueta } from "../componentes/atomos/Etiqueta";
@@ -14,6 +16,8 @@ import { MarcaProducto } from "../componentes/atomos/MarcaProducto";
 import { Spinner } from "../componentes/atomos/Spinner";
 import { BarraDeBusqueda } from "../componentes/moleculas/BarraDeBusqueda";
 import { Paginador } from "../componentes/moleculas/Paginador";
+import { Toast } from "../componentes/moleculas/Toast";
+import { etiquetaDeEstado, InsigniaDeEstado } from "../componentes/organismos/estadoDeContrato";
 import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
 import { cumplePisoHorizontal, cumplePisoVertical, esControlInteractivo } from "./guardias/pisoDeToque";
 
@@ -790,6 +794,13 @@ describe("guard 20: pisoDeToque confirms every PR7/PR8-converted atom, zero pre-
     unmount();
   });
 
+  it("finds and clears Toast's one interactive control — its Cerrar button (PR11)", () => {
+    const { container, unmount } = render(createElement(Toast, { mensaje: "Borrador creado", onDescartar: () => {} }));
+    expect(controlesInteractivosDe(container)).toHaveLength(1);
+    esperaControlesEnElPiso(container);
+    unmount();
+  });
+
   it("classifies zero controls in the non-interactive atoms — the engine does not over-flag", () => {
     for (const elemento of [createElement(Etiqueta, { children: "Nombre" }), createElement(MarcaProducto), createElement(Spinner, { etiqueta: "Cargando" })]) {
       const { container, unmount } = render(elemento);
@@ -1025,5 +1036,98 @@ describe("guard 12: BarraDeBusqueda/Paginador render no brand-blue utility class
 
     expect(container.innerHTML).not.toMatch(/\bmarca-azul\b/);
     unmount();
+  });
+});
+
+const ESTADOS_CONTRATO: readonly EstadoContrato[] = ["vigente", "borrador", "dado_de_baja", "anulado"];
+
+/**
+ * Guard 14 (PR11) — the estado badge's colour is a second channel, never
+ * the only one. This is the JSX-owning replacement for
+ * `convencionesDeEstilos.spec.ts:1210-1240` ("the estado a contract is in
+ * is encoded, never spelled out alone"), which stays live reading the
+ * frozen `panel.css`/`tokens.css` pair, unowned here now that
+ * `InsigniaDeEstado` renders real `bg-*`/`text-*` utilities instead of the
+ * `.insignia-estado[data-estado=...]` CSS rule. The `[data-estado=...]`
+ * attribute strategy itself is untouched — design.md D1 singles it out as
+ * the guard that survives this migration best, and this redesign keeps it
+ * rather than replacing it with a class-based variant.
+ */
+describe("guard 14: InsigniaDeEstado's four estado colours are distinct and its label never disappears (PR11)", () => {
+  const temaReal = readFileSync(join(DIRECTORIO_SRC, "estilos/tema.css"), "utf8");
+
+  /** The single winning `bg-*` utility in a rendered `className`, resolved to a hex value. */
+  function fondoDeClases(clases: string): string | undefined {
+    const coincidencia = /\bbg-([a-z][\w-]*)\b/.exec(clases);
+    return coincidencia ? valorDeColor(`bg-${coincidencia[1]}`, temaReal) : undefined;
+  }
+
+  it("renders a [data-estado=...] hook whose background resolves to a real colour, for every estado", () => {
+    for (const estado of ESTADOS_CONTRATO) {
+      const { container, unmount } = render(createElement(InsigniaDeEstado, { estado }));
+      const insignia = container.querySelector(`[data-estado="${estado}"]`);
+      expect(insignia, `no [data-estado="${estado}"] element rendered`).not.toBeNull();
+      expect(
+        fondoDeClases(insignia?.className ?? ""),
+        `estado "${estado}" resolves no background colour from its className: ${insignia?.className}`,
+      ).toBeDefined();
+      unmount();
+    }
+  });
+
+  it("paints the four estados in colours that are actually different from each other, resolved from real rendered classes", () => {
+    const fondos = ESTADOS_CONTRATO.map((estado) => {
+      const { container, unmount } = render(createElement(InsigniaDeEstado, { estado }));
+      const insignia = container.querySelector(`[data-estado="${estado}"]`);
+      const color = fondoDeClases(insignia?.className ?? "");
+      unmount();
+      return color;
+    });
+
+    expect(
+      new Set(fondos).size,
+      `the four estado badges resolve to ${new Set(fondos).size} distinct colours (${fondos.join(", ")}) — two states that look the same are worse than no colour at all, because they suggest a distinction that is not there`,
+    ).toBe(ESTADOS_CONTRATO.length);
+  });
+
+  it("keeps the Spanish label as the badge's entire accessible text, for every estado — colour is never the only channel", () => {
+    for (const estado of ESTADOS_CONTRATO) {
+      const { container, unmount } = render(createElement(InsigniaDeEstado, { estado }));
+      expect(container.textContent, `no visible label rendered for estado "${estado}"`).toBe(etiquetaDeEstado(estado));
+      unmount();
+    }
+  });
+});
+
+/**
+ * Guards 9-11 (PR11) — real coverage extended to `InsigniaDeEstado`'s four
+ * estado tokens, the first PR to exercise `valorDeColor` against colours
+ * outside the brand palette (guard 12's `bg-primario`/wordmark targets).
+ * `matiz`/`saturacion` need no separate estado-specific exercise here: both
+ * already carry real coverage via `MarcaProducto`'s wordmark (PR8), and none
+ * of the four estado tokens sits anywhere near the 190°-230° brand-blue hue
+ * window the saturation floor exists to police — this is a presence/equality
+ * check on `valorDeColor`'s resolution, not a hue-family classification.
+ */
+describe("guards 9-11: InsigniaDeEstado's estado tokens resolve real colours from tema.css (D3, PR11)", () => {
+  const temaReal = readFileSync(join(DIRECTORIO_SRC, "estilos/tema.css"), "utf8");
+  const FONDOS_ESPERADOS: Record<EstadoContrato, string> = {
+    vigente: "#d7f0e4",
+    borrador: "#e9edf0",
+    dado_de_baja: "#fdecd2",
+    anulado: "#fbe0de",
+  };
+
+  it("resolves every estado's rendered bg-* utility to the exact hex value tema.css declares", () => {
+    for (const estado of ESTADOS_CONTRATO) {
+      const { container, unmount } = render(createElement(InsigniaDeEstado, { estado }));
+      const insignia = container.querySelector(`[data-estado="${estado}"]`);
+      const coincidencia = /\bbg-([a-z][\w-]*)\b/.exec(insignia?.className ?? "");
+      const resuelto = coincidencia ? valorDeColor(`bg-${coincidencia[1]}`, temaReal) : undefined;
+      expect(resuelto, `estado "${estado}" resolved ${resuelto} from className "${insignia?.className}"`).toBe(
+        FONDOS_ESPERADOS[estado],
+      );
+      unmount();
+    }
   });
 });

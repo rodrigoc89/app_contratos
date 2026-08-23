@@ -11,7 +11,9 @@ const DURACION_MS = 5_000;
  * PR26 — the shared surface for exactly three transient confirmations
  * (design.md "Toast" category): "Borrador creado", "Documentos compartidos
  * correctamente." and the signing confirmation. Bottom-anchored, brand
- * colour, high contrast (CSS: `.toast`, `estilos/organismos.css`).
+ * colour, high contrast (design-system-migration PR11: redesigned onto
+ * Tailwind, `bg-primario`/`text-white`, the same pairing PR7's `Boton`
+ * already proved at 7.25:1).
  * `role="status"` is what makes this announced at all — a toast without a
  * live region is invisible to a screen reader, and it is `status` (polite),
  * never `alert`, because nothing breaks if one of these three is missed.
@@ -55,9 +57,17 @@ export function Toast({ mensaje, onDescartar }: PropiedadesToast) {
   }, []);
 
   return (
-    <div role="status" className="toast">
-      <p className="toast__mensaje">{mensaje}</p>
-      <button type="button" className="toast__cerrar" aria-label="Cerrar aviso" onClick={onDescartar}>
+    <div
+      role="status"
+      className="fixed inset-x-4 bottom-4 z-10 flex items-center justify-between gap-3 rounded-base bg-primario p-4 font-semibold text-white"
+    >
+      <p className="m-0">{mensaje}</p>
+      <button
+        type="button"
+        className="min-h-toque min-w-toque cursor-pointer border-none bg-transparent text-grande text-white"
+        aria-label="Cerrar aviso"
+        onClick={onDescartar}
+      >
         ×
       </button>
     </div>
