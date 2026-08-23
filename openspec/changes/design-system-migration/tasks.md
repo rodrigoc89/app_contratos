@@ -273,7 +273,7 @@ claiming full coverage, rather than assuming this list is exhaustive.
 ## Phase 7B — PR7 close-out
 
 - [x] 7B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
-- [ ] 7B.2 User visual review of the redesigned `Boton`/`CampoTexto` — "visibly new" is a judgment this suite cannot assert (Success Criteria).
+- [x] 7B.2 User visual review of the redesigned `Boton`/`CampoTexto` — "visibly new" is a judgment this suite cannot assert (Success Criteria).
 - [x] 7B.3 Open PR #7 targeting PR #6's branch.
 
 ## Phase 8 — PR8: `Etiqueta`/`MarcaProducto`/`Spinner`/`CabeceraDeSesion` redesign (slice C1b, guards 9–12/18/21)
@@ -299,7 +299,7 @@ finding; that window is three draft PRs, none of which gate anything.*
 ## Phase 8B — PR8 close-out
 
 - [x] 8B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
-- [ ] 8B.2 User visual review of the redesigned atoms.
+- [x] 8B.2 User visual review of the redesigned atoms.
 - [x] 8B.3 Open PR #8 targeting PR #7's branch.
 
 ## Phase 9 — PR9: guard 20 engine + guard 8 rebuild (slice C2)
@@ -339,7 +339,7 @@ finding; that window is three draft PRs, none of which gate anything.*
 
 - [ ] 11.1 RED: guard 14 case — `InsigniaDeEstado`'s 4 estado colours each resolve to distinct values and the Spanish label stays present in every variant (never colour-only). Must fail against pre-redesign markup.
 - [ ] 11.2 GREEN: redesign `InsigniaDeEstado`/`estadoDeContrato.tsx`, keeping its existing `[data-estado=...]` attribute strategy (already compatible per exploration row 14 — "SURVIVES best of all").
-- [ ] 11.3 GREEN: redesign the remaining named self-contained molecules (`Toast`, `IndicadorDePaso`, `AvisoDeActualizacion`), plus any additional component surfaced by 11.0's inventory confirmation not already covered by PR7/PR8/PR10/PR12–15. **`CabeceraDeSesion` is no longer here — it moved to PR8**, so 11.0's inventory must not re-list it.
+- [ ] 11.3 GREEN: redesign the remaining named self-contained molecules (`Toast`, `IndicadorDePaso`, `AvisoDeActualizacion`), plus any additional component surfaced by 11.0's inventory confirmation not already covered by PR7/PR8/PR10/PR12–15. **`CabeceraDeSesion` and `PaginaLogin` are no longer here — both moved to PR8**, so 11.0's inventory must not re-list it.
 - [ ] 11.4 RED then GREEN: real-coverage confirmation for guards 9–11 (colour resolvers) against every component converted through this PR.
 - [ ] 11.5 Update `registro.ts` entry 14 to `JSX`; confirm 9–11 coverage note.
 
