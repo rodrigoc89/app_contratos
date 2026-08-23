@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { LayoutPanel } from "./LayoutPanel";
 
 /**
- * DESIGN.md D13 — the office shell, sibling to `LayoutTablet`, never a
+ * DESIGN.md D13 — the office shell, sibling to `LayoutTecnico`, never a
  * modification of it. `.layout-panel` is the class `panel.css`'s
  * `--fuente-base: 16px` rebind and the 1280px content cap both hang off.
  */

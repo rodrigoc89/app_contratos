@@ -282,13 +282,13 @@
   margin-top: var(--espacio-5);
 }
 
-/* --- app shell: LayoutTablet --------------------------------------------- */
+/* --- app shell: LayoutTecnico --------------------------------------------- */
 
-.layout-tablet {
+.layout-tecnico {
   min-height: 100%;
 }
 
-.layout-tablet__contenido {
+.layout-tecnico__contenido {
   max-width: 720px;
   margin: 0 auto;
   padding: var(--espacio-4);

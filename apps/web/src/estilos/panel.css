@@ -34,7 +34,7 @@
   /* A desktop operator reading for hours wants the browser's own 16px
      default, not the 18px `:root` value sized for a tablet held at arm's
      length (tokens.css). Scoped here rather than as a second global token
-     so `LayoutTablet`'s subtree is untouched. */
+     so `LayoutTecnico`'s subtree is untouched. */
   --fuente-base: 16px;
   /* The rebind above is not enough on its own, and for two years of reading
      this file it looked like it was.

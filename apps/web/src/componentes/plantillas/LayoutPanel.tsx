@@ -11,8 +11,8 @@ interface PropiedadesLayoutPanel {
 }
 
 /**
- * DESIGN.md D13 — the office shell. A sibling to `LayoutTablet`, never a
- * modification of it: `LayoutTablet`'s name declares a device assumption
+ * DESIGN.md D13 — the office shell. A sibling to `LayoutTecnico`, never a
+ * modification of it: `LayoutTecnico`'s name declares a device assumption
  * (`max-width: 720px`) that would waste most of a 1920px monitor, and it
  * carries its own spec plus the técnico flow depending on it.
  *
