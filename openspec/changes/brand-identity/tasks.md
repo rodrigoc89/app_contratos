@@ -69,7 +69,7 @@ Only the tracker merges to master.
 
 - [x] 1B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint` against the PR1 diff; record results.
 - [x] 1B.2 Manual: diff `apps/api/prisma/plantillas/*.html` and `tokens.css`'s `--familia-tipografica` against the pre-change state — confirm byte-identical (spec `product-identity`, "Change-scope boundary" — no existing test pins this).
-- [ ] 1B.3 Open PR #1 targeting the tracker/feature branch (feature-branch-chain). Evidence: focused test command output, manual tab-title/favicon check, rollback boundary from the Work Units table.
+- [x] 1B.3 Open PR #1 (opened as #93) targeting the tracker/feature branch (feature-branch-chain). Evidence: focused test command output, manual tab-title/favicon check, rollback boundary from the Work Units table.
 
 ## Phase 2 — PR2: replacement PWA icons (D5)
 
