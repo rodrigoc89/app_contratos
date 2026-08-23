@@ -2,7 +2,14 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { render } from "@testing-library/react";
+import { createElement } from "react";
 import { describe, expect, it } from "vitest";
+
+import { Boton, TAMANOS_BOTON } from "../componentes/atomos/Boton";
+
+// This file is `.spec.ts`, not `.spec.tsx` — `createElement` renders guard
+// 3/4's fixtures below without JSX syntax this loader does not parse.
 
 /**
  * design.md D2 — the JSX/`cva`/`@theme` half of the guard endpoint,
@@ -395,5 +402,234 @@ describe("guard 12: Guards A-D brand-blue contrast assertion, ported to JSX clas
     const violaciones = violacionesGuardiaDeMarcaJsx([{ selector: ".otro", claseTexto: "text-fondo" }], TEMA);
 
     expect(violaciones).toEqual([]);
+  });
+});
+
+/**
+ * Guard 3 (design.md D5's future engine, scoped to `Boton` in PR7 — the
+ * general `pisoDeToque.ts` scan over every interactive element lands in
+ * PR9) — the same heuristic that engine will generalise: `*-toque` (D3's
+ * `--spacing-toque` token), `size-toque`, or a numeric `w-N`/`h-N` utility
+ * where `N * 4 >= 48` (Tailwind's default 4px spacing step). The CSS-scoped
+ * predecessor read a `min-height`/`min-width` declaration off `.boton`;
+ * this reads the same floor off `Boton`'s `cva` `tamano` variant instead.
+ */
+function resuelveEjeDeToque(clases: string, eje: "w" | "h"): boolean {
+  if (/\bsize-toque\b/.test(clases)) {
+    return true;
+  }
+  if (new RegExp(`\\b(?:min-)?${eje}-toque\\b`).test(clases)) {
+    return true;
+  }
+  const numerico = new RegExp(`\\b(?:min-)?${eje}-(\\d+)\\b`, "g");
+  return [...clases.matchAll(numerico)].some((coincidencia) => Number(coincidencia[1]) * 4 >= 48);
+}
+
+export function satisfaceToqueEnAmbosEjes(clases: string): boolean {
+  return resuelveEjeDeToque(clases, "w") && resuelveEjeDeToque(clases, "h");
+}
+
+describe("guard 3: Boton's cva variant map resolves >=48px on both axes (D5 early, JSX)", () => {
+  it("flags a fixture class list missing the touch floor on one axis", () => {
+    expect(satisfaceToqueEnAmbosEjes("min-h-toque px-4")).toBe(false);
+  });
+
+  it("accepts the size-toque shorthand, which sets both axes at once", () => {
+    expect(satisfaceToqueEnAmbosEjes("size-toque")).toBe(true);
+  });
+
+  it("accepts an equivalent numeric utility once N * 4 >= 48", () => {
+    expect(satisfaceToqueEnAmbosEjes("h-12 w-12")).toBe(true);
+  });
+
+  it("rejects a numeric utility under the floor", () => {
+    expect(satisfaceToqueEnAmbosEjes("h-8 w-8")).toBe(false);
+  });
+
+  it("resolves every tamano variant Boton declares to >=48px on both axes", () => {
+    for (const tamano of TAMANOS_BOTON) {
+      const { getByRole, unmount } = render(createElement(Boton, { tamano, children: "Guardar" }));
+      const clases = getByRole("button", { name: "Guardar" }).className;
+      expect(satisfaceToqueEnAmbosEjes(clases), `tamano="${tamano}" fails the touch floor: ${clases}`).toBe(true);
+      unmount();
+    }
+  });
+});
+
+/**
+ * Guard 4 (PR25's CSS-scoped guard, JSX variant half — final confirmation
+ * against `LienzoDeFirma`'s real composition lands in PR13): `destructivo`
+ * must colour itself off the `variante` prop, never off DOM position, and
+ * a fixture composition of adjacent `Boton`s must be able to reach the
+ * >=32px separation `organismos.css`'s `.lienzo-de-firma__acciones` rule
+ * enforced, via an ordinary Tailwind spacing utility.
+ */
+describe("guard 4: destructivo variant differs by colour, not position, at >=32px gap in a fixture composition (PR25 -> PR7 variant half)", () => {
+  const SEPARACION_MINIMA_PX = 32;
+
+  it("colours the destructivo variant by its own prop, regardless of where it sits in the composition", () => {
+    const primera = render(
+      createElement(
+        "div",
+        { className: "flex gap-8" },
+        createElement(Boton, { variante: "destructivo", children: "Borrar" }),
+        createElement(Boton, { children: "Firmar" }),
+      ),
+    );
+    expect(primera.getByRole("button", { name: "Borrar" })).toHaveClass("bg-error");
+    expect(primera.getByRole("button", { name: "Firmar" })).not.toHaveClass("bg-error");
+    primera.unmount();
+
+    const segunda = render(
+      createElement(
+        "div",
+        { className: "flex gap-8" },
+        createElement(Boton, { children: "Firmar" }),
+        createElement(Boton, { variante: "destructivo", children: "Borrar" }),
+      ),
+    );
+    expect(segunda.getByRole("button", { name: "Borrar" })).toHaveClass("bg-error");
+    expect(segunda.getByRole("button", { name: "Firmar" })).not.toHaveClass("bg-error");
+    segunda.unmount();
+  });
+
+  it(`keeps at least ${SEPARACION_MINIMA_PX}px of gap in a fixture composition of adjacent Boton controls`, () => {
+    const { container, unmount } = render(
+      createElement(
+        "div",
+        { className: "flex gap-8" },
+        createElement(Boton, { children: "Firmar" }),
+        createElement(Boton, { variante: "destructivo", children: "Borrar" }),
+      ),
+    );
+
+    const envoltorio = container.firstElementChild;
+    expect(envoltorio, "fixture wrapper not found").not.toBeNull();
+
+    const gap = /\bgap-(\d+)\b/.exec(envoltorio?.className ?? "");
+    expect(gap, `fixture composition has no gap-N utility: ${envoltorio?.className}`).not.toBeNull();
+    // Tailwind's default (unmodified, D3) spacing scale: N * 4px per step.
+    expect(Number(gap?.[1]) * 4).toBeGreaterThanOrEqual(SEPARACION_MINIMA_PX);
+    unmount();
+  });
+});
+
+const PATRON_OUTLINE_NONE_JSX = /\boutline-none\b/;
+const PATRON_SOMBRA_DE_FOCO = /\bfocus-visible:shadow-(?!none\b)[\w-]+\b/;
+// A colour-suffixed token (`ring-foco`) is NOT a width token — the
+// lookahead requires the class to END right after `ring`/`outline` (bare,
+// default non-zero width) or right after its numeric suffix, so
+// `focus-visible:ring-foco` is correctly left to the colour pattern below.
+const PATRON_ANILLO_CON_ANCHO = /\bfocus-visible:(?:ring|outline)(?:-(\d+))?(?=\s|$)/g;
+const PATRON_COLOR_DE_ANILLO = /\bfocus-visible:(ring|outline)-([a-z][\w-]*)\b/g;
+const RATIO_FOCO_MINIMO = 3;
+
+function tieneAnchoDeAnilloNoNulo(clases: string): boolean {
+  if (PATRON_SOMBRA_DE_FOCO.test(clases)) {
+    return true;
+  }
+  return [...clases.matchAll(PATRON_ANILLO_CON_ANCHO)].some(
+    (coincidencia) => coincidencia[1] === undefined || Number(coincidencia[1]) > 0,
+  );
+}
+
+/**
+ * The colour half of a `focus-visible:ring-*`/`focus-visible:outline-*`
+ * token, excluding its width/offset siblings — scans every match, not just
+ * the first, since a width-only token (`ring-offset-2`) can legitimately
+ * appear before the real colour token (`ring-foco`) in the same class list.
+ */
+function claseDeColorDeAnillo(clases: string): string | undefined {
+  for (const coincidencia of clases.matchAll(PATRON_COLOR_DE_ANILLO)) {
+    const sufijo = coincidencia[2] ?? "";
+    if (/^\d+$/.test(sufijo) || sufijo.startsWith("offset")) continue;
+    return `${coincidencia[1]}-${sufijo}`;
+  }
+  return undefined;
+}
+
+/**
+ * Guard 6 (D6) — the expanded, ring-aware focus judgment.
+ * `removalesSinReemplazo`/`tieneReemplazoDeFoco` (`convencionesDeEstilos.spec.ts`)
+ * required a real `outline:` declaration; ported verbatim that either
+ * false-fails idiomatic shadcn (`outline-none` + `focus-visible:ring-*`) or
+ * silently stops protecting anything once `Boton` converts. D6 widens WHAT
+ * counts as a replacement — never removes the requirement for one. Accepted
+ * only when all three hold: (i) the replacement sits on `focus-visible:`,
+ * never unconditional; (ii) it is a ring/outline/shadow token with
+ * non-zero width; (iii) its colour resolves >=3:1 against the adjacent
+ * background through the same `@theme` map guards 9-12 use.
+ */
+export function tieneReemplazoDeFocoJsx(clases: string, tema: string, fondoAdyacente = "bg-fondo"): boolean {
+  if (!PATRON_OUTLINE_NONE_JSX.test(clases)) {
+    return true;
+  }
+  if (!tieneAnchoDeAnilloNoNulo(clases)) {
+    return false;
+  }
+
+  const claseColor = claseDeColorDeAnillo(clases);
+  if (claseColor === undefined) {
+    return false;
+  }
+
+  const colorAnillo = valorDeColor(claseColor, tema);
+  const colorFondo = valorDeColor(fondoAdyacente, tema);
+  if (colorAnillo === undefined || colorFondo === undefined) {
+    return false;
+  }
+
+  return contraste(colorAnillo, colorFondo) >= RATIO_FOCO_MINIMO;
+}
+
+describe("guard 6: ring-based focus replacements pass, bare outline-none with none fails (D6)", () => {
+  const TEMA = `
+    @theme {
+      --color-foco: #0b634a;
+      --color-fondo: #ffffff;
+    }
+  `;
+
+  it("does not flag a class list that never removes the outline", () => {
+    expect(tieneReemplazoDeFocoJsx("bg-primario text-white", TEMA)).toBe(true);
+  });
+
+  it("rejects a bare outline-none with no replacement at all", () => {
+    expect(tieneReemplazoDeFocoJsx("outline-none", TEMA)).toBe(false);
+  });
+
+  it("accepts an idiomatic focus-visible:ring replacement with non-zero width and >=3:1 contrast", () => {
+    expect(tieneReemplazoDeFocoJsx("outline-none focus-visible:ring-2 focus-visible:ring-foco", TEMA)).toBe(true);
+  });
+
+  it("rejects a zero-width ring replacement", () => {
+    expect(
+      tieneReemplazoDeFocoJsx("outline-none focus-visible:ring-0 focus-visible:ring-foco", TEMA),
+    ).toBe(false);
+  });
+
+  it("rejects an unconditional (non-focus-visible) ring — D6's requirement (i)", () => {
+    expect(tieneReemplazoDeFocoJsx("outline-none ring-2 ring-foco", TEMA)).toBe(false);
+  });
+
+  it("rejects a ring replacement whose colour resolves under 3:1 — D6's requirement (iii)", () => {
+    const temaClaro = `@theme { --color-foco: #f5f5f5; --color-fondo: #ffffff; }`;
+    expect(
+      tieneReemplazoDeFocoJsx("outline-none focus-visible:ring-2 focus-visible:ring-foco", temaClaro),
+    ).toBe(false);
+  });
+
+  it("rejects every real .tsx file under apps/web/src whose outline-none has no valid focus-visible replacement", () => {
+    const temaReal = readFileSync(join(DIRECTORIO_SRC, "estilos/tema.css"), "utf8");
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    expect(fuentes.length, "no .tsx files found — the scan matched nothing").toBeGreaterThan(3);
+
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      expect(
+        tieneReemplazoDeFocoJsx(contenido, temaReal),
+        `${rutaRelativa} removes focus with outline-none but declares no valid focus-visible ring/outline/shadow replacement (design.md D6)`,
+      ).toBe(true);
+    }
   });
 });

@@ -402,12 +402,16 @@ describe("LienzoDeFirma — destructive action (PR25)", () => {
 
     // Borrar discards every stroke the customer already made; Deshacer
     // removes one. Only the unrecoverable one carries the warning.
-    expect(borrar).toHaveClass("boton--destructivo");
-    expect(deshacer).not.toHaveClass("boton--destructivo");
+    // design-system-migration PR7 — the BEM `.boton--destructivo` modifier
+    // is replaced by Boton's cva `destructivo` variant, which colours by
+    // its own prop rather than a class a caller could paste onto the wrong
+    // button; `bg-error` is its resolved marker.
+    expect(borrar).toHaveClass("bg-error");
+    expect(deshacer).not.toHaveClass("bg-error");
 
-    // The base class must survive alongside the modifier — the atom used to
-    // overwrite an incoming className outright.
-    expect(borrar).toHaveClass("boton");
+    // The shared base class must survive alongside the variant — the atom
+    // used to overwrite an incoming className outright.
+    expect(borrar).toHaveClass("inline-flex");
   });
 });
 

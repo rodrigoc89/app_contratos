@@ -88,24 +88,36 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
+    // PR7 — Boton redesigned; the CSS-scoped min-height/min-width scan
+    // retires along with `.boton`, replaced by the ported heuristic reading
+    // the cva `tamano` variant map (D5 early, generalised into
+    // pisoDeToque.ts in PR9).
     numero: 3,
     protege: ".boton ≥48px touch floor",
-    disposicion: "CSS",
-    archivoCss: "estilos/atomos.css",
+    disposicion: "JSX",
     pruebas: [
-      { archivo: ESTILOS, titulo: "gives .boton a minimum touch target of at least 48px in both dimensions" },
+      {
+        archivo: UTILIDADES,
+        titulo: "resolves every tamano variant Boton declares to >=48px on both axes",
+      },
     ],
   },
   {
+    // PR7 — variant half only: Boton's destructivo cva variant proves the
+    // colour-not-position half plus a fixture composition's >=32px gap.
+    // Final confirmation against LienzoDeFirma's real composition lands in
+    // PR13, where this entry's pruebas gain that second owning test.
     numero: 4,
     protege: "32px gap + destructive colour-not-position (signature actions)",
-    disposicion: "CSS",
-    archivoCss: "estilos/organismos.css",
+    disposicion: "JSX",
     pruebas: [
       {
-        archivo: ESTILOS,
-        titulo:
-          "keeps at least ${SEPARACION_MINIMA_PX}px below .lienzo-de-firma__acciones before the next control, so a thumb reaching for Firmar cannot land on Borrar",
+        archivo: UTILIDADES,
+        titulo: "colours the destructivo variant by its own prop, regardless of where it sits in the composition",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo: "keeps at least ${SEPARACION_MINIMA_PX}px of gap in a fixture composition of adjacent Boton controls",
       },
     ],
   },
@@ -122,11 +134,20 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
+    // PR7 (D6) — ownership moves fully to the ring-aware JSX judgment.
+    // `convencionesDeEstilos.spec.ts`'s CSS-scoped scan still runs over the
+    // still-BEM sheets (nothing there removes a focus indicator today), but
+    // this protection's owner is now the scanner that recognises a
+    // focus-visible:ring replacement, which the CSS-scoped version cannot.
     numero: 6,
     protege: "Focus-visible never silently removed without a declared replacement",
-    disposicion: "CSS",
-    archivoCss: "estilos/panel.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "never removes a focus indicator without declaring a replacement" }],
+    disposicion: "JSX",
+    pruebas: [
+      {
+        archivo: UTILIDADES,
+        titulo: "rejects every real .tsx file under apps/web/src whose outline-none has no valid focus-visible replacement",
+      },
+    ],
   },
   {
     numero: 7,

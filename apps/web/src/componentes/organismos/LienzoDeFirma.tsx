@@ -231,7 +231,11 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
         <Boton type="button" onClick={manejarDeshacer}>
           Deshacer
         </Boton>
-        <Boton type="button" className="boton--destructivo" onClick={manejarBorrar}>
+        {/* design-system-migration PR7 — Boton's destructive marker moved
+            from a BEM modifier class to the cva `variante` prop; the
+            surrounding organism's own layout/composition is unchanged
+            (redesign lands in PR13, guard 4's final confirmation). */}
+        <Boton type="button" variante="destructivo" onClick={manejarBorrar}>
           Borrar
         </Boton>
       </div>
