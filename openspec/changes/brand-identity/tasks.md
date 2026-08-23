@@ -83,7 +83,7 @@ Only the tracker merges to master.
 
 - [x] 2B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1+PR2 diff; record results.
 - [x] 2B.2 Manual: confirm `apps/api/prisma/plantillas/*.html` and `tokens.css`'s font stack remain byte-identical (same check as 1B.2, cumulative).
-- [ ] 2B.3 Open PR #2 targeting PR #1's branch (feature-branch-chain). Evidence per Work Units table; note the reinstall/home-screen-icon caveat from the proposal's Rollback Plan.
+- [x] 2B.3 Open PR #2 (opened as #94) targeting PR #1's branch (feature-branch-chain). Evidence per Work Units table; note the reinstall/home-screen-icon caveat from the proposal's Rollback Plan.
 
 ## Phase 3 — PR3: wordmark, CSS, brand-blue contrast guard (D1, D2, D6, D7)
 
