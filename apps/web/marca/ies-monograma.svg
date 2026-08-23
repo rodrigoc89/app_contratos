@@ -7,11 +7,56 @@
   Recreated (no vector source exists — approved by the user from a
   screenshot): a #008bff field with a white "IES" monogram in a bold
   grotesque (Arial/Helvetica Black-weight). 512x512 canvas so this same
-  source can seed every raster derivative: the 32x32 favicon (this PR) and,
-  later, the 192/512/512-maskable manifest icons (Phase 2 / PR2), which must
-  keep the monogram inside the maskable icon's center 80% safe zone
-  (409.6px of 512px) — the glyph block below already sits well inside that
-  bound.
+  source can seed every raster derivative: the 32x32 favicon (PR1) and the
+  192/512/512-maskable manifest icons (PR2, this file).
+
+  Maskable safe zone (DESIGN.md D5): the monogram must stay inside the
+  center 80% of the 512px canvas — a 409.6px square centered on the
+  512x512 canvas, i.e. x/y in [51.2, 461.8]. `icon-512-maskable.png` uses a
+  smaller `font-size="130"` (down from this file's 176) precisely so its
+  glyph clears that bound with margin once Android's circular crop is
+  applied on top of the square safe zone; `icon-192.png` and `icon-512.png`
+  are not maskable and use this file's dimensions as-is.
+
+  ── Regeneration (Phase 2 / PR2) ────────────────────────────────────────
+  No `rsvg-convert`, Inkscape, ImageMagick or `cairosvg` is installed on
+  this machine (checked via `command -v`, all absent) — none of the usual
+  SVG-to-PNG converters are an option here. What actually worked: screenshot
+  this SVG through the headless Chromium binary already downloaded for
+  `apps/api`'s `puppeteer` dependency (`^25.4.0`, see
+  `apps/api/src/contratos/infrastructure/GeneradorDeDocumentosPuppeteer.ts`
+  for the same `puppeteer.launch({ headless: true, ... })` shape reused
+  here) — no new runtime dependency for `apps/web`, since the render step is
+  a one-off local script, never part of the build.
+
+  Exact steps, run from the repo root with `apps/api`'s puppeteer already
+  installed (`pnpm install` at the root covers it):
+
+  1. For each PNG, set the viewport to the exact target pixel size with
+     `deviceScaleFactor: 1` (this is what makes the screenshot pixel-exact
+     instead of DPR-scaled) and load this file directly as a `file://` URL:
+       - `icon-192.png`   → viewport 192x192
+       - `icon-512.png`   → viewport 512x512
+       - `icon-512-maskable.png` → viewport 512x512, using a copy of this
+         SVG with `font-size="130"` and `y="305"` on the `<text>` element
+         (glyph pulled up and shrunk to clear the circular mask — see the
+         safe-zone note above)
+       - `favicon-32.png` → viewport 32x32, using `apps/web/public/favicon.svg`
+         (the simplified 16px-legible variant), not this file
+  2. `page.screenshot({ omitBackground: false })` against a page whose body
+     has zero margin and contains only the `<svg>` sized to fill the
+     viewport, so the capture has no browser chrome or padding.
+  3. Write the PNG bytes straight to
+     `apps/web/public/icons/{icon-192,icon-512,icon-512-maskable}.png` and
+     `apps/web/public/favicon-32.png`.
+  4. Confirm `apps/web/src/pwa/iconos.spec.ts` passes — it parses each
+     output file's real IHDR width/height and compares them against the
+     `sizes` the manifest promises, so a viewport typo is caught, not just
+     eyeballed.
+  5. Visually confirm the blue field, the white "IES" monogram and the
+     maskable safe zone by opening the PNGs directly — this suite cannot
+     decode PNG pixel content (spec `product-identity`, "visual fidelity is
+     verified manually, not by an automated test").
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <rect width="512" height="512" fill="#008bff" />
