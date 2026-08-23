@@ -43,24 +43,47 @@ export interface EntradaDeRegistro {
 
 const ESTILOS = "estilos/convencionesDeEstilos.spec.ts";
 const UTILIDADES = "estilos/convencionesDeUtilidades.spec.ts";
+const COMPILADO = "estilos/convencionesDeCompilado.compilado.spec.ts";
 
 export const REGISTRO: readonly EntradaDeRegistro[] = [
   {
+    // PR6 (design.md slice B) — the collision cluster. CSS half stays:
+    // guard 1 bans overflow:hidden/clip anywhere in hand-authored CSS; the
+    // compiled half (guard 1/16 shared) additionally scans dist/ output,
+    // where Tailwind Preflight and any vendored .sr-only usage are
+    // visible; the JSX half bans the literal `sr-only` token at author
+    // time, independent of whether a build has run.
     numero: 1,
     protege: "No overflow:hidden/clip anywhere (reading gate) + sr-only token ban",
-    disposicion: "CSS",
+    disposicion: "AMBOS",
     archivoCss: "estilos/base.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "declares no overflow: hidden / overflow: clip anywhere" }],
+    pruebas: [
+      { archivo: ESTILOS, titulo: "declares no overflow: hidden / overflow: clip anywhere" },
+      { archivo: COMPILADO, titulo: "finds no overflow:hidden|clip or clip-path rule in the real compiled dist/ output" },
+      {
+        archivo: UTILIDADES,
+        titulo: "rejects every real .tsx file under apps/web/src that contains the literal sr-only token",
+      },
+    ],
   },
   {
+    // PR6 — the project's own `[hidden]` duplicate was deleted from
+    // base.css (design.md slice B); Tailwind Preflight's equivalent rule
+    // is now the sole `!important display` rule, visible only in compiled
+    // output. The CSS-scoped test now proves the negative (no rule was
+    // reintroduced); the compiled test proves Preflight's rule is alone.
     numero: 2,
     protege: "Exactly one !important display declaration ([hidden])",
-    disposicion: "CSS",
+    disposicion: "AMBOS",
     archivoCss: "estilos/base.css",
     pruebas: [
       {
         archivo: ESTILOS,
-        titulo: "has exactly one !important display declaration — the [hidden] protection itself",
+        titulo: "declares no project-authored [hidden] rule in estilos/base.css — Preflight's own rule is the sole owner now",
+      },
+      {
+        archivo: COMPILADO,
+        titulo: "finds exactly one !important display rule in the real compiled dist/ output — Preflight's own [hidden] rule",
       },
     ],
   },
@@ -197,12 +220,17 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
+    // PR6 — the displacement recipe (panel.css:254-256/303-305) is
+    // unchanged: `left: -10000px`, never `overflow:hidden`/`clip-path`.
+    // The compiled scan (shared with guard 1) confirms it survives the
+    // Tailwind swap without a `.sr-only`/clip-path regression reappearing.
     numero: 16,
     protege: "Narrow-layout thead displaced, not clipped",
-    disposicion: "CSS",
+    disposicion: "AMBOS",
     archivoCss: "estilos/panel.css",
     pruebas: [
       { archivo: ESTILOS, titulo: "moves the narrow-layout thead off-screen instead of only clipping its pixels" },
+      { archivo: COMPILADO, titulo: "finds no overflow:hidden|clip or clip-path rule in the real compiled dist/ output" },
     ],
   },
   {

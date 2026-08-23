@@ -19,6 +19,21 @@
  * tokens are available to every utility class compiled from here on.
  */
 @import "tailwindcss";
+
+/**
+ * design.md's slice B collision cluster, found while implementing it: this
+ * directory's own English prose ("...using the sr-only recipe...",
+ * "...the overflow-hidden / `[hidden]` / `sr-only` collision cluster...")
+ * contains bare words that are *shaped* like Tailwind utility class names.
+ * Tailwind's candidate scanner is a dumb lexical match over raw file text —
+ * it has no idea these are sentences, not `className`s — so it speculatively
+ * compiled `.sr-only` and `.overflow-hidden` into real `dist/` output before
+ * any component ever used them. `estilos/` holds no `.tsx`, so it can never
+ * contribute a real utility candidate; excluding it removes this whole class
+ * of false positive rather than policing every future comment's word choice.
+ */
+@source not "./";
+
 @import "./tema.css";
 @import "./tokens.css";
 @import "./base.css";

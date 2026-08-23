@@ -1,18 +1,26 @@
 /**
- * Global reset plus the one structural invariant that protects the
- * `EscanerDeMac` camera preview from an accidental `display:` collision
- * (see `convencionesDeEstilos.spec.ts`, which fails if either this rule is
- * removed or a second `!important` display declaration appears anywhere).
+ * Global reset. The `[hidden]` protection that used to live here (guard 2,
+ * PR24a) was deleted in design-system-migration PR6 — see design.md's
+ * slice B collision cluster. Tailwind v4 Preflight ships its own equivalent
+ * `[hidden]:where(:not([hidden="until-found"])) { display: none !important; }`
+ * (unconditionally, from `@import "tailwindcss"` in `index.css`), and this
+ * project's own rule was a byte-for-byte duplicate of that protection, not
+ * an addition to it.
  *
- * `EscanerDeMac.tsx` hides its `<video>` with `hidden={...}` while the
- * camera is closed. A later `display: flex/grid/block` rule that happens to
- * match it would override `[hidden]` and turn the preview back on. This
- * rule is the whole mitigation — it must stay `!important` and it must stay
- * the only one.
+ * Proof this is safe, not merely equivalent-looking CSS text: `!important`
+ * declarations always outrank non-important ones for the same property on
+ * the same element, *regardless of cascade layer or selector specificity* —
+ * Preflight's rule lives inside `@layer base`, but that only affects
+ * ordering among other important declarations, and this compiled output has
+ * none competing (guard 2's compiled scan, `convencionesDeCompilado.compilado.spec.ts`,
+ * asserts exactly one `!important display` rule survives). `EscanerDeMac.tsx`'s
+ * `<video hidden={...}>` is still governed by `organismos.css`'s
+ * `.escaner-de-mac__video { display: block; ... }` — a plain, non-important
+ * declaration (see that rule's own comment) — so Preflight's `!important`
+ * rule wins the camera preview exactly as this project's own rule used to.
+ * `EscanerDeMac.spec.tsx`'s hidden-attribute assertions and PR14's dedicated
+ * guard-2-final task re-confirm this on the converted component.
  */
-[hidden] {
-  display: none !important;
-}
 
 *,
 *::before,

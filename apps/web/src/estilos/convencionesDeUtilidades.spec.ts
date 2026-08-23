@@ -76,6 +76,48 @@ describe("no first-party file imports Radix directly (D1)", () => {
   });
 });
 
+const PATRON_TOKEN_SR_ONLY = /\bsr-only\b/;
+
+/**
+ * Guard 1's JSX-scanner ban (design.md slice B, `styling-guards`'s
+ * "an authored sr-only token is caught before it compiles" scenario) —
+ * defence in depth alongside the compiled scan
+ * (`convencionesDeCompilado.compilado.spec.ts`): this catches what the team
+ * writes, at author time, independent of whether a build has run; the
+ * compiled scan catches what anything — including vendored source — emits.
+ * Neither substitutes for the other.
+ */
+function tieneTokenSrOnly(contenido: string): boolean {
+  return PATRON_TOKEN_SR_ONLY.test(contenido);
+}
+
+describe("guard 1: no first-party .tsx contains the literal sr-only class token (D2/slice B)", () => {
+  it("flags a fixture className carrying the literal sr-only token", () => {
+    expect(tieneTokenSrOnly('<span className="sr-only">Etiqueta</span>')).toBe(true);
+  });
+
+  it("flags the token even when combined with other classes", () => {
+    expect(tieneTokenSrOnly('className={cn("flex", "sr-only", "gap-2")}')).toBe(true);
+  });
+
+  it("does not flag an unrelated class name", () => {
+    expect(tieneTokenSrOnly('<span className="sr-2 only-sr">Etiqueta</span>')).toBe(false);
+  });
+
+  it("rejects every real .tsx file under apps/web/src that contains the literal sr-only token", () => {
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    expect(fuentes.length, "no .tsx files found — the scan matched nothing").toBeGreaterThan(3);
+
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      expect(
+        tieneTokenSrOnly(contenido),
+        `${rutaRelativa} uses the sr-only class token — this reproduces the 492px overflow regression (design.md slice B); displace instead (left: -10000px)`,
+      ).toBe(false);
+    }
+  });
+});
+
 const PREFIJOS_BREAKPOINT_CONOCIDOS = ["sm", "md", "lg", "xl", "2xl", "tableta", "escritorio"] as const;
 const PREFIJOS_BREAKPOINT_PERMITIDOS: ReadonlySet<string> = new Set(["tableta", "escritorio"]);
 const PATRON_PREFIJO_BREAKPOINT = new RegExp(

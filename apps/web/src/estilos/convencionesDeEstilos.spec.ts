@@ -55,13 +55,32 @@ const PATRON_DISPLAY_IMPORTANT = /display\s*:\s*[^;]+!important/gi;
 const PATRON_TAMANO_MINIMO = /--tamano-toque-minimo\s*:\s*(\d+)px/;
 const PATRON_ALTURA_ACOTADA_VH = /(?:^|\s)(?:height|max-height)\s*:\s*\d+(?:\.\d+)?vh\b/i;
 
+/**
+ * PR6 — strips `/* ... *\/` comments before any whole-content regex scan
+ * below. Found while documenting base.css's PR6 edit: a comment explaining
+ * *why* the `[hidden]` rule was removed necessarily quotes what it used to
+ * say, and `PATRON_DISPLAY_IMPORTANT` does not know the difference between
+ * a real declaration and prose describing one — it does not strip the
+ * comment `/* ... *\/` syntax any more than Tailwind's own candidate
+ * scanner (`index.css`'s new `@source not` fix, same PR) strips English
+ * sentences. Only the whole-content scans below (`PATRON_OVERFLOW_CLIP`,
+ * `PATRON_DISPLAY_IMPORTANT`) are exposed to this — the per-rule-body
+ * extractions elsewhere in this file only ever capture text between a
+ * matched selector's own `{` and `}`, never a preceding comment.
+ */
+export function quitarComentarios(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 function archivosCss(directorio: string): ReadonlyArray<{ ruta: string; contenido: string }> {
   return readdirSync(directorio).flatMap((nombre) => {
     const ruta = join(directorio, nombre);
     if (statSync(ruta).isDirectory()) {
       return archivosCss(ruta);
     }
-    return nombre.endsWith(".css") ? [{ ruta, contenido: readFileSync(ruta, "utf8") }] : [];
+    return nombre.endsWith(".css")
+      ? [{ ruta, contenido: quitarComentarios(readFileSync(ruta, "utf8")) }]
+      : [];
   });
 }
 
@@ -184,24 +203,36 @@ describe("stylesheets never clip a scrollable surface", () => {
 });
 
 describe("[hidden] elements can never be forced visible", () => {
-  it("keeps the !important display:none protection rule in estilos/base.css", () => {
+  /**
+   * PR6 (design.md slice B) — the project's own `[hidden]` rule was
+   * deleted from `estilos/base.css`; Tailwind Preflight's equivalent
+   * `[hidden]:where(:not([hidden="until-found"])) { display: none !important; }`
+   * is now the sole owner, visible only in compiled output
+   * (`convencionesDeCompilado.compilado.spec.ts`'s guard 2 case — this
+   * source-level scanner cannot see it, since it never appears as literal
+   * text in `src/**\/*.css`). Disposition AMBOS: this describe block now
+   * proves the CSS-authored half of the invariant — no rule was
+   * *reintroduced* here — while the compiled scanner proves Preflight's
+   * rule is the sole `!important display` rule that ships.
+   */
+  it("declares no project-authored [hidden] rule in estilos/base.css — Preflight's own rule is the sole owner now", () => {
     const base = archivo("estilos/base.css");
     expect(base, "estilos/base.css is missing").toBeDefined();
     expect(
       REGLA_HIDDEN_PROTEGIDA.test(base?.contenido ?? ""),
-      "estilos/base.css must declare `[hidden] { display: none !important; }`",
-    ).toBe(true);
+      "estilos/base.css must not declare its own `[hidden] { display: none !important; }` — that duplicates Tailwind Preflight's equivalent rule (design.md slice B)",
+    ).toBe(false);
   });
 
-  it("has exactly one !important display declaration — the [hidden] protection itself", () => {
+  it("declares zero !important display declarations in src/**/*.css — the compiled scan is the sole owner of that count now", () => {
     const total = archivosCss(DIRECTORIO_SRC).reduce(
       (acumulado, { contenido }) => acumulado + [...contenido.matchAll(PATRON_DISPLAY_IMPORTANT)].length,
       0,
     );
     expect(
       total,
-      "a second !important display declaration can tie or outrank the [hidden] protection by source order",
-    ).toBe(1);
+      "a hand-authored !important display declaration reappeared — this project no longer owns any (Preflight's compiled rule is the sole one, guard 2's compiled scan)",
+    ).toBe(0);
   });
 });
 
