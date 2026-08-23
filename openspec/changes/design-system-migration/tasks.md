@@ -217,17 +217,17 @@ claiming full coverage, rather than assuming this list is exhaustive.
 
 *Second "passes by doing nothing" mechanism — an absent build measures 0 bytes and trivially satisfies "≤ ceiling." Its RED test must prove it rejects that.*
 
-- [ ] 4.1 RED, falsification: write `scripts/techoDeDist.spec.ts` asserting non-zero exit when `dist/` is missing or empty. Run it first against a **naive stub script that sums whatever exists (0 on a missing dir) and exits 0 if ≤ 665600** — confirm the test fails to catch the stub's false pass. This proves the assertion, not just the implementation, is load-bearing.
-- [ ] 4.2 RED: a build whose summed size exceeds 665,600 bytes fails with the measured byte count in its output. Must fail — script does not exist.
-- [ ] 4.3 GREEN: create `scripts/techoDeDist.ts` — sums whole `dist/`, fails closed on missing/empty/under-floor-file-count, prints used/ceiling/headroom, satisfies 4.1 and 4.2.
-- [ ] 4.4 Add `pnpm --filter @contratos/web size` script.
-- [ ] 4.5 RED then GREEN: baseline re-measure — a clean `pnpm build` at this branch point must measure exactly 515,412 B; a mismatch reports "branch point changed before migration start" instead of silently accepting a different number.
-- [ ] 4.6 Add the new `bundle` CI job to `.github/workflows/ci.yml`: fresh runner, own `actions/cache@v4` restore + install-on-miss for Puppeteer (independent of the `integration` job's cache), no `needs:`. Step order: `vite build` → `pnpm size` → `pnpm test:compilado` → handheld (added PR5).
+- [x] 4.1 RED, falsification: write `scripts/techoDeDist.spec.ts` asserting non-zero exit when `dist/` is missing or empty. Run it first against a **naive stub script that sums whatever exists (0 on a missing dir) and exits 0 if ≤ 665600** — confirm the test fails to catch the stub's false pass. This proves the assertion, not just the implementation, is load-bearing.
+- [x] 4.2 RED: a build whose summed size exceeds 665,600 bytes fails with the measured byte count in its output. Must fail — script does not exist.
+- [x] 4.3 GREEN: create `scripts/techoDeDist.ts` — sums whole `dist/`, fails closed on missing/empty/under-floor-file-count, prints used/ceiling/headroom, satisfies 4.1 and 4.2.
+- [x] 4.4 Add `pnpm --filter @contratos/web size` script.
+- [x] 4.5 RED then GREEN: baseline re-measure — a clean `pnpm build` at this branch point must measure exactly 515,412 B; a mismatch reports "branch point changed before migration start" instead of silently accepting a different number.
+- [x] 4.6 Add the new `bundle` CI job to `.github/workflows/ci.yml`: fresh runner, own `actions/cache@v4` restore + install-on-miss for Puppeteer (independent of the `integration` job's cache), no `needs:`. Step order: `vite build` → `pnpm size` → `pnpm test:compilado` → handheld (added PR5).
 
 ## Phase 4B — PR4 close-out
 
-- [ ] 4B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus the new `bundle` job locally (`vite build && pnpm size`); record the measured byte count.
-- [ ] 4B.2 Open PR #4 targeting PR #3's branch.
+- [x] 4B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus the new `bundle` job locally (`vite build && pnpm size`); record the measured byte count.
+- [x] 4B.2 Open PR #4 targeting PR #3's branch.
 
 ## Phase 5 — PR5: handheld geometry harness (D8, 5 states)
 
