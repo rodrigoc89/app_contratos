@@ -101,6 +101,24 @@ export const EXENCIONES: readonly ExencionDeToque[] = [
   },
 ];
 
+/**
+ * PR17 (D5) — `base.css`'s `@layer base` rule sizes native
+ * `input[type=radio]`/`input[type=checkbox]` to `--spacing-toque` with no
+ * class at all (`FormularioEquipos.tsx:87,97`). D5 records this as
+ * "resolved against that rule, not reported as violations": a structural
+ * exemption for the tag+type pair, not a per-component `EXENCIONES` entry,
+ * since any native radio/checkbox anywhere hits the identical gap. Once the
+ * element attempts its own sizing class, that attempt is judged normally —
+ * this only covers the case the base rule alone is doing the sizing.
+ */
+const TIPOS_TOQUE_NATIVOS: ReadonlySet<string> = new Set(["radio", "checkbox"]);
+const PATRON_INTENTO_DE_TOQUE = /\b(?:min-)?(?:h|w|size)-(?:toque|\d+)\b/;
+
+export function esControlNativoDeToque(tag: string, type: string | undefined, clases: string): boolean {
+  if (tag !== "input" || type === undefined || !TIPOS_TOQUE_NATIVOS.has(type)) return false;
+  return !PATRON_INTENTO_DE_TOQUE.test(clases);
+}
+
 /** Ported `EXENCIONES.some((e) => e.base === regla.base)`. */
 export function esExento(
   componente: string,
