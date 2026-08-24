@@ -76,7 +76,14 @@ export function BarraDeBusqueda({
           onCambiar={onCambiarTermino}
           onKeyDown={manejarTecla}
           placeholder="Nombre o DNI"
-          className="w-60"
+          /*
+            `mb-0` (PR20 review): the form's `items-end` aligns border
+            boxes, and the atom's default `mb-4` sat between the visible
+            input and the alignment edge — the chips lined up with the
+            phantom margin, 16px below the field. The atom's bottom margin
+            must not participate in this row; `cn()` lets the instance win.
+          */
+          className="w-60 mb-0"
         />
       </div>
       <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap gap-2">
@@ -92,12 +99,13 @@ export function BarraDeBusqueda({
                 read as four actions. What shrinks is the ink, never the box:
                 `min-h-toque min-w-toque` still comes from `tamano`, so the
                 target a gloved thumb has to hit is unchanged at 48px, and
-                guard 3 iterates variante x tamano to keep it that way. These
-                utilities merge through `cn()`, so each beats the atom's own
-                default in its group — `border` over `border-2`, `rounded-full`
-                over `rounded-base`, `font-medium` over `font-semibold`.
+                guard 3 iterates variante x tamano to keep it that way.
+                `px-4 font-medium` merge through `cn()` and beat the atom's
+                `px-5 font-semibold`; the frame — `rounded-base border-2` —
+                stays the atom's own (PR20 review: the earlier pill override
+                gave these four a different border than every other button).
               */
-              className="rounded-full border px-4 font-medium"
+              className="px-4 font-medium"
               aria-pressed={activo}
               onClick={() => onAlternarEstado(valor)}
             >
