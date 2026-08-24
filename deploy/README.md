@@ -45,7 +45,11 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 `provision.sh` assumes `/opt/contratos` is (or will become) the git checkout
 `deploy.sh` operates on — see "`.cache/` and the git-exclude step" below for
 why the order between "clone the repository" and "run `provision.sh`" does
-not matter.
+not matter. Nor does the directory the script is started from: its one
+`npx` step (Chromium's `--install-deps`, D1) runs from a scratch directory
+of its own, so `cd /opt/contratos && bash deploy/provision.sh` works the
+same as running it from `/root` — see "Chromium and fonts" for the gap
+that made this explicit.
 
 ## Idempotent-guard plan (`provision.sh --dry-run`)
 
@@ -214,6 +218,21 @@ package simply covers both.) The root step also sets
 once before `browsers install chrome` downloads it again into the scratch
 cache — `--install-deps` still resolves libraries against that second,
 explicit download.
+
+A third thing surfaced once the script was run *from the checkout* (gap
+#13): `cd /opt/contratos && bash deploy/provision.sh` died in this step with
+`sh: 1: puppeteer: not found` (exit 127). Verified side by side on the host
+with `PUPPETEER_SKIP_DOWNLOAD=1 npx --yes puppeteer@25.4.0 --help`: from
+`/opt/contratos` it fails the same way, from a `mktemp -d` scratch directory
+it works. `npx` inside a Node project resolves the binary against the
+enclosing project — the checkout is a pnpm workspace with a root
+`package.json`/`node_modules` and no root `puppeteer` bin — instead of the
+package it just fetched; earlier runs passed only because they started from
+`/root`. `provision.sh` now `cd`s into the scratch cache directory it already
+creates before invoking `npx`, in a subshell, so the step never runs inside
+the checkout no matter where the script was started from. The dry-run plan
+line says so ("run from a scratch directory outside the checkout, …") and
+`provision.spec.ts` asserts it.
 
 ### Render verdict (`pnpm --filter @contratos/api verify:render`)
 

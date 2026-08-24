@@ -603,6 +603,27 @@ describe("provision.sh --dry-run", () => {
     expect(chromiumPlan).toContain("PUPPETEER_SKIP_DOWNLOAD=1");
   });
 
+  it("runs the root Chromium step from a scratch directory, never inside the checkout", async () => {
+    // Gap #13, seen on the real host: `cd /opt/contratos && bash
+    // deploy/provision.sh` — exactly what "clone, then re-run provision"
+    // implies — died with `sh: 1: puppeteer: not found` (exit 127). npx
+    // inside a Node project resolves the bin against the enclosing project
+    // (a pnpm workspace with no root `puppeteer` bin) instead of the package
+    // it just fetched; the same command from `mktemp -d` works. Earlier runs
+    // passed only because they happened to start from /root.
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: join(scratch, "opt-contratos") },
+    });
+
+    const chromiumPlan = stdout
+      .split("\n")
+      .find((line) => line.includes("browsers install chrome --install-deps"));
+
+    expect(chromiumPlan).toContain(
+      "run from a scratch directory outside the checkout, since npx resolves bins against an enclosing Node project",
+    );
+  });
+
   it("does not accept a commented-out fstab line as an existing swap entry", async () => {
     // A half-finished provisioning run leaves exactly this behind. Read as
     // "already present", the swapfile never survives a reboot — and nothing
