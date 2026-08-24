@@ -1743,11 +1743,20 @@ describe("every interactive control the stylesheets define meets the touch floor
  * than assumed.
  *
  * Scanned from the components as well as the stylesheets, because the two
- * links are reached differently and either route alone leaves a hole:
- * `TablaDeContratos.tsx` names its class on the element
+ * links were reached differently and either route alone would have left a
+ * hole: `TablaDeContratos.tsx` used to name its class on the element
  * (`<Link className="tabla-de-contratos__enlace">`) while
  * `PaginaDetalleContrato.tsx` renders a bare `<Link>` styled through its
  * parent (`.pagina-detalle-contrato__volver a`).
+ *
+ * design-system-migration PR15 (task 15.4) — `TablaDeContratos` converts to
+ * a Tailwind class list, so the component-side route now legitimately finds
+ * nothing: `convencionesDeUtilidades.spec.ts`'s guard 21 (JSX-dispositioned,
+ * `registro.ts` entry 21) owns it from here. The stylesheet-side route
+ * (`PaginaDetalleContrato.tsx`'s parent selector) is untouched and still
+ * live until PR16 deletes the sheet, so the combined floor below only fails
+ * if BOTH routes go empty at once — the actual failure mode this guard
+ * exists to catch.
  */
 describe("a link declares a box, since a floor on an inline box is ignored", () => {
   const DISPLAY_CON_CAJA = /display\s*:\s*(?:inline-flex|inline-grid|inline-block|flex|grid|block)\b/;
@@ -1812,9 +1821,11 @@ describe("a link declares a box, since a floor on an inline box is ignored", () 
     ),
   ].map((clase) => `.${clase}`);
 
-  it("finds links to check in both the stylesheets and the components", () => {
-    expect(selectoresDeAncla.length, "no `… a { }` rule found — the anchor scan matched nothing").toBeGreaterThan(0);
-    expect(clasesDeEnlace.length, "no <a>/<Link> with a className found — the component scan matched nothing").toBeGreaterThan(0);
+  it("finds links to check in at least one of the stylesheets or the components — both routes empty at once means the guard is silently dead", () => {
+    expect(
+      selectoresDeAncla.length + clasesDeEnlace.length,
+      "no `… a { }` rule and no <a>/<Link> with a literal className found anywhere — the whole scan matched nothing",
+    ).toBeGreaterThan(0);
   });
 
   it.each([...new Set(selectoresDeAncla)])("gives %s a real box", (selector) => {
