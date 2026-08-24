@@ -1,7 +1,11 @@
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * The systemd units are the only artifacts under `deploy/` that had no spec,
@@ -81,6 +85,30 @@ describe("contratos-backup.service", () => {
 
   it("is triggered by the timer, never enabled on its own", () => {
     expect(unidad.get("WantedBy")).toBeUndefined();
+  });
+});
+
+describe("contratos-api.service", () => {
+  const unidad = leerUnidad("contratos-api.service");
+
+  it("grants write access to the exact directory provision.sh creates for the documents", async () => {
+    // provision.sh installs this unit from the checkout, so the repository
+    // copy is what runs. On the real host it named /srv/contratos/documentos
+    // while provision.sh (DOCUMENT_STORE_DIR) and backup.sh create
+    // /opt/contratos/var/documentos; systemd could not mount a path that
+    // does not exist and the first deploy died with status=226/NAMESPACE.
+    // The default is read from provision.sh's own plan, not restated here.
+    const { stdout } = await execFileAsync(join(import.meta.dirname, "provision.sh"), [
+      "--dry-run",
+    ]);
+    const appDir = /^== provision\.sh plan for (.+) \(dry-run=/m.exec(stdout)?.[1];
+    const directoriosPlanificados = [...stdout.matchAll(/^\[(?:plan|skip)\] .*directory '([^']+)'/gm)]
+      .map((coincidencia) => coincidencia[1]);
+    const documentStoreDir = directoriosPlanificados.find((ruta) => ruta !== appDir);
+    expect(documentStoreDir).toBeDefined();
+
+    const readWritePaths = (unidad.get("ReadWritePaths") ?? []).flatMap((valor) => valor.split(/\s+/));
+    expect(readWritePaths).toEqual([documentStoreDir]);
   });
 });
 

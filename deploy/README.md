@@ -145,6 +145,27 @@ as a non-root operator `sudo -n` refuses without prompting and the step
 simply plans. A dry run never generates or writes a password
 (`provision.spec.ts` asserts the file is absent afterward).
 
+### The API unit's documents path
+
+`provision.sh` installs `contratos-api.service` from the checkout, so the
+repository copy is the one that runs — and it was the outlier: it named
+`/srv/contratos/documentos` while `provision.sh` (`DOCUMENT_STORE_DIR`) and
+`backup.sh` both default to `/opt/contratos/var/documentos`. With
+`ProtectSystem=strict`, systemd bind-mounts every `ReadWritePaths` entry
+into the service's namespace, and a path that does not exist cannot be
+mounted: the first real deploy died at
+`status=226/NAMESPACE — Failed to set up mount namespacing:
+/run/systemd/unit-root/srv/contratos/documentos: No such file or directory`
+until the installed unit was rewritten by hand. The unit now says
+`/opt/contratos/var/documentos` everywhere (its header, the `api.env`
+example, `ReadWritePaths=`), and `unidades-systemd.spec.ts` reads
+`provision.sh`'s own dry-run plan and asserts `ReadWritePaths` equals the
+directory it creates — the two cannot drift apart silently again. That same
+value is what `ALMACEN_DOCUMENTOS_RUTA` in `/etc/contratos/api.env` must
+carry; the schema's default is the *relative* `var/documentos`, resolved
+against `WorkingDirectory` (`/opt/contratos/apps/api`), which is not the
+same directory.
+
 ## Chromium and fonts (D1, D2)
 
 Provisioning resolves Chromium's shared-library dependencies as root, via
