@@ -436,17 +436,17 @@ equal specificity — PR8 nearly shipped a silently reinstated `flex-wrap`
 exactly this way, and jsdom cannot see it. A half-migrated layout is where
 that bites hardest.*
 
-- [ ] 16.1 RED: assert no first-party `.tsx` under `componentes/plantillas/` carries a hand-authored BEM className. Must fail against `LayoutPanel.tsx` and `LayoutTecnico.tsx`, naming both.
-- [ ] 16.2 GREEN: redesign `LayoutTecnico.tsx` and `LayoutPanel.tsx` off `.layout-tecnico`/`.layout-panel` onto Tailwind, keeping `LayoutTecnico`'s 720px and `LayoutPanel`'s 1280px content bounds.
-- [ ] 16.3 Resolve `panel.css`'s `--fuente-base: 16px` rebind and read-back (guard 7's MOOT half): the office shell states its sizes literally instead of rebinding an inherited custom property, so the "rebind alone is inert" bug class becomes structurally impossible rather than guarded (D4).
-- [ ] 16.4 Re-check guard 8's component-path exemption axis against the converted shells — PR9 scoped it to `componentes/organismos|moleculas/` and `funcionalidades/contratos/`, deliberately excluding `componentes/atomos/`; confirm `plantillas/` needs no entry.
-- [ ] 16.5 `pnpm size && pnpm handheld` — both shells host every measured state, so a shell regression shows up here or nowhere.
+- [x] 16.1 RED: assert no first-party `.tsx` under `componentes/plantillas/` carries a hand-authored BEM className. Must fail against `LayoutPanel.tsx` and `LayoutTecnico.tsx`, naming both.
+- [x] 16.2 GREEN: redesign `LayoutTecnico.tsx` and `LayoutPanel.tsx` off `.layout-tecnico`/`.layout-panel` onto Tailwind, keeping `LayoutTecnico`'s 720px and `LayoutPanel`'s 1280px content bounds.
+- [x] 16.3 Resolve `panel.css`'s `--fuente-base: 16px` rebind and read-back (guard 7's MOOT half): the office shell states its sizes literally instead of rebinding an inherited custom property, so the "rebind alone is inert" bug class becomes structurally impossible rather than guarded (D4).
+- [x] 16.4 Re-check guard 8's component-path exemption axis against the converted shells — PR9 scoped it to `componentes/organismos|moleculas/` and `funcionalidades/contratos/`, deliberately excluding `componentes/atomos/`; confirm `plantillas/` needs no entry.
+- [x] 16.5 `pnpm size && pnpm handheld` — both shells host every measured state, so a shell regression shows up here or nowhere.
 
 ## Phase 16B — PR16 close-out
 
-- [ ] 16B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 16B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
 - [ ] 16B.2 User visual review of both shells.
-- [ ] 16B.3 Open PR #16 targeting PR #15's branch.
+- [x] 16B.3 Open PR #16 targeting PR #15's branch. (#114)
 
 ## Phase 17 — PR17: the four office organisms (inventory gap)
 
