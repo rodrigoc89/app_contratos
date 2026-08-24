@@ -366,16 +366,16 @@ finding; that window is three draft PRs, none of which gate anything.*
 
 *Highest-stakes single guard in the file — legal reading-gate boundedness. Dedicated verification, not batch treatment.*
 
-- [ ] 12.1 RED: guard 17 case — the converted iframe's height class resolves to an explicit `h-[NNvh]`/bounded value; `auto` or an unbounded `min-height` fails. Must fail against pre-redesign markup (CSS-rule scanned today).
-- [ ] 12.2 GREEN: redesign `VisorDeDocumento.tsx`, preserving `puertaDeLectura.ts`'s reading-gate boundedness contract, satisfying 12.1.
-- [ ] 12.3 Update `registro.ts` entry 17 to `JSX`.
-- [ ] 12.4 Dedicated manual verification pass: confirm the reading gate behaves identically to pre-migration on a real converted render (legal-evidence-adjacent — not covered by the automated scan alone).
+- [x] 12.1 RED: guard 17 case — the converted iframe's height class resolves to an explicit `h-[NNvh]`/bounded value; `auto` or an unbounded `min-height` fails. Must fail against pre-redesign markup (CSS-rule scanned today).
+- [x] 12.2 GREEN: redesign `VisorDeDocumento.tsx`, preserving `puertaDeLectura.ts`'s reading-gate boundedness contract, satisfying 12.1.
+- [x] 12.3 Update `registro.ts` entry 17 to `JSX`.
+- [x] 12.4 Dedicated manual verification pass: confirm the reading gate behaves identically to pre-migration on a real converted render (legal-evidence-adjacent — not covered by the automated scan alone).
 
 ## Phase 12B — PR12 close-out
 
-- [ ] 12B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 12B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
 - [ ] 12B.2 User visual review, with explicit sign-off on the reading-gate manual pass (12.4).
-- [ ] 12B.3 Open PR #12 targeting PR #11's branch.
+- [x] 12B.3 Open PR #12 targeting PR #11's branch. (#110 — Phase 12 boxes reconciled at sdd-verify: commit 78cddde is an ancestor of the chain HEAD and #110 is an open draft with the correct base; the ticks were missed at delivery time, the work was not)
 
 ## Phase 13 — PR13: `LienzoDeFirma` redesign + S3 driver (slice F2, guards 4-final/19)
 
@@ -488,7 +488,7 @@ half, which was built and verified green before being reverted for budget.*
 
 - [x] 18B.1 Run the full suite plus `pnpm size && pnpm handheld`; record results. (#117: 789/789 web specs, compilado 6/6, typecheck/lint 0, dist 575,588 B, handheld 6/6; gate widened the whole-tree scan to `.ts` modules — `formulario.ts`/`progreso.ts` convention — with the file+token `PROSA_EXENTA` prose exemption)
 - [ ] 18B.2 User visual review of the técnico flow end to end.
-- [ ] 18B.3 Open PR #18 targeting PR #17's branch.
+- [x] 18B.3 Open PR #18 targeting PR #17's branch. (#117, drafted against PR17b's branch `feat/dsm-pr17b-detalle-acciones-guard-4` — reconciled at sdd-verify)
 
 ## Phase 19 — PR19: BEM deletion, final register audit, whole-flow pass (F-cleanup + G)
 
