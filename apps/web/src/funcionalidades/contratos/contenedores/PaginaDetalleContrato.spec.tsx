@@ -114,6 +114,22 @@ describe("PaginaDetalleContrato", () => {
     );
   });
 
+  /**
+   * PR21 — the transitions are downloads' neighbours now: one documents
+   * row holds both, so the office reads everything it can do with the
+   * sealed contract in one place, under one heading.
+   */
+  it("seats the transition actions in the documents section, under no separate heading", async () => {
+    obtener.mockResolvedValue(contrato());
+    renderizar();
+
+    const descarga = await screen.findByRole("button", { name: "Descargar Comodato" });
+    const accion = screen.getByRole("button", { name: "Dar de baja" });
+    expect(accion.closest("section")).not.toBeNull();
+    expect(accion.closest("section")).toBe(descarga.closest("section"));
+    expect(screen.queryByRole("heading", { name: "Acciones" })).not.toBeInTheDocument();
+  });
+
   it("offers a way back to the list", async () => {
     obtener.mockResolvedValue(contrato());
     renderizar();

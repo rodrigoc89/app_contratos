@@ -1,0 +1,21 @@
+{
+  "elementos": [
+    {
+      "id": "fixture-contrato-1",
+      "numero": 1001,
+      "estado": "vigente",
+      "comodatario": { "nombreCompleto": "Cliente Demostración Uno", "dni": "30.111.222" },
+      "fechaFirma": "2026-01-15"
+    },
+    {
+      "id": "fixture-contrato-2",
+      "numero": null,
+      "estado": "borrador",
+      "comodatario": { "nombreCompleto": "Cliente Demostración Dos", "dni": "30.333.444" },
+      "fechaFirma": null
+    }
+  ],
+  "total": 2,
+  "pagina": 1,
+  "tamanoPagina": 10
+}

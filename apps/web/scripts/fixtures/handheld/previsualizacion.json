@@ -1,0 +1,11 @@
+{
+  "contratoId": "fixture-contrato-creado-1",
+  "plantillaVersion": "fixture-plantilla-v1",
+  "plazoMeses": 12,
+  "fechaPrevistaDeFirma": "2026-01-15",
+  "fechaPrevistaDeVencimiento": "2027-01-15",
+  "documentos": [
+    { "documento": "condiciones_generales", "html": "<p>Condiciones generales — texto fijo de fixture.</p>" },
+    { "documento": "comodato", "html": "<p>Contrato de comodato — texto fijo de fixture.</p>" }
+  ]
+}

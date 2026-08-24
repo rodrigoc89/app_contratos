@@ -8,9 +8,11 @@ interface PropiedadesLayoutTecnico {
 
 export function LayoutTecnico({ children, cabecera }: PropiedadesLayoutTecnico) {
   return (
-    <div className="layout-tecnico">
+    <div className="min-h-full" data-layout-tecnico>
       {cabecera}
-      <main className="layout-tecnico__contenido">{children}</main>
+      <main className="mx-auto max-w-[720px] p-4" data-layout-tecnico-contenido>
+        {children}
+      </main>
     </div>
   );
 }
