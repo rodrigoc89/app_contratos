@@ -265,8 +265,10 @@ describe("FormularioEquipos — encabezado, jerarquía y radios", () => {
     const volver = screen.getByRole("button", { name: "Volver" });
     const enviar = screen.getByRole("button", { name: "Crear borrador" });
 
-    expect(volver.className).toContain("boton--secundario");
-    expect(enviar.className).not.toContain("boton--secundario");
+    // design-system-migration PR17 — `boton--secundario` retired; `bg-fondo`
+    // is the resolved marker of the `secundario` variant (the fill it loses).
+    expect(volver.className).toContain("bg-fondo");
+    expect(enviar.className).not.toContain("bg-fondo");
   });
 
   /**
@@ -282,7 +284,11 @@ describe("FormularioEquipos — encabezado, jerarquía y radios", () => {
     expect(radios).toHaveLength(2);
     for (const radio of radios) {
       const etiqueta = radio.closest("label");
-      expect(etiqueta?.className).toContain("etiqueta--opcion");
+      // design-system-migration PR17 — `etiqueta--opcion` retired;
+      // `flex`/`items-center` are the structural precondition the fix rests
+      // on (`CLASE_ETIQUETA_OPCION`, `estilos/formulario.ts`).
+      expect(etiqueta?.className).toContain("flex");
+      expect(etiqueta?.className).toContain("items-center");
     }
   });
 });

@@ -1,14 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { LayoutTablet } from "./LayoutTablet";
+import { LayoutTecnico } from "./LayoutTecnico";
 
-describe("LayoutTablet", () => {
-  it("renders its children inside the tablet shell", () => {
+describe("LayoutTecnico", () => {
+  it("renders its children inside the técnico shell", () => {
     render(
-      <LayoutTablet>
+      <LayoutTecnico>
         <p>Contenido de la visita</p>
-      </LayoutTablet>,
+      </LayoutTecnico>,
     );
 
     expect(screen.getByText("Contenido de la visita")).toBeInTheDocument();

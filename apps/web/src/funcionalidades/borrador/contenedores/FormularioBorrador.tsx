@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Spinner } from "../../../componentes/atomos/Spinner";
 import { Toast } from "../../../componentes/moleculas/Toast";
+import { CLASE_PROGRESO } from "../../../estilos/progreso";
 import { FormularioComodatario, type ValoresComodatario } from "../../../componentes/organismos/FormularioComodatario";
 import { FormularioEquipos, type ValoresEquipos } from "../../../componentes/organismos/FormularioEquipos";
 import {
@@ -408,7 +409,7 @@ export function FormularioBorrador({
   // `contratoId` above is still being verified against the server.
   if (resumiendo) {
     return (
-      <div role="status" className="progreso">
+      <div role="status" className={CLASE_PROGRESO} data-progreso>
         <span aria-hidden="true">
           <Spinner etiqueta="Recuperando el borrador guardado" />
         </span>

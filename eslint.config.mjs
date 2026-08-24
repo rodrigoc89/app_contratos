@@ -214,6 +214,13 @@ export default tseslint.config(
     files: ["apps/web/**/*.{ts,tsx}"],
     languageOptions: { globals: globals.browser },
   },
+  {
+    // `techoDeDist.ts` (design.md D7) is a CLI script run via `jiti` under
+    // Node, never shipped to the browser — it needs `process`/`console`,
+    // which `apps/web`'s own `globals.browser` above does not declare.
+    files: ["apps/web/scripts/**/*.ts"],
+    languageOptions: { globals: globals.node },
+  },
   // `packages/esquemas` gets neither on purpose: its tsconfig sets
   // `"types": []` and a DOM-free `lib` so the package stays importable from
   // the browser. Declaring Node globals here would undo that guarantee at

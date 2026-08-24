@@ -1,0 +1,13 @@
+{
+  "tokenDeAcceso": "fixture-token-acceso-oficina",
+  "expiraEnSegundos": 900,
+  "tokenDeRefresco": "fixture-token-refresco-oficina",
+  "refrescoExpiraEnSegundos": 2592000,
+  "usuario": {
+    "id": "fixture-usuario-oficina",
+    "nombreUsuario": "oficina.demo",
+    "nombreCompleto": "Oficina de Demostración",
+    "rol": "oficina",
+    "activo": true
+  }
+}
