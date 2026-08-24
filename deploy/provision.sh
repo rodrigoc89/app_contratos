@@ -385,6 +385,43 @@ provision_git_exclude() {
   done
 }
 
+# ---------------------------------------------------- git safe.directory
+
+# deploy.sh runs as root (`sudo TAG=… deploy/deploy.sh`) against a checkout
+# owned by $SERVICE_USER. git refuses to read a repository owned by another
+# user ("detected dubious ownership") unless that path is listed in
+# safe.directory, so on the real host every `git -C $APP_DIR` in deploy.sh
+# failed and its repository guard reported "not a git checkout". The
+# system-wide config (/etc/gitconfig) is the right scope: it applies to root
+# no matter which HOME sudo hands it, and it is exactly what was run by hand
+# on the host. Read through git itself, so the spec can point it at a scratch
+# file with GIT_CONFIG_SYSTEM instead of this machine's real one.
+git_safe_directory_present() {
+  local listed dir
+  listed="$(git config --system --get-all safe.directory 2>/dev/null || true)"
+  while IFS= read -r dir; do
+    if [ "$dir" = "$APP_DIR" ]; then
+      return 0
+    fi
+  done <<< "$listed"
+  return 1
+}
+
+provision_git_safe_directory() {
+  if git_safe_directory_present; then
+    skip "'$APP_DIR' already listed in git's system-wide safe.directory"
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]; then
+    plan "would run: git config --system --add safe.directory '$APP_DIR'"
+    return
+  fi
+
+  git config --system --add safe.directory "$APP_DIR"
+  log "added '$APP_DIR' to git's system-wide safe.directory"
+}
+
 main() {
   if [ "$DRY_RUN" != true ] && [ "$(id -u)" -ne 0 ]; then
     echo "provision.sh: must run as root (use --dry-run to preview without root)" >&2
@@ -403,6 +440,7 @@ main() {
   provision_dir "$APP_DIR"
   provision_dir "$DOCUMENT_STORE_DIR"
   provision_git_exclude
+  provision_git_safe_directory
 
   log "== done =="
 }

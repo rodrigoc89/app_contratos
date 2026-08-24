@@ -51,8 +51,9 @@ requirement:
 | Swapfile + its `/etc/fstab` entry | `[skip] swapfile '…' already exists` / `[skip] fstab entry for '…' already present` | `[plan] would create a 2048MB swapfile at '…'` / `[plan] would append '… none swap sw 0 0' to '…'` |
 | `.cache/`, `.bash_logout`, `.bashrc`, `.profile` in the git exclude file (one guard per entry) | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
 | Node.js ≥ `NODE_MAJOR` and pnpm = `PNPM_VERSION` on `$PATH` | `[skip] node v… (>= 24) and pnpm 11.11.0 already installed` | `[plan] would install Node.js 24 (NodeSource) and pnpm 11.11.0` |
+| `$APP_DIR` in git's system-wide `safe.directory` (`/etc/gitconfig`) | `[skip] '…' already listed in git's system-wide safe.directory` | `[plan] would run: git config --system --add safe.directory '…'` |
 
-All five are asserted by `deploy/provision.spec.ts` against a scratch temp
+All six are asserted by `deploy/provision.spec.ts` against a scratch temp
 directory — every path (`SERVICE_USER`, `APP_DIR`, `DOCUMENT_STORE_DIR`,
 `SWAP_FILE`, `FSTAB_FILE`, `GIT_EXCLUDE_FILE`) is overridable by environment
 variable for exactly this reason, in production those variables keep their
@@ -308,6 +309,15 @@ real deploy:
 | 1 | Git repository selection (threat matrix, **Applicable**) | `$APP_DIR` is missing, is not a git checkout, or its `git rev-parse --show-toplevel` disagrees with `$APP_DIR` itself, or it has no `$GIT_REMOTE_NAME` remote configured | `deploy.sh` always runs `git -C "$APP_DIR"`, never bare `git` reading cwd — this guard additionally refuses to fall back to whatever repository the operator happens to be standing in when `$APP_DIR` itself is not a valid target |
 | 2 | Commit state (threat matrix, **Applicable**) | `git -C "$APP_DIR" status --porcelain` is non-empty | A hot-fixed server worktree must never be silently discarded. The guard only *reads* `git status` — `deploy.sh` never calls `git reset --hard` or any `--force` flag anywhere, so there is nothing in the script that could discard the uncommitted change even if this check were bypassed |
 | 3 | Required configuration (deployment-configuration spec.md) | `$ENV_FILE` is missing, or `DATABASE_URL`/`JWT_SECRET` is absent or empty in it | The app itself needs both to boot at all; failing here, before the stop, means the previous version keeps running instead of going down for a config typo |
+
+**Root and a `contratos`-owned checkout.** `deploy.sh` runs as root, but
+`/opt/contratos` belongs to `contratos`, and git refuses to read a repository
+owned by another user ("detected dubious ownership") — on the real host every
+`git -C /opt/contratos` failed and guard 1 reported "not a git checkout" for
+a perfectly good clone. `provision.sh` therefore runs
+`git config --system --add safe.directory /opt/contratos` (idempotent — it
+skips when the path is already listed). System scope on purpose: it applies
+to root no matter which `HOME` `sudo` hands it, unlike `--global`.
 
 Only after all three pass does `deploy.sh` stop the service and run the rest
 of the sequence: dump the database (`pg_dump -Fc`, local, pre-migration —

@@ -29,8 +29,10 @@ const ROOT_PACKAGE_JSON = join(import.meta.dirname, "..", "package.json");
  * this harness had only ever inherited a developer PATH that already had
  * Node — a bare host was never represented.
  *
- * Only the three binaries a dry run touches are linked in (`bash` for the
- * shebang, `id` for the user guard, `grep` for the git-exclude guard);
+ * Only the binaries a dry run touches are linked in (`bash` for the shebang,
+ * `id` for the user guard, `grep` for the git-exclude guard, `git` for the
+ * safe.directory guard — pointed at a scratch system config through
+ * `GIT_CONFIG_SYSTEM`, never at this machine's /etc/gitconfig);
  * `node`/`pnpm` fakes that print the given version are added on request.
  */
 async function makeToolchainBin(
@@ -42,6 +44,7 @@ async function makeToolchainBin(
   await symlink("/bin/bash", join(binDir, "bash"));
   await symlink("/usr/bin/id", join(binDir, "id"));
   await symlink("/usr/bin/grep", join(binDir, "grep"));
+  await symlink("/usr/bin/git", join(binDir, "git"));
   for (const [name, version] of Object.entries(present)) {
     await writeFile(join(binDir, name), `#!/bin/bash\nprintf '%s\\n' '${version}'\n`, {
       mode: 0o755,
@@ -81,6 +84,7 @@ describe("provision.sh --dry-run", () => {
         SWAP_SIZE_MB: "64",
         FSTAB_FILE: fstabFile,
         GIT_EXCLUDE_FILE: excludeFile,
+        GIT_CONFIG_SYSTEM: join(scratch, "gitconfig-that-does-not-exist"),
       },
     });
 
@@ -110,6 +114,12 @@ describe("provision.sh --dry-run", () => {
     for (const skeletonFile of [".bash_logout", ".bashrc", ".profile"]) {
       expect(stdout).toContain(`[plan] would append '${skeletonFile}' to '${excludeFile}'`);
     }
+    // deploy.sh runs as root against a checkout owned by `contratos`; git
+    // refuses that ("dubious ownership") and the repository guard reports
+    // "not a git checkout". Seen on the real host.
+    expect(stdout).toContain(
+      `[plan] would run: git config --system --add safe.directory '${appDir}'`,
+    );
   });
 
   it("skips every idempotent-guarded resource that is already provisioned", async () => {
@@ -125,6 +135,8 @@ describe("provision.sh --dry-run", () => {
     await writeFile(fstabFile, `${swapFile} none swap sw 0 0\n`, "utf-8");
     await mkdir(join(appDir, ".git", "info"), { recursive: true });
     await writeFile(excludeFile, ".cache/\n.bash_logout\n.bashrc\n.profile\n", "utf-8");
+    const gitSystemConfig = join(scratch, "gitconfig");
+    await writeFile(gitSystemConfig, `[safe]\n\tdirectory = ${appDir}\n`, "utf-8");
     const binDir = await makeToolchainBin(scratch, { node: "v24.1.0", pnpm: "11.11.0" });
 
     const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
@@ -137,6 +149,7 @@ describe("provision.sh --dry-run", () => {
         SWAP_FILE: swapFile,
         FSTAB_FILE: fstabFile,
         GIT_EXCLUDE_FILE: excludeFile,
+        GIT_CONFIG_SYSTEM: gitSystemConfig,
       },
     });
 
@@ -153,6 +166,9 @@ describe("provision.sh --dry-run", () => {
     for (const entry of [".cache/", ".bash_logout", ".bashrc", ".profile"]) {
       expect(stdout).toContain(`[skip] '${entry}' already present in '${excludeFile}'`);
     }
+    expect(stdout).toContain(
+      `[skip] '${appDir}' already listed in git's system-wide safe.directory`,
+    );
   });
 
   it("reinstalls the toolchain when the Node on PATH is older than the pinned major", async () => {
