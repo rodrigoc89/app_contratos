@@ -129,7 +129,7 @@ export function TablaDeContratos({ contratos }: PropiedadesTablaDeContratos) {
               <td role="cell" data-etiqueta="Nombre completo" className={CLASE_CELDA}>
                 {/*
                   R-3.4, amended: the ROW is still not a click target — a
-                  whole-row handler is invisible to the keyboard, announces
+                  whole-row handler is unseen by the keyboard, announces
                   nothing and swallows text selection. The name carries the
                   one link instead. It is what the office is scanning for,
                   and unlike `numero` it is present on a draft too, so every
