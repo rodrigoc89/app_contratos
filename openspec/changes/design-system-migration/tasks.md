@@ -1,8 +1,9 @@
 # Tasks: Tailwind v4 + shadcn/ui design system for `apps/web`
 
 **`sdd-tasks` owns this binding forecast.** The proposal's A-G lettered slices
-are kept as traceability tags, but the actual delivery unit is **16 chained
-PRs** — the proposal itself flagged that C, D and F would "likely need
+are kept as traceability tags, but the actual delivery unit is **19 chained
+PRs** (16 planned, plus three added after PR11 confirmed the component
+inventory against the tree and found twelve unclaimed components) — the proposal itself flagged that C, D and F would "likely need
 splitting again," and design's File Changes table relocated `pisoDeToque.ts`
 (guard 20's engine) from a standalone slice E into slice C, which this
 partition follows. All four known relocations from the brief are applied:
@@ -25,10 +26,10 @@ PR5 below.
 
 | Field | Value |
 |-------|-------|
-| Estimated changed lines | ~4,020–4,830 across 16 PRs (see Work Units) |
+| Estimated changed lines | ~4,820–5,810 across 19 PRs (see Work Units) |
 | 400-line budget risk | **High** — several PRs land 300–380, three (PR6, PR10, PR13) are legal/regression-adjacent and stay near or over budget by content, not oversight |
 | Chained PRs recommended | Yes |
-| Suggested split | Tracker → PR1 → PR2 → … → PR16, linear feature-branch-chain |
+| Suggested split | Tracker → PR1 → PR2 → … → PR19, linear feature-branch-chain |
 | Delivery strategy | auto-chain |
 | Chain strategy | feature-branch-chain |
 
@@ -77,9 +78,12 @@ master
                                                                    └─ PR13 (F2 — LienzoDeFirma + guards 4/19 + S3 driver)
                                                                         └─ PR14 (F3 — EscanerDeMac + guard 2 final)
                                                                              └─ PR15 (F4 — TablaDeContratos + guards 5/16/20 final)
-                                                                                  └─ PR16 (F-cleanup+G — BEM deletion, final audit, whole-flow pass)
+                                                                                  └─ PR16 (inventory gap — the two layout shells)
+                                                                                       └─ PR17 (inventory gap — four office organisms)
+                                                                                            └─ PR18 (inventory gap — six containers, zero-BEM assertion)
+                                                                                                 └─ PR19 (F-cleanup+G — BEM deletion, final audit, whole-flow pass)
 
-Only the tracker merges to master, and only after PR16 is integrated.
+Only the tracker merges to master, and only after PR19 is integrated.
 Each PR body marks its own position with 📍 per the chained-pr skill.
 ```
 
@@ -99,7 +103,7 @@ starting state for all 21).
 | 4 | 32px gap + destructive colour-not-position | JSX | PR7 (variant), final confirm PR13 |
 | 5 | 48px floor explicitly absent on table rows | JSX | PR15 |
 | 6 | Focus-visible never silently removed (ring-aware judgment, D6) | JSX | PR7 |
-| 7 | Exactly 640/1024 breakpoints; rebind/read-back half MOOT | JSX | PR3, MOOT confirmed PR16 |
+| 7 | Exactly 640/1024 breakpoints; rebind/read-back half MOOT | JSX | PR3, MOOT confirmed PR19 |
 | 8 | No `font-size<1rem` outside panel — new component-path exemption axis | JSX | PR9 |
 | 9 | `valorDeColor` resolver ported to `@theme`/class names | JSX | PR3 (util), PR8 (real coverage) |
 | 10 | `matiz` (hue) resolver ported | JSX | PR3, PR8 |
@@ -110,9 +114,9 @@ starting state for all 21).
 | 15 | Sticky paginator armed + opaque background | JSX | PR10 |
 | 16 | Narrow-layout `thead` displaced, not clipped | AMBOS | PR6 (compiled), final confirm PR15 |
 | 17 | Document-viewer iframe bounded `vh` (legal reading gate) | JSX, dedicated | PR12 |
-| 18 | BEM modifier never above base (cascade footgun) | MOOT | PR16 |
+| 18 | BEM modifier never above base (cascade footgun) | MOOT | PR19 |
 | 19 | Signature canvas bounded, controls never covered (`elementFromPoint`) | JSX, dedicated | PR13 |
-| 20 | Universal touch-floor scan (`pisoDeToque.ts`) | JSX | PR9 (engine), PR15 (primary target), PR16 (site-wide confirm) |
+| 20 | Universal touch-floor scan (`pisoDeToque.ts`) | JSX | PR9 (engine), PR15 (primary target), PR19 (site-wide confirm) |
 | 21 | Every `<a>`/`<Link>` gets a real box | JSX | PR8 |
 
 **Component inventory caveat.** Design names 5 atoms, `BarraDeBusqueda`,
@@ -120,9 +124,12 @@ starting state for all 21).
 `TablaDeContratos`, `CabeceraDeSesion`, `InsigniaDeEstado`/`estadoDeContrato`
 explicitly (13 of 21+10 components/containers). The remaining molecules,
 organisms and containers are not individually named in any input artifact —
-PR11's apply step MUST confirm the complete list against
-`fd -e tsx . apps/web/src/componentes apps/web/src/funcionalidades` before
-claiming full coverage, rather than assuming this list is exhaustive.
+PR11's apply step confirmed it with `rg --files -g '*.tsx'` (`fd` is not
+installed on this machine — an empty result there means "not installed", not
+"no matches") and found **twelve components no numbered task claimed**: the
+two layout shells, four office organisms and six containers. Phases 16–18
+close that gap; without them `panel.css` and `organismos.css` stay in use and
+PR19 can neither delete them nor audit the register to zero `CSS` entries.
 
 ## Suggested Work Units
 
@@ -143,7 +150,10 @@ claiming full coverage, rather than assuming this list is exhaustive.
 | PR13 | F2 | `LienzoDeFirma` redesigned + guards 4(final)/19 dedicated verification + S3 handheld driver (6-state constant) | 320–380 | Deshacer/Borrar are never covered by the iframe; S3 is reached and measured for the first time |
 | PR14 | F3 | `EscanerDeMac` redesigned + guard 2 final confirmation | 120–160 | `[hidden]` camera containment survives on converted markup |
 | PR15 | F4 | `TablaDeContratos` redesigned + guards 5/16/20 final site-wide confirmation | 280–340 | Guard 20's primary target passes; no `sr-only` collision on the table |
-| PR16 | F-cleanup + G | BEM sheets deleted (6 files), old `convencionesDeEstilos.spec.ts` deleted, register audited to zero `CSS` entries, final whole-flow handheld pass (6 states, 360–430px) | 200–260 | Success Criteria checklist closes; no hand-authored BEM sheet remains |
+| PR16 | gap | `LayoutTecnico`/`LayoutPanel` off BEM + guard 7 rebind resolved | 180–240 | The cascade-layer trap cannot hide in a half-migrated shell |
+| PR17 | gap | Four office organisms off BEM, shared `.formulario` shape converted once | 300–360 | Guard 4 holds in a real destructive composition, not a fixture |
+| PR18 | gap | Six containers off BEM + whole-tree zero-BEM assertion | 320–380 | PR19's deletion becomes safe rather than hopeful |
+| PR19 | F-cleanup + G | BEM sheets deleted (6 files), old `convencionesDeEstilos.spec.ts` deleted, register audited to zero `CSS` entries, final whole-flow handheld pass (6 states, 360–430px) | 200–260 | Success Criteria checklist closes; no hand-authored BEM sheet remains |
 
 | PR | Focused test command | Runtime harness | Rollback boundary |
 |----|----------------------|------------------|--------------------|
@@ -162,7 +172,10 @@ claiming full coverage, rather than assuming this list is exhaustive.
 | PR13 | `pnpm --filter @contratos/web test` | `pnpm size && pnpm handheld` (S3 now included, 6-state constant) | `git revert` PR13's branch restores prior `LienzoDeFirma`; S3 harness drops back to unreachable (constant reverts to 5 with it) |
 | PR14 | `pnpm --filter @contratos/web test` | `pnpm size && pnpm handheld` | `git revert` PR14's branch restores prior `EscanerDeMac` |
 | PR15 | `pnpm --filter @contratos/web test` | `pnpm size && pnpm handheld` | `git revert` PR15's branch restores prior `TablaDeContratos` |
-| PR16 | `pnpm -r test`, `pnpm typecheck`, `pnpm lint` | `pnpm size && pnpm handheld` (full 6-state final pass) | **Not simple** — reverting PR16 alone is safe (restores deleted BEM files), but it is the terminal PR; no PR depends on it |
+| PR16 | `pnpm --filter @contratos/web test` | `pnpm size && pnpm handheld` (both shells host every measured state) | `git revert` PR16's branch restores the BEM layout shells |
+| PR17 | `pnpm --filter @contratos/web test` | `pnpm size && pnpm handheld` | `git revert` PR17's branch restores the four office organisms' prior BEM design |
+| PR18 | `pnpm --filter @contratos/web test` | `pnpm size && pnpm handheld` | `git revert` PR18's branch restores the six containers' prior BEM design; the zero-BEM assertion reverts with it |
+| PR19 | `pnpm -r test`, `pnpm typecheck`, `pnpm lint` | `pnpm size && pnpm handheld` (full 6-state final pass) | **Not simple** — reverting PR19 alone is safe (restores deleted BEM files), but it is the terminal PR; no PR depends on it |
 
 ---
 
@@ -291,7 +304,7 @@ finding; that window is three draft PRs, none of which gate anything.*
 - [x] 8.1 RED: guard 21 case — a fixture `<a>`/`<Link className="…">` without a block/flex/full-width utility is flagged as an inline box with silently-inert `min-height`. Must fail against pre-redesign markup (still CSS-rule-body scanned).
 - [x] 8.2 GREEN: redesign `Etiqueta.tsx`, `MarcaProducto.tsx`, `Spinner.tsx`; every `<a>`/`<Link>` in scope gets a real box (block/flex/full-width), satisfying 8.1.
 - [x] 8.3 RED then GREEN: brand-presentation's rebuilt contrast guard — `MarcaProducto`'s wordmark text/control usage resolves ≥4.5:1 against `#ffffff` and never equals `#008bff`; the icon's raster `#008bff` fill is confirmed **outside** the guard's reach (D1's "wordmark as live text" decision) rather than exempted by a scoping rule.
-- [x] 8.4 Guard 18 confirmed structurally MOOT for these 3 converted atoms — no `@apply`-based custom class introduced; note in the PR body, register stays `CSS` for entry 18 until PR16's full-codebase confirmation.
+- [x] 8.4 Guard 18 confirmed structurally MOOT for these 3 converted atoms — no `@apply`-based custom class introduced; note in the PR body, register stays `CSS` for entry 18 until PR19's full-codebase confirmation.
 - [x] 8.5 Update `registro.ts` entries 9, 10, 11, 12 real-coverage confirmed on `MarcaProducto`; entry 21 to `JSX`.
 - [x] 8.6 RED: extend `geometriaHandheld.ts`'s committed single-row budget assertion to fail on the **current** `CabeceraDeSesion` at 390px in both shells. Confirm it fails at the measured 110px (técnico) and 98px (oficina) — the pre-existing defect PR5 surfaced — before any redesign, so the GREEN below is proven to be what fixed it.
 - [x] 8.7 GREEN: redesign `CabeceraDeSesion.tsx` so it renders in a single row at 360–430px in both `LayoutTecnico` and `LayoutPanel`, within the committed budget, with every control still ≥48px on both axes. Re-run `pnpm handheld` and confirm the step now passes — do not weaken the assertion to reach green.
@@ -408,21 +421,74 @@ finding; that window is three draft PRs, none of which gate anything.*
 - [ ] 15B.2 User visual review.
 - [ ] 15B.3 Open PR #15 targeting PR #14's branch.
 
-## Phase 16 — PR16: BEM deletion, final register audit, whole-flow pass (F-cleanup + G)
+## Phase 16 — PR16: the two layout shells (inventory gap, added after PR11)
 
-- [ ] 16.1 RED then GREEN: `registro.spec.ts` asserts zero entries remain `CSS` (all 21 have migrated to `JSX`/`AMBOS`/`MOOT`/`RESUELTA`) — this must fail if any guard is still only CSS-protected before proceeding to delete the sheets.
-- [ ] 16.2 Delete `estilos/{tokens,base,atomos,organismos,panel,index}.css` (6 files, 1665 measured lines) and `estilos/convencionesDeEstilos.spec.ts` (1812 measured lines) — last, per D2.
-- [ ] 16.3 Confirm guard 18 is now globally `MOOT` (no `@apply`-based custom class exists anywhere) and guard 7's rebind half is structurally impossible (no inherited `--fuente-base`-style custom property remains); update `registro.ts` entries 7, 18 accordingly.
-- [ ] 16.4 `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint` — confirms nothing still imports a deleted stylesheet.
-- [ ] 16.5 Run the full 6-state handheld pass (`pnpm handheld`) at 360/390/430px as the final whole-flow verification (proposal's slice G).
-- [ ] 16.6 Success Criteria checklist: all 21 dispositions named; `pnpm -r test`/`typecheck`/`lint` green; no `.dark`/`@custom-variant dark`/`next-themes`; técnico flow scrollWidth/48px at 360–430px; every shipped colour ≥4.5:1 text / ≥3:1 non-text; no `LayoutTablet` identifier; `dist/` ≤665,600 B; `apps/api`/`prisma/plantillas/*.html`/signature logic byte-identical (confirm via `git diff --stat` against those paths across the whole chain).
+*PR11's task 11.0 — "confirm the complete list against the tree rather than
+assuming it" — found twelve components carrying first-party BEM classNames
+that no numbered task in the original sixteen claimed. Phases 16–18 close
+that gap. Without them `panel.css` and `organismos.css` stay in use, so
+PR19 cannot delete them and the register cannot reach zero `CSS` entries:
+the migration would end with two guard systems instead of one.*
+
+*The shells come first because they are the cascade risk. Tailwind wraps its
+output in native `@layer`s and unlayered hand-authored CSS outranks it at
+equal specificity — PR8 nearly shipped a silently reinstated `flex-wrap`
+exactly this way, and jsdom cannot see it. A half-migrated layout is where
+that bites hardest.*
+
+- [ ] 16.1 RED: assert no first-party `.tsx` under `componentes/plantillas/` carries a hand-authored BEM className. Must fail against `LayoutPanel.tsx` and `LayoutTecnico.tsx`, naming both.
+- [ ] 16.2 GREEN: redesign `LayoutTecnico.tsx` and `LayoutPanel.tsx` off `.layout-tecnico`/`.layout-panel` onto Tailwind, keeping `LayoutTecnico`'s 720px and `LayoutPanel`'s 1280px content bounds.
+- [ ] 16.3 Resolve `panel.css`'s `--fuente-base: 16px` rebind and read-back (guard 7's MOOT half): the office shell states its sizes literally instead of rebinding an inherited custom property, so the "rebind alone is inert" bug class becomes structurally impossible rather than guarded (D4).
+- [ ] 16.4 Re-check guard 8's component-path exemption axis against the converted shells — PR9 scoped it to `componentes/organismos|moleculas/` and `funcionalidades/contratos/`, deliberately excluding `componentes/atomos/`; confirm `plantillas/` needs no entry.
+- [ ] 16.5 `pnpm size && pnpm handheld` — both shells host every measured state, so a shell regression shows up here or nowhere.
 
 ## Phase 16B — PR16 close-out
 
-- [ ] 16B.1 Run the full `pnpm -r test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1–PR16 diff; record results.
-- [ ] 16B.2 Final user sign-off: "visibly new" confirmed across every redesigned screen (cumulative — not just this PR's diff).
-- [ ] 16B.3 Open PR #16 targeting PR #15's branch. Retarget nothing further — this is the terminal child PR.
-- [ ] 16B.4 Merge the chain into the tracker PR (retargeting is a no-op at this point — PR16 already targets the last child); merge the tracker into `master` last.
+- [ ] 16B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [ ] 16B.2 User visual review of both shells.
+- [ ] 16B.3 Open PR #16 targeting PR #15's branch.
+
+## Phase 17 — PR17: the four office organisms (inventory gap)
+
+- [ ] 17.1 RED: guard 20's `pisoDeToque` scan and guard 8's ≥1rem floor run against `FormularioComodatario`, `FormularioEquipos`, `DetalleDeContrato`, `AccionesDeContrato`. Must fail against their pre-redesign markup.
+- [ ] 17.2 GREEN: redesign all four off BEM. `FormularioComodatario`/`FormularioEquipos` share `.formulario`, `.formulario__campo` and `.formulario__fieldset` with `PaginaLogin` — convert the shared shape once rather than three times, and note `FormularioEquipos.tsx:87,97` are native radios whose 48px floor came from `base.css` (PR1's `@layer base` row).
+- [ ] 17.3 `AccionesDeContrato` renders destructive controls: confirm guard 4's colour-not-position rule and the ≥32px gap hold in its real composition, not just PR7's atom-level fixture.
+- [ ] 17.4 Update `registro.ts` for any disposition these conversions complete.
+
+## Phase 17B — PR17 close-out
+
+- [ ] 17B.1 Run the full suite plus `pnpm size && pnpm handheld`; record results.
+- [ ] 17B.2 User visual review of the office detail and form screens.
+- [ ] 17B.3 Open PR #17 targeting PR #16's branch.
+
+## Phase 18 — PR18: the six remaining containers (inventory gap)
+
+- [ ] 18.1 RED: the whole-tree BEM scan (16.1's, widened to `funcionalidades/**`) must fail against `PanelNoDisponible`, `FormularioBorrador`, `PaginaDetalleContrato`, `PaginaListaContratos`, `EnvioDeFirma`, `PasoFirmaDual`.
+- [ ] 18.2 GREEN: redesign all six. `PanelNoDisponible`'s copy stays role-agnostic per DESIGN.md D10 — it must not name a home that does not exist for that role.
+- [ ] 18.3 `EnvioDeFirma` and `PasoFirmaDual` sit in the signature flow: confirm no redesign covers a control the técnico needs, and that `PasoFirmaDual`'s step transitions still reach S3 for `geometriaHandheld.ts`'s visit script (PR13).
+- [ ] 18.4 RED then GREEN: extend the whole-tree BEM scan to assert **zero** first-party BEM classNames remain anywhere under `apps/web/src`, `.formulario` included. This is what makes PR19's deletion safe rather than hopeful.
+
+## Phase 18B — PR18 close-out
+
+- [ ] 18B.1 Run the full suite plus `pnpm size && pnpm handheld`; record results.
+- [ ] 18B.2 User visual review of the técnico flow end to end.
+- [ ] 18B.3 Open PR #18 targeting PR #17's branch.
+
+## Phase 19 — PR19: BEM deletion, final register audit, whole-flow pass (F-cleanup + G)
+
+- [ ] 19.1 RED then GREEN: `registro.spec.ts` asserts zero entries remain `CSS` (all 21 have migrated to `JSX`/`AMBOS`/`MOOT`/`RESUELTA`) — this must fail if any guard is still only CSS-protected before proceeding to delete the sheets.
+- [ ] 19.2 Delete `estilos/{tokens,base,atomos,organismos,panel,index}.css` (6 files, 1665 measured lines) and `estilos/convencionesDeEstilos.spec.ts` (1812 measured lines) — last, per D2.
+- [ ] 19.3 Confirm guard 18 is now globally `MOOT` (no `@apply`-based custom class exists anywhere) and guard 7's rebind half is structurally impossible (no inherited `--fuente-base`-style custom property remains); update `registro.ts` entries 7, 18 accordingly.
+- [ ] 19.4 `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint` — confirms nothing still imports a deleted stylesheet.
+- [ ] 19.5 Run the full 6-state handheld pass (`pnpm handheld`) at 360/390/430px as the final whole-flow verification (proposal's slice G).
+- [ ] 19.6 Success Criteria checklist: all 21 dispositions named; `pnpm -r test`/`typecheck`/`lint` green; no `.dark`/`@custom-variant dark`/`next-themes`; técnico flow scrollWidth/48px at 360–430px; every shipped colour ≥4.5:1 text / ≥3:1 non-text; no `LayoutTablet` identifier; `dist/` ≤665,600 B; `apps/api`/`prisma/plantillas/*.html`/signature logic byte-identical (confirm via `git diff --stat` against those paths across the whole chain).
+
+## Phase 19B — PR19 close-out
+
+- [ ] 19B.1 Run the full `pnpm -r test`, `pnpm typecheck`, `pnpm lint` against the cumulative PR1–PR19 diff; record results.
+- [ ] 19B.2 Final user sign-off: "visibly new" confirmed across every redesigned screen (cumulative — not just this PR's diff).
+- [ ] 19B.3 Open PR #16 targeting PR #15's branch. Retarget nothing further — this is the terminal child PR.
+- [ ] 19B.4 Merge the chain into the tracker PR (retargeting is a no-op at this point — PR19 already targets the last child); merge the tracker into `master` last.
 
 ## Deferred / recorded, not resolved here
 
