@@ -45,7 +45,11 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 `provision.sh` assumes `/opt/contratos` is (or will become) the git checkout
 `deploy.sh` operates on — see "`.cache/` and the git-exclude step" below for
 why the order between "clone the repository" and "run `provision.sh`" does
-not matter.
+not matter. Nor does the directory the script is started from: its one
+`npx` step (Chromium's `--install-deps`, D1) runs from a scratch directory
+of its own, so `cd /opt/contratos && bash deploy/provision.sh` works the
+same as running it from `/root` — see "Chromium and fonts" for the gap
+that made this explicit.
 
 ## Idempotent-guard plan (`provision.sh --dry-run`)
 
@@ -59,7 +63,7 @@ requirement:
 | `contratos` system user | `[skip] user '…' already exists` | `[plan] would create system user '…'` |
 | `$APP_DIR`, `$DOCUMENT_STORE_DIR` (`contratos:contratos` 750); `/etc/contratos`, `/etc/contratos/gnupg`, `/var/backups/contratos-offsite` (`root:root` 700 — every path `contratos-backup.service` lists in `ReadWritePaths=`/`GNUPGHOME`) | `[skip] directory '…' already exists` | `[plan] would create directory '…' (owner …, mode …)` |
 | Swapfile + its `/etc/fstab` entry | `[skip] swapfile '…' already exists` / `[skip] fstab entry for '…' already present` | `[plan] would create a 2048MB swapfile at '…'` / `[plan] would append '… none swap sw 0 0' to '…'` |
-| `.cache/`, `.bash_logout`, `.bashrc`, `.profile` in the git exclude file (one guard per entry) | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
+| `.cache/`, `.bash_logout`, `.bashrc`, `.profile`, `.config/`, `.local/`, `.npm/`, `.pnpm-store/` in the git exclude file (one guard per entry) | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
 | Node.js ≥ `NODE_MAJOR` and pnpm = `PNPM_VERSION` on `$PATH` | `[skip] node v… (>= 24) and pnpm 11.11.0 already installed` | `[plan] would install Node.js 24 (NodeSource) and pnpm 11.11.0` |
 | `$APP_DIR` in git's system-wide `safe.directory` (`/etc/gitconfig`) | `[skip] '…' already listed in git's system-wide safe.directory` | `[plan] would run: git config --system --add safe.directory '…'` |
 | `contratos-api.service` installed from `$APP_DIR/deploy/` (byte-identical) and enabled | `[skip] contratos-api.service already installed at '…' (identical) and enabled` | `[plan] would install '…' as '/etc/systemd/system/contratos-api.service' (mode 644), run systemctl daemon-reload, and enable contratos-api.service — never start it` — or `[skip] '…' not found — clone the repository into '…' and re-run provision.sh …` while there is no checkout yet |
@@ -106,7 +110,25 @@ and `git status --porcelain` (untracked files included) makes the very first
 `deploy.sh` refuse over a "dirty" worktree. `provision.sh` excludes those
 three as well, one guard per line, so a host provisioned before they were
 added still gains them on the next re-run — the table above shows the
-`.cache/` line; the other three print the same `[skip]`/`[plan]` shape.
+`.cache/` line; the others print the same `[skip]`/`[plan]` shape.
+
+It bit a third time, after the first deploy had already succeeded: the
+checkout is `contratos`'s `$HOME`, so every tool `deploy.sh` runs as that
+user that writes XDG/config directories into `$HOME` writes them into the
+checkout. `pnpm install` (and Node underneath it) left `.config/` and
+`.local/` there, and the next `TAG=v1.0.1 deploy/deploy.sh` was refused by
+the dirty-worktree guard before it stopped the service — the guard was
+right, the hygiene was not. `provision.sh` therefore excludes the
+dot-directories a home accumulates as well. The full list, kept in one
+array (`GIT_EXCLUDE_ENTRIES`) so the script and this section never drift:
+
+- `.cache/` — Puppeteer's browser download
+- `.bash_logout`, `.bashrc`, `.profile` — `/etc/skel` copied by `useradd`
+- `.config/`, `.local/`, `.npm/`, `.pnpm-store/` — XDG and package-manager
+  state written by pnpm/node during `deploy.sh`
+
+On a host provisioned before the XDG entries existed, a re-run of
+`provision.sh` appends the missing lines and leaves the rest `[skip]`ped.
 
 ### Database
 
@@ -196,6 +218,21 @@ package simply covers both.) The root step also sets
 once before `browsers install chrome` downloads it again into the scratch
 cache — `--install-deps` still resolves libraries against that second,
 explicit download.
+
+A third thing surfaced once the script was run *from the checkout* (gap
+#13): `cd /opt/contratos && bash deploy/provision.sh` died in this step with
+`sh: 1: puppeteer: not found` (exit 127). Verified side by side on the host
+with `PUPPETEER_SKIP_DOWNLOAD=1 npx --yes puppeteer@25.4.0 --help`: from
+`/opt/contratos` it fails the same way, from a `mktemp -d` scratch directory
+it works. `npx` inside a Node project resolves the binary against the
+enclosing project — the checkout is a pnpm workspace with a root
+`package.json`/`node_modules` and no root `puppeteer` bin — instead of the
+package it just fetched; earlier runs passed only because they started from
+`/root`. `provision.sh` now `cd`s into the scratch cache directory it already
+creates before invoking `npx`, in a subshell, so the step never runs inside
+the checkout no matter where the script was started from. The dry-run plan
+line says so ("run from a scratch directory outside the checkout, …") and
+`provision.spec.ts` asserts it.
 
 ### Render verdict (`pnpm --filter @contratos/api verify:render`)
 

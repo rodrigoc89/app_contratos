@@ -328,17 +328,30 @@ provision_node() {
 # affect the explicit `browsers install chrome` that follows, which still
 # performs a real download into the scratch cache — and that download is
 # the one `--install-deps` resolves the system libraries against.
+#
+# The npx step runs from the scratch cache directory, never from wherever
+# this script was invoked (gap #13, seen on the real host): `cd
+# /opt/contratos && bash deploy/provision.sh` — exactly what "clone, then
+# re-run provision" implies — died with `sh: 1: puppeteer: not found`
+# (exit 127), while the same `npx --yes puppeteer@… --help` from a
+# `mktemp -d` worked. npx inside a Node project resolves the bin against the
+# enclosing project (the checkout is a pnpm workspace with a root
+# package.json/node_modules and no `puppeteer` bin) instead of the package
+# it just fetched. Earlier runs passed only because they started from /root.
 provision_chromium_deps() {
   if [ "$DRY_RUN" = true ]; then
-    plan "would run: npx --yes puppeteer@${PUPPETEER_VERSION} browsers install chrome --install-deps (PUPPETEER_SKIP_DOWNLOAD=1 for the postinstall; scratch PUPPETEER_CACHE_DIR, deleted afterward)"
+    plan "would run: npx --yes puppeteer@${PUPPETEER_VERSION} browsers install chrome --install-deps (PUPPETEER_SKIP_DOWNLOAD=1 for the postinstall; scratch PUPPETEER_CACHE_DIR, deleted afterward; run from a scratch directory outside the checkout, since npx resolves bins against an enclosing Node project)"
     return
   fi
 
   local scratch_cache
   scratch_cache="$(mktemp -d)"
-  PUPPETEER_CACHE_DIR="$scratch_cache" \
-    PUPPETEER_SKIP_DOWNLOAD=1 \
-    npx --yes "puppeteer@${PUPPETEER_VERSION}" browsers install chrome --install-deps
+  (
+    cd "$scratch_cache" &&
+      PUPPETEER_CACHE_DIR="$scratch_cache" \
+        PUPPETEER_SKIP_DOWNLOAD=1 \
+        npx --yes "puppeteer@${PUPPETEER_VERSION}" browsers install chrome --install-deps
+  )
   rm -rf "$scratch_cache"
 }
 
@@ -476,12 +489,25 @@ provision_dir() {
 # excluded here too, each entry guarded on its own line so a host provisioned
 # before they were added still gains them.
 #
+# And a third time, after the first successful deploy: the checkout doubles
+# as $SERVICE_USER's HOME (`useradd --home-dir "$APP_DIR"` above), so every
+# tool deploy.sh runs as that user that writes XDG/config dirs into $HOME
+# writes them into the checkout. `pnpm install` left `.config/` and `.local/`
+# behind, and the next `deploy.sh` was refused by the dirty-worktree guard
+# before it ever stopped the service — correct guard, wrong hygiene. The
+# dot-directories a HOME accumulates are excluded here for the same reason,
+# in this single list, so the guard and the README describe the same set.
+#
 # This step is safe to run before the repository is ever cloned into
 # $APP_DIR: it only creates the directory chain that would hold that
 # exclude file. Clone the repository into $APP_DIR before or after running
 # this script — either order works, since re-running provision.sh is
 # exactly what this guard is for.
-GIT_EXCLUDE_ENTRIES=('.cache/' '.bash_logout' '.bashrc' '.profile')
+GIT_EXCLUDE_ENTRIES=(
+  '.cache/'
+  '.bash_logout' '.bashrc' '.profile'
+  '.config/' '.local/' '.npm/' '.pnpm-store/'
+)
 
 git_exclude_entry_present() {
   [ -f "$GIT_EXCLUDE_FILE" ] && grep -qxF "$1" "$GIT_EXCLUDE_FILE"
