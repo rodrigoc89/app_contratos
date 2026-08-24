@@ -19,9 +19,15 @@ describe("CampoTexto", () => {
     expect(screen.getByLabelText("nombre")).toHaveValue("Ana");
   });
 
-  it("carries the shared text-field styling class (PR24a — atoms are the styling seam)", () => {
+  /**
+   * PR24a's "atoms are the styling seam" claim survives the redesign; only
+   * the literal marker changes. The BEM `.campo-texto` class the migration
+   * retires (design-system-migration PR7) is replaced by a fixed Tailwind
+   * class list — `w-full` is the structural one every instance shares.
+   */
+  it("carries the shared styling class (PR24a — atoms are the styling seam)", () => {
     render(<CampoTexto aria-label="dni" value="" onCambiar={() => {}} />);
 
-    expect(screen.getByLabelText("dni")).toHaveClass("campo-texto");
+    expect(screen.getByLabelText("dni")).toHaveClass("w-full");
   });
 });

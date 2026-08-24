@@ -1,0 +1,143 @@
+/**
+ * design-system-migration PR1 (D3) — Tailwind v4's `@theme` token layer,
+ * originally mapped from `tokens.css`. PR19 (task 19.2) deletes every
+ * hand-authored BEM sheet (`tokens.css`, `base.css`, `atomos.css`,
+ * `organismos.css`, `panel.css`, `index.css`) now that nothing references
+ * them; this file absorbs `index.css`'s former role as the single
+ * stylesheet entry point, imported once from `main.tsx`.
+ *
+ * `--breakpoint-*: initial;` resets the default `sm/md/lg/xl/2xl` tiers
+ * before the two named ones, so `md:`/`lg:` compile to nothing rather than
+ * reintroducing a third breakpoint silently (guard 7 is a JSX prefix
+ * whitelist in PR3 for the same reason).
+ *
+ * `--radius-base`, not a bare `--radius`: v4's border-radius namespace
+ * requires a suffix, and this project keeps its own token layer rather
+ * than shadcn's `@theme inline`/`--radius` convention.
+ */
+@import "tailwindcss";
+
+/**
+ * design.md's slice B collision cluster, found while implementing it: this
+ * directory's own English prose (e.g. "...using the sr-only recipe...",
+ * "...the overflow-hidden / `[hidden]` / `sr-only` collision cluster...")
+ * contains bare words that are *shaped* like Tailwind utility class names.
+ * Tailwind's candidate scanner is a dumb lexical match over raw file text —
+ * it has no idea these are sentences, not `className`s — so it speculatively
+ * compiled `.sr-only` and `.overflow-hidden` into real `dist/` output before
+ * any component ever used them. `estilos/` holds no `.tsx`, so it can never
+ * contribute a real utility candidate; excluding it removes this whole class
+ * of false positive rather than policing every future comment's word choice.
+ */
+@source not "./";
+
+@theme {
+  /* Brand */
+  --color-primario: #0b634a;
+  --color-primario-oscuro: #094f3b;
+  --color-marca-azul: #0076d9;
+
+  /* Neutrals */
+  --color-fondo: #ffffff;
+  --color-texto: #14181b;
+  --color-texto-suave: #3f4b52;
+  --color-borde: #4b5563;
+  --color-borde-suave: #d0d7dc;
+
+  /* Semantic */
+  --color-error: #b3261e;
+  --color-foco: #0b634a;
+
+  /* Estado badges */
+  --color-estado-vigente-fondo: #d7f0e4;
+  --color-estado-vigente-texto: #08533e;
+  --color-estado-borrador-fondo: #e9edf0;
+  --color-estado-borrador-texto: #39454c;
+  --color-estado-baja-fondo: #fdecd2;
+  --color-estado-baja-texto: #6d4106;
+  --color-estado-anulado-fondo: #fbe0de;
+  --color-estado-anulado-texto: #8c1d18;
+
+  /* Touch target — guard 3's "token ≥48px" reads this */
+  --spacing-toque: 48px;
+
+  /* Session header's measured rendered height (48px control + 2x8px
+     padding + 1px border, probed at 1280x800 AND 360x640) — the sticky
+     office chrome's anchor: the header sizes itself with it and the list
+     page's pinned search block offsets itself below it (PR22). */
+  --altura-cabecera-panel: 65px;
+
+  /* Type — a tablet held at arm's length, not read up close */
+  --text-base: 18px;
+  --text-grande: 22px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radius-base: 8px;
+
+  /* Breakpoints — mobile-first, growing viewport only */
+  --breakpoint-*: initial;
+  --breakpoint-tableta: 640px;
+  --breakpoint-escritorio: 1024px;
+}
+
+/**
+ * `@layer base` — rules rebound from `base.css` (D3's rule-by-rule table).
+ * `base.css` itself is deleted by PR19 (task 19.2); these rules are its
+ * only surviving descendants.
+ */
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-foco);
+    outline-offset: 2px;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-fondo);
+    color: var(--color-texto);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.5;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  h1,
+  h2,
+  h3 {
+    line-height: 1.25;
+  }
+
+  h2 {
+    font-size: var(--text-grande);
+  }
+
+  [role="alert"] {
+    display: block;
+    margin: 0.75rem 0;
+    padding: 1rem;
+    border: 2px solid var(--color-error);
+    border-radius: var(--radius-base);
+    background-color: color-mix(in srgb, var(--color-error) 12%, var(--color-fondo));
+    color: var(--color-error);
+    font-weight: 600;
+  }
+
+  /* Load-bearing: sizes the native radios/checkboxes
+     (`FormularioEquipos.tsx:87,97`) to the touch floor. */
+  input[type="radio"],
+  input[type="checkbox"] {
+    width: var(--spacing-toque);
+    height: var(--spacing-toque);
+    accent-color: var(--color-primario);
+  }
+}

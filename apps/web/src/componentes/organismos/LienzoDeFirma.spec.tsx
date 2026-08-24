@@ -312,13 +312,14 @@ describe("LienzoDeFirma", () => {
     }).not.toThrow();
   });
 
-  it("carries the viewport-bounded signature-canvas class (PR24b — as large as the viewport reasonably allows, but never unbounded)", () => {
+  it("carries the bounded signature-canvas classes (design-system-migration PR13) — vh-boundedness itself is policed by guard 19 in convencionesDeUtilidades.spec.ts, not here", () => {
     const { superficie } = superficieFalsa();
     render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficie} />);
     const lienzo = screen.getByRole("img", { name: "Firma" });
 
-    expect(lienzo).toHaveClass("lienzo-de-firma__lienzo");
-    expect(lienzo.parentElement).toHaveClass("lienzo-de-firma");
+    expect(lienzo.className).toMatch(/\bh-\[40vh\]/);
+    expect(lienzo.className).not.toMatch(/\bh-auto\b/);
+    expect(lienzo.className).not.toMatch(/\bmin-h-/);
   });
 
   /**
@@ -402,12 +403,16 @@ describe("LienzoDeFirma — destructive action (PR25)", () => {
 
     // Borrar discards every stroke the customer already made; Deshacer
     // removes one. Only the unrecoverable one carries the warning.
-    expect(borrar).toHaveClass("boton--destructivo");
-    expect(deshacer).not.toHaveClass("boton--destructivo");
+    // design-system-migration PR7 — the BEM `.boton--destructivo` modifier
+    // is replaced by Boton's cva `destructivo` variant, which colours by
+    // its own prop rather than a class a caller could paste onto the wrong
+    // button; `bg-error` is its resolved marker.
+    expect(borrar).toHaveClass("bg-error");
+    expect(deshacer).not.toHaveClass("bg-error");
 
-    // The base class must survive alongside the modifier — the atom used to
-    // overwrite an incoming className outright.
-    expect(borrar).toHaveClass("boton");
+    // The shared base class must survive alongside the variant — the atom
+    // used to overwrite an incoming className outright.
+    expect(borrar).toHaveClass("inline-flex");
   });
 });
 
@@ -451,7 +456,10 @@ describe("LienzoDeFirma — la superficie se acota desde la hoja, no en línea",
     const envoltorio = lienzo.parentElement;
     const acciones = screen.getByRole("button", { name: "Deshacer" }).parentElement;
 
-    expect(envoltorio?.className).toContain("lienzo-de-firma");
+    // `data-lienzo-de-firma` (design-system-migration PR13) — same
+    // `data-*` hook pattern `[data-cabecera-de-sesion]` established: a
+    // Tailwind wrapper carries no stable BEM class name to assert on.
+    expect(envoltorio?.hasAttribute("data-lienzo-de-firma")).toBe(true);
     expect(envoltorio?.contains(acciones ?? null)).toBe(true);
   });
 });
