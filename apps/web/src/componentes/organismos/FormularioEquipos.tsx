@@ -4,6 +4,14 @@ import { Boton } from "../atomos/Boton";
 import { CampoTexto } from "../atomos/CampoTexto";
 import { Etiqueta } from "../atomos/Etiqueta";
 import { IndicadorDePaso, PASOS_DEL_BORRADOR } from "../moleculas/IndicadorDePaso";
+import {
+  CLASE_ACCIONES_FORMULARIO,
+  CLASE_ETIQUETA_OPCION,
+  CLASE_FIELDSET_FORMULARIO,
+  CLASE_FORMULARIO,
+  CLASE_LEYENDA_FORMULARIO,
+  CLASE_TITULO_FORMULARIO,
+} from "../../estilos/formulario";
 import { EscanerDeMac } from "./EscanerDeMac";
 
 /**
@@ -65,9 +73,9 @@ export function FormularioEquipos({
   }
 
   return (
-    <form onSubmit={manejarEnvio} className="formulario">
+    <form onSubmit={manejarEnvio} className={CLASE_FORMULARIO} data-formulario>
       <IndicadorDePaso pasos={PASOS_DEL_BORRADOR} actual={2} />
-      <h1>Nuevo contrato</h1>
+      <h1 className={CLASE_TITULO_FORMULARIO}>Nuevo contrato</h1>
       <Etiqueta htmlFor="antenaModelo">Modelo de antena</Etiqueta>
       <CampoTexto
         id="antenaModelo"
@@ -80,9 +88,9 @@ export function FormularioEquipos({
         onCambiar={(valor) => onCambiar("antenaMac", valor)}
         deshabilitado={deshabilitado}
       />
-      <fieldset className="formulario__fieldset">
-        <legend>¿Se entregó inyector PoE?</legend>
-        <Etiqueta className="etiqueta--opcion">
+      <fieldset className={CLASE_FIELDSET_FORMULARIO}>
+        <legend className={CLASE_LEYENDA_FORMULARIO}>¿Se entregó inyector PoE?</legend>
+        <Etiqueta className={CLASE_ETIQUETA_OPCION}>
           <input
             type="radio"
             name="poe"
@@ -92,7 +100,7 @@ export function FormularioEquipos({
           />
           Sí
         </Etiqueta>
-        <Etiqueta className="etiqueta--opcion">
+        <Etiqueta className={CLASE_ETIQUETA_OPCION}>
           <input
             type="radio"
             name="poe"
@@ -111,7 +119,7 @@ export function FormularioEquipos({
         disabled={deshabilitado}
       />
       {error !== null && <p role="alert">{error}</p>}
-      <div className="formulario__acciones">
+      <div className={CLASE_ACCIONES_FORMULARIO}>
         {/*
           Going back and committing are not the same act, and they used to be
           the same button. The secondary one loses the fill rather than the
@@ -119,12 +127,7 @@ export function FormularioEquipos({
           more presence than an outlined one on a tablet in direct sun, so
           the fill belongs to the action that matters.
         */}
-        <Boton
-          type="button"
-          className="boton--secundario"
-          onClick={onVolver}
-          disabled={deshabilitado}
-        >
+        <Boton type="button" variante="secundario" onClick={onVolver} disabled={deshabilitado}>
           Volver
         </Boton>
         <Boton type="submit" disabled={deshabilitado}>
