@@ -36,9 +36,11 @@ const ROOT_PACKAGE_JSON = join(import.meta.dirname, "..", "package.json");
  * the unit-file guard); `node`/`pnpm` fakes that print the given version
  * are added on request.
  *
- * `systemctl` is a fake when `host.apiUnitEnabled` is given: it answers
- * `is-enabled` and exits 99 for anything else, so a dry run that reaches
- * `daemon-reload`/`enable` fails the spec instead of passing silently.
+ * `systemctl` is a fake when `host.apiUnitEnabled` or
+ * `host.backupTimerEnabled` is given: it answers `is-enabled`/`is-active`
+ * per unit (unnamed units read as disabled) and exits 99 for anything
+ * else, so a dry run that reaches `daemon-reload`/`enable` fails the spec
+ * instead of passing silently.
  * `sudo` + `psql` are fakes when `host.databaseProvisioned` is given, on
  * the same terms: `sudo` drops its `-n -u postgres` and execs the command
  * on this PATH, `psql` answers the `SELECT 1 …` existence probes it reads
@@ -47,7 +49,11 @@ const ROOT_PACKAGE_JSON = join(import.meta.dirname, "..", "package.json");
 async function makeToolchainBin(
   scratch: string,
   present: { node?: string; pnpm?: string } = {},
-  host: { apiUnitEnabled?: boolean; databaseProvisioned?: boolean } = {},
+  host: {
+    apiUnitEnabled?: boolean;
+    backupTimerEnabled?: boolean;
+    databaseProvisioned?: boolean;
+  } = {},
 ): Promise<string> {
   const binDir = join(scratch, "bin");
   await mkdir(binDir);
@@ -61,14 +67,18 @@ async function makeToolchainBin(
       mode: 0o755,
     });
   }
-  if (host.apiUnitEnabled !== undefined) {
-    // Builtins only: this PATH has no coreutils.
+  if (host.apiUnitEnabled !== undefined || host.backupTimerEnabled !== undefined) {
+    // Builtins only: this PATH has no coreutils. The unit name is the last
+    // argument (`systemctl is-enabled --quiet <unit>`).
     await writeFile(
       join(binDir, "systemctl"),
       [
         "#!/bin/bash",
-        'case "$1" in',
-        `  is-enabled) exit ${host.apiUnitEnabled ? 0 : 1} ;;`,
+        'unit="${*: -1}"',
+        'case "$1:$unit" in',
+        `  is-enabled:contratos-api.service) exit ${host.apiUnitEnabled ? 0 : 1} ;;`,
+        `  is-enabled:contratos-backup.timer | is-active:contratos-backup.timer) exit ${host.backupTimerEnabled ? 0 : 1} ;;`,
+        "  is-enabled:* | is-active:*) exit 1 ;;",
         `  *) printf 'systemctl %s: a dry run must never reach this\\n' "$*" >&2; exit 99 ;;`,
         "esac",
         "",
@@ -112,6 +122,16 @@ async function makeToolchainBin(
 }
 
 const API_UNIT_FIXTURE = "[Unit]\nDescription=fake contratos-api\n[Service]\nExecStart=/bin/true\n";
+const BACKUP_SERVICE_FIXTURE =
+  "[Unit]\nDescription=fake contratos-backup\n[Service]\nType=oneshot\nExecStart=/bin/true\n";
+const BACKUP_TIMER_FIXTURE =
+  "[Unit]\nDescription=fake timer\n[Timer]\nOnCalendar=daily\n[Install]\nWantedBy=timers.target\n";
+
+async function writeBackupUnits(dir: string): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "contratos-backup.service"), BACKUP_SERVICE_FIXTURE, "utf-8");
+  await writeFile(join(dir, "contratos-backup.timer"), BACKUP_TIMER_FIXTURE, "utf-8");
+}
 
 describe("provision.sh --dry-run", () => {
   let scratch: string;
@@ -130,7 +150,9 @@ describe("provision.sh --dry-run", () => {
     const swapFile = join(scratch, "swapfile");
     const fstabFile = join(scratch, "fstab");
     const excludeFile = join(appDir, ".git", "info", "exclude");
-    const dbPasswordFile = join(scratch, "etc-contratos", "db.password");
+    const etcDir = join(scratch, "etc-contratos");
+    const dbPasswordFile = join(etcDir, "db.password");
+    const backupWorkDir = join(scratch, "var-backups-contratos-offsite");
     await writeFile(fstabFile, "", "utf-8");
     const binDir = await makeToolchainBin(scratch, {}, { databaseProvisioned: false });
 
@@ -146,7 +168,10 @@ describe("provision.sh --dry-run", () => {
         FSTAB_FILE: fstabFile,
         GIT_EXCLUDE_FILE: excludeFile,
         GIT_CONFIG_SYSTEM: join(scratch, "gitconfig-that-does-not-exist"),
+        ETC_CONTRATOS_DIR: etcDir,
         DB_PASSWORD_FILE: dbPasswordFile,
+        BACKUP_WORK_DIR: backupWorkDir,
+        SYSTEMD_UNIT_DIR: join(scratch, "etc-systemd-system"),
       },
     });
 
@@ -177,6 +202,21 @@ describe("provision.sh --dry-run", () => {
     );
     expect(stdout).toContain(`[plan] would create directory '${appDir}'`);
     expect(stdout).toContain(`[plan] would create directory '${documentStoreDir}'`);
+    // contratos-backup.service lists its keyring and its work directory in
+    // ReadWritePaths; with ProtectSystem=strict systemd bind-mounts those
+    // BEFORE ExecStart, so backup.sh's own `mkdir -p` never gets to run and
+    // a missing path is status=226/NAMESPACE, same as gap #7. Root-only:
+    // the work directory stages a plaintext pg_dump before encryption.
+    expect(stdout).toContain(`[plan] would create directory '${etcDir}' (owner root:root, mode 700)`);
+    expect(stdout).toContain(
+      `[plan] would create directory '${join(etcDir, "gnupg")}' (owner root:root, mode 700)`,
+    );
+    expect(stdout).toContain(
+      `[plan] would create directory '${backupWorkDir}' (owner root:root, mode 700)`,
+    );
+    expect(stdout).toContain(
+      `[skip] '${appDir}/deploy/contratos-backup.service' or '${appDir}/deploy/contratos-backup.timer' not found — clone the repository into '${appDir}' and re-run provision.sh to install and enable contratos-backup.timer`,
+    );
     // The size comes from SWAP_SIZE_MB above, so this asserts the override is
     // honoured as well as the guard — the production default is 2048.
     expect(stdout).toContain(`[plan] would create a 64MB swapfile at '${swapFile}'`);
@@ -220,15 +260,20 @@ describe("provision.sh --dry-run", () => {
     const gitSystemConfig = join(scratch, "gitconfig");
     await writeFile(gitSystemConfig, `[safe]\n\tdirectory = ${appDir}\n`, "utf-8");
     const unitSource = join(appDir, "deploy", "contratos-api.service");
-    const unitTarget = join(scratch, "etc-systemd-system", "contratos-api.service");
-    await mkdir(join(appDir, "deploy"), { recursive: true });
-    await mkdir(join(scratch, "etc-systemd-system"), { recursive: true });
+    const unitDir = join(scratch, "etc-systemd-system");
+    const unitTarget = join(unitDir, "contratos-api.service");
+    const etcDir = join(scratch, "etc-contratos");
+    const backupWorkDir = join(scratch, "var-backups-contratos-offsite");
+    await writeBackupUnits(join(appDir, "deploy"));
+    await writeBackupUnits(unitDir);
     await writeFile(unitSource, API_UNIT_FIXTURE, "utf-8");
     await writeFile(unitTarget, API_UNIT_FIXTURE, "utf-8");
+    await mkdir(join(etcDir, "gnupg"), { recursive: true });
+    await mkdir(backupWorkDir, { recursive: true });
     const binDir = await makeToolchainBin(
       scratch,
       { node: "v24.1.0", pnpm: "11.11.0" },
-      { apiUnitEnabled: true, databaseProvisioned: true },
+      { apiUnitEnabled: true, backupTimerEnabled: true, databaseProvisioned: true },
     );
 
     const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
@@ -242,7 +287,9 @@ describe("provision.sh --dry-run", () => {
         FSTAB_FILE: fstabFile,
         GIT_EXCLUDE_FILE: excludeFile,
         GIT_CONFIG_SYSTEM: gitSystemConfig,
-        API_UNIT_TARGET: unitTarget,
+        ETC_CONTRATOS_DIR: etcDir,
+        BACKUP_WORK_DIR: backupWorkDir,
+        SYSTEMD_UNIT_DIR: unitDir,
       },
     });
 
@@ -250,6 +297,12 @@ describe("provision.sh --dry-run", () => {
     expect(stdout).toContain(`[skip] user '${currentUser}' already exists`);
     expect(stdout).toContain(`[skip] directory '${appDir}' already exists`);
     expect(stdout).toContain(`[skip] directory '${documentStoreDir}' already exists`);
+    expect(stdout).toContain(`[skip] directory '${etcDir}' already exists`);
+    expect(stdout).toContain(`[skip] directory '${join(etcDir, "gnupg")}' already exists`);
+    expect(stdout).toContain(`[skip] directory '${backupWorkDir}' already exists`);
+    expect(stdout).toContain(
+      `[skip] contratos-backup.service and contratos-backup.timer already installed in '${unitDir}' (identical), contratos-backup.timer enabled and active`,
+    );
     expect(stdout).toContain(`[skip] swapfile '${swapFile}' already exists`);
     expect(stdout).toContain(
       `[skip] fstab entry for '${swapFile}' already present in '${fstabFile}'`,
@@ -307,11 +360,11 @@ describe("provision.sh --dry-run", () => {
     expect(aptPlan?.split(" ")).toContain("git");
   });
 
-  it("installs and enables contratos-api.service from the checkout, as the last step", async () => {
+  it("installs and enables contratos-api.service from the checkout, after every host step", async () => {
     // Nothing installed the unit before this: deploy.sh's start step assumed
     // it existed and the README only ever documented copying the backup
-    // units. It goes last because it needs the checkout, which every other
-    // step is indifferent to.
+    // units. The unit steps go after everything else because they need the
+    // checkout, which every other step is indifferent to.
     const appDir = join(scratch, "opt-contratos");
     const unitSource = join(appDir, "deploy", "contratos-api.service");
     const unitTarget = join(scratch, "etc-systemd-system", "contratos-api.service");
@@ -334,6 +387,38 @@ describe("provision.sh --dry-run", () => {
     const safeDirectoryPlan = `[plan] would run: git config --system --add safe.directory '${appDir}'`;
     expect(stdout.indexOf(safeDirectoryPlan)).toBeLessThan(stdout.indexOf(unitPlan));
     expect(stdout.indexOf(unitPlan)).toBeLessThan(stdout.indexOf("== done =="));
+  });
+
+  it("installs the backup units from the checkout and enables the timer, re-enabling a disabled one", async () => {
+    // The README only ever documented a manual `cp` + `daemon-reload` +
+    // `enable --now` for these two; the real host had neither installed.
+    // Enabling before backup.env exists is deliberate: backup.sh exits 1
+    // naming the missing file, so a premature nightly run fails loudly in
+    // the journal rather than the schedule silently never existing.
+    const appDir = join(scratch, "opt-contratos");
+    const unitDir = join(scratch, "etc-systemd-system");
+    await writeBackupUnits(join(appDir, "deploy"));
+    const backupPlan = `[plan] would install '${appDir}/deploy/contratos-backup.service' and '${appDir}/deploy/contratos-backup.timer' into '${unitDir}' (mode 644), run systemctl daemon-reload, and enable --now contratos-backup.timer`;
+    const env = {
+      ...process.env,
+      APP_DIR: appDir,
+      GIT_CONFIG_SYSTEM: join(scratch, "gitconfig-that-does-not-exist"),
+      SYSTEMD_UNIT_DIR: unitDir,
+    };
+
+    const bareBin = await makeToolchainBin(scratch, {}, { backupTimerEnabled: false });
+    const fresh = await execFileAsync(SCRIPT, ["--dry-run"], { env: { ...env, PATH: bareBin } });
+    expect(fresh.stdout).toContain(backupPlan);
+    expect(fresh.stdout.indexOf(backupPlan)).toBeLessThan(fresh.stdout.indexOf("== done =="));
+
+    // Identical files, timer disabled: still a plan, not a skip.
+    await writeBackupUnits(unitDir);
+    await rm(bareBin, { recursive: true, force: true });
+    const disabledBin = await makeToolchainBin(scratch, {}, { backupTimerEnabled: false });
+    const disabled = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...env, PATH: disabledBin },
+    });
+    expect(disabled.stdout).toContain(backupPlan);
   });
 
   it("reinstalls a drifted unit file and re-enables an identical one that is disabled", async () => {

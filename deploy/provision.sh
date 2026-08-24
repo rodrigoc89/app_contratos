@@ -37,14 +37,21 @@ SWAP_FILE="${SWAP_FILE:-/swapfile}"
 SWAP_SIZE_MB="${SWAP_SIZE_MB:-2048}"
 FSTAB_FILE="${FSTAB_FILE:-/etc/fstab}"
 GIT_EXCLUDE_FILE="${GIT_EXCLUDE_FILE:-$APP_DIR/.git/info/exclude}"
+# Root-only configuration: api.env, backup.env, the database password below,
+# and the gpg keyring contratos-backup.service points GNUPGHOME at.
+ETC_CONTRATOS_DIR="${ETC_CONTRATOS_DIR:-/etc/contratos}"
+GNUPG_HOME_DIR="${GNUPG_HOME_DIR:-$ETC_CONTRATOS_DIR/gnupg}"
+# backup.sh's staging + local-retention directory (same variable name there).
+BACKUP_WORK_DIR="${BACKUP_WORK_DIR:-/var/backups/contratos-offsite}"
+SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
 API_UNIT_SOURCE="${API_UNIT_SOURCE:-$APP_DIR/deploy/contratos-api.service}"
-API_UNIT_TARGET="${API_UNIT_TARGET:-/etc/systemd/system/contratos-api.service}"
+API_UNIT_TARGET="${API_UNIT_TARGET:-$SYSTEMD_UNIT_DIR/contratos-api.service}"
 DB_ROLE="${DB_ROLE:-contratos}"
 DB_NAME="${DB_NAME:-contratos}"
 # Written once, when the role is created, and nowhere else — the operator
 # composes DATABASE_URL in /etc/contratos/api.env from it (deploy/README.md,
 # "Database").
-DB_PASSWORD_FILE="${DB_PASSWORD_FILE:-/etc/contratos/db.password}"
+DB_PASSWORD_FILE="${DB_PASSWORD_FILE:-$ETC_CONTRATOS_DIR/db.password}"
 PUPPETEER_VERSION="${PUPPETEER_VERSION:-25.4.0}"
 # Root package.json: `engines.node >=22`, `packageManager: pnpm@11.11.0`.
 # 24 is the Active LTS line and what .github/workflows/ci.yml pins (the
@@ -428,8 +435,16 @@ provision_user() {
 # idempotency for every OTHER directory (starting with
 # $DOCUMENT_STORE_DIR / ALMACEN_DOCUMENTOS_RUTA) on both a fresh host and a
 # re-run.
+#
+# Owner, group and mode default to the service user's 750; the root-only
+# directories below pass root:root 700. Every directory a unit lists in
+# ReadWritePaths= has to exist before that unit first starts: with
+# ProtectSystem=strict systemd bind-mounts them BEFORE ExecStart, so a
+# missing one is status=226/NAMESPACE and no `mkdir -p` inside the script
+# ever gets to run — which is why backup.sh creating $BACKUP_WORK_DIR itself
+# was not enough on the real host.
 provision_dir() {
-  local dir="$1"
+  local dir="$1" owner="${2:-$SERVICE_USER}" group="${3:-$SERVICE_USER}" mode="${4:-750}"
 
   if [ -d "$dir" ]; then
     skip "directory '$dir' already exists"
@@ -437,11 +452,11 @@ provision_dir() {
   fi
 
   if [ "$DRY_RUN" = true ]; then
-    plan "would create directory '$dir' (owner $SERVICE_USER:$SERVICE_USER, mode 750)"
+    plan "would create directory '$dir' (owner $owner:$group, mode $mode)"
     return
   fi
 
-  install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$dir"
+  install -d -o "$owner" -g "$group" -m "$mode" "$dir"
   log "created directory '$dir'"
 }
 
@@ -528,24 +543,29 @@ provision_git_safe_directory() {
   log "added '$APP_DIR' to git's system-wide safe.directory"
 }
 
-# --------------------------------------------------------------- api unit
+# ---------------------------------------------------------- systemd units
+
+# The units are taken from the checkout itself, so these steps need the
+# clone to exist and therefore run last — on a first run before the clone
+# they skip and say to re-run, which is what idempotent provisioning is
+# for. Each guard is "byte-identical AND enabled", so an edited unit in the
+# checkout is reinstalled and a disabled one is re-enabled.
+unit_file_current() {
+  local source="$1" target="$2"
+  [ -f "$target" ] && cmp -s "$source" "$target"
+}
+
+unit_enabled() {
+  systemctl is-enabled --quiet "$1" 2>/dev/null
+}
+
+unit_active() {
+  systemctl is-active --quiet "$1" 2>/dev/null
+}
 
 # deploy.sh's start step assumes contratos-api.service exists, and nothing
 # installed it: the README only ever documented copying the backup units.
-# The unit is taken from the checkout itself, so this step needs the clone
-# to exist and therefore runs last — on a first run before the clone it
-# skips and says to re-run, which is what idempotent provisioning is for.
-# The guard is "byte-identical AND enabled", so an edited unit in the
-# checkout is reinstalled and a disabled one is re-enabled. It is never
-# started here: deploy.sh starts it, after migrate/seed/publish.
-api_unit_installed() {
-  [ -f "$API_UNIT_TARGET" ] && cmp -s "$API_UNIT_SOURCE" "$API_UNIT_TARGET"
-}
-
-api_unit_enabled() {
-  systemctl is-enabled --quiet "${API_UNIT_TARGET##*/}" 2>/dev/null
-}
-
+# It is never started here: deploy.sh starts it, after migrate/seed/publish.
 provision_api_unit() {
   local unit="${API_UNIT_TARGET##*/}"
 
@@ -554,7 +574,7 @@ provision_api_unit() {
     return
   fi
 
-  if api_unit_installed && api_unit_enabled; then
+  if unit_file_current "$API_UNIT_SOURCE" "$API_UNIT_TARGET" && unit_enabled "$unit"; then
     skip "$unit already installed at '$API_UNIT_TARGET' (identical) and enabled"
     return
   fi
@@ -568,6 +588,43 @@ provision_api_unit() {
   systemctl daemon-reload
   systemctl enable "$unit"
   log "installed and enabled $unit from '$API_UNIT_SOURCE' (not started — deploy.sh starts it)"
+}
+
+# contratos-backup.service is triggered by contratos-backup.timer and has no
+# [Install] section of its own, so only the timer is enabled — and started
+# (`--now`), otherwise it waits for a reboot. Enabling it before
+# /etc/contratos/backup.env exists is deliberate: backup.sh exits 1 naming
+# the missing file, so a premature nightly run fails loudly in the journal
+# instead of the schedule silently not existing until someone remembers.
+provision_backup_units() {
+  local service_source="$APP_DIR/deploy/contratos-backup.service"
+  local timer_source="$APP_DIR/deploy/contratos-backup.timer"
+  local service_target="$SYSTEMD_UNIT_DIR/contratos-backup.service"
+  local timer_target="$SYSTEMD_UNIT_DIR/contratos-backup.timer"
+  local timer="${timer_target##*/}"
+
+  if [ ! -f "$service_source" ] || [ ! -f "$timer_source" ]; then
+    skip "'$service_source' or '$timer_source' not found — clone the repository into '$APP_DIR' and re-run provision.sh to install and enable $timer"
+    return
+  fi
+
+  if unit_file_current "$service_source" "$service_target" \
+    && unit_file_current "$timer_source" "$timer_target" \
+    && unit_enabled "$timer" && unit_active "$timer"; then
+    skip "${service_target##*/} and $timer already installed in '$SYSTEMD_UNIT_DIR' (identical), $timer enabled and active"
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]; then
+    plan "would install '$service_source' and '$timer_source' into '$SYSTEMD_UNIT_DIR' (mode 644), run systemctl daemon-reload, and enable --now $timer"
+    return
+  fi
+
+  install -m 644 "$service_source" "$service_target"
+  install -m 644 "$timer_source" "$timer_target"
+  systemctl daemon-reload
+  systemctl enable --now "$timer"
+  log "installed ${service_target##*/} and $timer from '$APP_DIR/deploy'; $timer enabled and started (backup.sh refuses until '$ETC_CONTRATOS_DIR/backup.env' exists)"
 }
 
 main() {
@@ -588,9 +645,13 @@ main() {
   provision_user
   provision_dir "$APP_DIR"
   provision_dir "$DOCUMENT_STORE_DIR"
+  provision_dir "$ETC_CONTRATOS_DIR" root root 700
+  provision_dir "$GNUPG_HOME_DIR" root root 700
+  provision_dir "$BACKUP_WORK_DIR" root root 700
   provision_git_exclude
   provision_git_safe_directory
   provision_api_unit
+  provision_backup_units
 
   log "== done =="
 }
