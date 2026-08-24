@@ -409,17 +409,17 @@ finding; that window is three draft PRs, none of which gate anything.*
 
 *Guard 20's primary target — the component the enumerated-list defect (two 24px links) originally slipped through.*
 
-- [ ] 15.1 RED: guard 5 case — table rows/cells explicitly carry **no** ≥48px sizing class (rows must not look interactive, R-3.5). Must fail against pre-redesign markup.
-- [ ] 15.2 RED: guard 20's site-wide confirmation on this component — every genuinely interactive element (sort controls, row actions) ≥48px, exempting non-interactive `<tr>` per the carried-over `EXENCIONES` entry.
-- [ ] 15.3 RED: guard 16's final confirmation — the narrow-layout `thead` displacement recipe survives on the converted table at ≤390px, no `sr-only` reintroduced.
-- [ ] 15.4 GREEN: redesign `TablaDeContratos.tsx`, satisfying 15.1–15.3.
-- [ ] 15.5 Update `registro.ts` entries 5, 16 (final), 20 (primary-target confirmed) to `JSX`/`AMBOS` per the landing map.
+- [x] 15.1 RED: guard 5 case — table rows/cells explicitly carry **no** ≥48px sizing class (rows must not look interactive, R-3.5). Must fail against pre-redesign markup.
+- [x] 15.2 RED: guard 20's site-wide confirmation on this component — every genuinely interactive element (sort controls, row actions) ≥48px, exempting non-interactive `<tr>` per the carried-over `EXENCIONES` entry.
+- [x] 15.3 RED: guard 16's final confirmation — the narrow-layout `thead` displacement recipe survives on the converted table at ≤390px, no `sr-only` reintroduced.
+- [x] 15.4 GREEN: redesign `TablaDeContratos.tsx`, satisfying 15.1–15.3.
+- [x] 15.5 Update `registro.ts` entries 5, 16 (final), 20 (primary-target confirmed) to `JSX`/`AMBOS` per the landing map.
 
 ## Phase 15B — PR15 close-out
 
-- [ ] 15B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 15B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
 - [ ] 15B.2 User visual review.
-- [ ] 15B.3 Open PR #15 targeting PR #14's branch.
+- [x] 15B.3 Open PR #15 targeting PR #14's branch. (#113)
 
 ## Phase 16 — PR16: the two layout shells (inventory gap, added after PR11)
 
