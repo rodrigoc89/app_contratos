@@ -381,18 +381,18 @@ finding; that window is three draft PRs, none of which gate anything.*
 
 *S3 cannot exist before this PR — it is the second of the two surfaces (`VisorDeDocumento`, `LienzoDeFirma`) it drives to.*
 
-- [ ] 13.1 RED: guard 19 case — `elementFromPoint` at each of Deshacer/Borrar's coordinates hits the control itself, never an overlapping iframe. Must fail against pre-redesign markup.
-- [ ] 13.2 RED: guard 4's final confirmation — the 32px gap and destructive colouring hold in `LienzoDeFirma`'s real composition, not just PR7's atom-level variant fixture.
-- [ ] 13.3 GREEN: redesign `LienzoDeFirma.tsx`, satisfying 13.1–13.2.
-- [ ] 13.4 RED, falsification: extend `geometriaHandheld.ts`'s visit script for S3 (fill `FormularioBorrador`, intercepted `POST /contratos` returns a fixture, tap "Continuar"). First run it against the **existing pre-13.5 script** to confirm S3 is correctly reported as unreached (not silently re-measuring S2) — this is `handheld-readiness`'s explicit drift scenario.
-- [ ] 13.5 GREEN: commit the visit script; bump the states-reached constant to **6** (S1, S2, S4, S5, S6, S3); confirm all 6 states measured with `scrollWidth === clientWidth` and ≥48px controls at 360/390/430px.
-- [ ] 13.6 Update `registro.ts` entries 4 (final), 19 to `JSX`.
+- [x] 13.1 RED: guard 19 case — `elementFromPoint` at each of Deshacer/Borrar's coordinates hits the control itself, never an overlapping iframe. Must fail against pre-redesign markup.
+- [x] 13.2 RED: guard 4's final confirmation — the 32px gap and destructive colouring hold in `LienzoDeFirma`'s real composition, not just PR7's atom-level variant fixture.
+- [x] 13.3 GREEN: redesign `LienzoDeFirma.tsx`, satisfying 13.1–13.2.
+- [x] 13.4 RED, falsification: extend `geometriaHandheld.ts`'s visit script for S3 (fill `FormularioBorrador`, intercepted `POST /contratos` returns a fixture, tap "Continuar"). First run it against the **existing pre-13.5 script** to confirm S3 is correctly reported as unreached (not silently re-measuring S2) — this is `handheld-readiness`'s explicit drift scenario.
+- [x] 13.5 GREEN: commit the visit script; bump the states-reached constant to **6** (S1, S2, S4, S5, S6, S3); confirm all 6 states measured with `scrollWidth === clientWidth` and ≥48px controls at 360/390/430px.
+- [x] 13.6 Update `registro.ts` entries 4 (final), 19 to `JSX`.
 
 ## Phase 13B — PR13 close-out
 
-- [ ] 13B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld` (6-state); record results.
+- [x] 13B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld` (6-state); record results.
 - [ ] 13B.2 User visual review, with explicit sign-off on the signature-canvas manual pass.
-- [ ] 13B.3 Open PR #13 targeting PR #12's branch.
+- [x] 13B.3 Open PR #13 targeting PR #12's branch. (#111)
 
 ## Phase 14 — PR14: `EscanerDeMac` redesign (slice F3, guard 2 final)
 
@@ -494,3 +494,4 @@ that bites hardest.*
 
 - **Proposal Q3 (client demo date).** Not applied to this chain order: PR3–PR5's infra must front-load per D7/D8's "measured from its first commit" requirement. If a demo needs earlier visual proof, PR7 (position 7 of 16) is the earliest redesigned, visually-demonstrable slice — reordering ahead of PR3–PR5 would mean shipping component redesigns before the ceiling/handheld harnesses exist to catch their regressions, which this plan does not recommend.
 - **Guard 8's panel replacement type-scale values.** A per-screen redesign decision made organically inside PR10/PR11/PR15 wherever office-panel components land, not a blocking pre-decision.
+- **`Toast` covers the equipos step's submit button on short viewports (found by PR13's S3 driver).** `Toast.tsx` is `fixed inset-x-4 bottom-4`; right after "Crear borrador" the "Borrador creado" banner sits over the same button that re-renders as "Continuar", so a thumb tap lands on the toast. The harness dismisses the toast first (`button[aria-label="Cerrar aviso"]`) rather than hide the finding; the product fix (toast placement, or bottom padding on the form while a toast is visible) belongs with the container redesigns in PR18, and needs the user's call on placement.
