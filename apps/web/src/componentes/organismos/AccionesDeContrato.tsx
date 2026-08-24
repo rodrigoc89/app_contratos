@@ -2,6 +2,9 @@ import type { DatosContratoDetalle } from "@contratos/esquemas";
 import { useState } from "react";
 
 import { Boton } from "../atomos/Boton";
+import { CampoTexto } from "../atomos/CampoTexto";
+import { Etiqueta } from "../atomos/Etiqueta";
+import { Dialogo } from "../moleculas/Dialogo";
 
 /**
  * The three post-signature transitions, as the office performs them
@@ -38,6 +41,22 @@ const TITULO: Record<Exclude<FormularioAbierto, null>, string> = {
   restitucion: "Registrar la restitución de los equipos",
 };
 
+/**
+ * design-system-migration PR17b (D4, guard 4) — ported from the retired
+ * `.detalle-contrato__*` rules (panel.css). `CLASE_ACCIONES`'s `gap-8` is
+ * guard 4's >=32px floor between Dar de baja and Anular, proven against this
+ * real composition rather than only PR7's atom-level fixture. Since PR21 the
+ * cluster is a flex item of DetalleDeContrato's documents row, and the
+ * no-actions message is a `w-full` sibling so it wraps onto its own line
+ * under that row instead of sitting between the download buttons.
+ */
+const CLASE_ACCIONES = "flex flex-wrap items-center gap-8";
+const CLASE_MENSAJE = "w-full";
+const CLASE_ADVERTENCIA =
+  "mb-3 border-l-4 border-error bg-estado-anulado-fondo p-3 text-[0.9375rem] text-estado-anulado-texto";
+const CLASE_CAMPO = "mb-3";
+const CLASE_ACCIONES_CONFIRMAR = "flex flex-wrap gap-3";
+
 export function AccionesDeContrato({
   contrato,
   onDarDeBaja,
@@ -68,97 +87,97 @@ export function AccionesDeContrato({
 
   if (!esVigente && !admiteRestitucion) {
     return (
-      <section className="detalle-contrato__seccion">
-        <h2>Acciones</h2>
-        {/* Honest rather than empty: an office user who expected a button
-            should read why there is none. */}
-        <p>
-          {contrato.estado === "borrador"
-            ? "Este contrato todavía no se firmó."
-            : "Este contrato ya está cerrado: no hay acciones pendientes."}
-        </p>
-      </section>
+      /* Honest rather than empty: an office user who expected a button
+         should read why there is none. `w-full` gives it its own line
+         under the documents row this component now lives in. */
+      <p className={CLASE_MENSAJE}>
+        {contrato.estado === "borrador"
+          ? "Este contrato todavía no se firmó."
+          : "Este contrato ya está cerrado: no hay acciones pendientes."}
+      </p>
     );
   }
 
   return (
-    <section className="detalle-contrato__seccion">
-      <h2>Acciones</h2>
+    <>
+      {/*
+        PR21 — no section or heading of its own any more: this cluster is a
+        flex item of DetalleDeContrato's documents row. The confirmation
+        opens in a modal (`Dialogo`) rather than unfolding inline — the row
+        stays rendered behind the native backdrop; `showModal()` makes the
+        page inert.
+      */}
+      <div className={CLASE_ACCIONES}>
+        {esVigente && (
+          <>
+            <Boton type="button" onClick={() => establecerAbierto("baja")}>
+              Dar de baja
+            </Boton>
+            {/* Marked destructive by NAME, never by position — the same
+                rule `convencionesDeEstilos.spec.ts` enforces for the
+                signature pad's Borrar/Firmar pair (guard 4). */}
+            <Boton type="button" variante="destructivo" onClick={() => establecerAbierto("anulacion")}>
+              Anular
+            </Boton>
+          </>
+        )}
+        {admiteRestitucion && (
+          <Boton type="button" onClick={() => establecerAbierto("restitucion")}>
+            Registrar restitución
+          </Boton>
+        )}
+      </div>
 
-      {abierto === null ? (
-        <div className="detalle-contrato__acciones">
-          {esVigente && (
-            <>
-              <Boton type="button" onClick={() => establecerAbierto("baja")}>
-                Dar de baja
-              </Boton>
-              {/* Marked destructive by NAME, never by position — the same
-                  rule `convencionesDeEstilos.spec.ts` enforces for the
-                  signature pad's Borrar/Firmar pair. */}
+      {abierto !== null && (
+        <Dialogo abierto titulo={TITULO[abierto]} onCerrar={cerrar}>
+          <form onSubmit={confirmar}>
+            {abierto === "anulacion" && (
+              <p role="note" className={CLASE_ADVERTENCIA}>
+                Anular es para un contrato firmado con datos equivocados. El
+                contrato queda archivado con su PDF, y hay que firmar uno nuevo
+                con el cliente.
+              </p>
+            )}
+
+            {abierto !== "restitucion" && (
+              <div className={CLASE_CAMPO}>
+                <Etiqueta htmlFor="motivo-transicion">Motivo</Etiqueta>
+                <CampoTexto
+                  id="motivo-transicion"
+                  type="text"
+                  required
+                  maxLength={500}
+                  value={motivo}
+                  onCambiar={establecerMotivo}
+                />
+              </div>
+            )}
+
+            <div className={CLASE_CAMPO}>
+              <Etiqueta htmlFor="fecha-transicion">Fecha</Etiqueta>
+              <CampoTexto id="fecha-transicion" type="date" required value={fecha} onCambiar={establecerFecha} />
+            </div>
+
+            <div className={CLASE_ACCIONES_CONFIRMAR}>
+              {/*
+                Executing the annulment is what the destructive variant
+                marks here — guard 4's colour-not-position rule, applied to
+                the confirmation the same way it applies to the trigger.
+              */}
               <Boton
-                type="button"
-                className="boton--destructivo"
-                onClick={() => establecerAbierto("anulacion")}
+                type="submit"
+                variante={abierto === "anulacion" ? "destructivo" : undefined}
+                disabled={enCurso}
               >
-                Anular
+                {enCurso ? "Guardando…" : "Confirmar"}
               </Boton>
-            </>
-          )}
-          {admiteRestitucion && (
-            <Boton type="button" onClick={() => establecerAbierto("restitucion")}>
-              Registrar restitución
-            </Boton>
-          )}
-        </div>
-      ) : (
-        <form className="detalle-contrato__formulario" onSubmit={confirmar}>
-          <h3>{TITULO[abierto]}</h3>
-
-          {abierto === "anulacion" && (
-            <p role="note" className="detalle-contrato__advertencia">
-              Anular es para un contrato firmado con datos equivocados. El
-              contrato queda archivado con su PDF, y hay que firmar uno nuevo
-              con el cliente.
-            </p>
-          )}
-
-          {abierto !== "restitucion" && (
-            <p className="campo">
-              <label htmlFor="motivo-transicion">Motivo</label>
-              <input
-                id="motivo-transicion"
-                className="campo-texto"
-                type="text"
-                required
-                maxLength={500}
-                value={motivo}
-                onChange={(evento) => establecerMotivo(evento.target.value)}
-              />
-            </p>
-          )}
-
-          <p className="campo">
-            <label htmlFor="fecha-transicion">Fecha</label>
-            <input
-              id="fecha-transicion"
-              className="campo-texto"
-              type="date"
-              required
-              value={fecha}
-              onChange={(evento) => establecerFecha(evento.target.value)}
-            />
-          </p>
-
-          <div className="detalle-contrato__acciones">
-            <Boton type="submit" disabled={enCurso}>
-              {enCurso ? "Guardando…" : "Confirmar"}
-            </Boton>
-            <Boton type="button" onClick={cerrar} disabled={enCurso}>
-              Cancelar
-            </Boton>
-          </div>
-        </form>
+              <Boton type="button" onClick={cerrar} disabled={enCurso}>
+                Cancelar
+              </Boton>
+            </div>
+          </form>
+        </Dialogo>
       )}
-    </section>
+    </>
   );
 }

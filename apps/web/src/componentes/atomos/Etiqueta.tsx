@@ -12,12 +12,11 @@ interface PropiedadesEtiqueta extends LabelHTMLAttributes<HTMLLabelElement> {
  * makes the atom unable to accept a modifier at all — the prop is dropped
  * in silence, with no error for the caller who passed it.
  *
- * design-system-migration PR8 — visual redesign. `FormularioEquipos.tsx`'s
- * `className="etiqueta--opcion"` still applies unmodified: that rule is
- * unlayered, hand-authored CSS (`estilos/atomos.css`), which always
- * outranks a Tailwind `@layer utilities` class of equal specificity
- * regardless of source order, so `cn()` passing it straight through is
- * enough — no dedicated variant needed here.
+ * design-system-migration PR8 — visual redesign. PR17 converts the retired
+ * `.etiqueta--opcion` radio-row shape (`FormularioEquipos.tsx`) to a plain
+ * `className` override (`estilos/formulario.ts`'s `CLASE_ETIQUETA_OPCION`)
+ * composed through `cn()` rather than a dedicated `cva` variant — a single
+ * call site does not earn one.
  */
 export function Etiqueta({ children, className, ...resto }: PropiedadesEtiqueta) {
   return (

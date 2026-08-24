@@ -1,12 +1,14 @@
 /**
- * design.md D2 — the disposition register, closing the hole neither
- * `convencionesDeEstilos.spec.ts` (CSS) nor `convencionesDeUtilidades.spec.ts`/
- * `convencionesDeCompilado.compilado.spec.ts` (JSX/compiled) can see alone: a
- * protection that LEFT one scanner and never ARRIVED in the other.
+ * design.md D2 — the disposition register, closing the hole a scanner that
+ * retires can leave: a protection that LEFT one scanner and never ARRIVED
+ * in another.
  *
- * PR3 seeded state: all 21 entries are `CSS` — nothing has converted yet.
- * Task 3.9 flips entries 7, 9-12 to `JSX` once `convencionesDeUtilidades.spec.ts`
- * carries their mechanism (real component coverage still lands in PR8).
+ * PR3 seeded state: all 21 entries were `CSS`, read by the now-deleted
+ * `convencionesDeEstilos.spec.ts` — nothing had converted yet. PR19 (task
+ * 19.1-19.3) closes the migration: zero entries remain `CSS`, and
+ * `convencionesDeEstilos.spec.ts` itself is deleted (task 19.2). Every
+ * entry is now `JSX`/`AMBOS`/`MOOT`, owned by `convencionesDeUtilidades.spec.ts`
+ * and/or `convencionesDeCompilado.compilado.spec.ts`.
  */
 
 export type Disposicion = "CSS" | "JSX" | "AMBOS" | "MOOT" | "RESUELTA";
@@ -41,24 +43,24 @@ export interface EntradaDeRegistro {
   readonly porque?: string;
 }
 
-const ESTILOS = "estilos/convencionesDeEstilos.spec.ts";
 const UTILIDADES = "estilos/convencionesDeUtilidades.spec.ts";
 const COMPILADO = "estilos/convencionesDeCompilado.compilado.spec.ts";
 
 export const REGISTRO: readonly EntradaDeRegistro[] = [
   {
-    // PR6 (design.md slice B) — the collision cluster. CSS half stays:
-    // guard 1 bans overflow:hidden/clip anywhere in hand-authored CSS; the
-    // compiled half (guard 1/16 shared) additionally scans dist/ output,
-    // where Tailwind Preflight and any vendored .sr-only usage are
-    // visible; the JSX half bans the literal `sr-only` token at author
-    // time, independent of whether a build has run.
+    // PR6 (design.md slice B) — the collision cluster. CSS half stayed
+    // live through PR18 alongside the compiled+JSX halves; PR19 (task
+    // 19.2/19.3) deletes base.css, so the final disposition drops its
+    // archivoCss and ESTILOS-owned test — the compiled half (guard 1/16
+    // shared) scans real dist/ output, where Tailwind Preflight and any
+    // vendored .sr-only usage are visible; the JSX half bans the literal
+    // `sr-only` token at author time, independent of whether a build has
+    // run. Both survive the deletion untouched, so AMBOS is this guard's
+    // permanent final disposition, not a transitional one.
     numero: 1,
     protege: "No overflow:hidden/clip anywhere (reading gate) + sr-only token ban",
     disposicion: "AMBOS",
-    archivoCss: "estilos/base.css",
     pruebas: [
-      { archivo: ESTILOS, titulo: "declares no overflow: hidden / overflow: clip anywhere" },
       { archivo: COMPILADO, titulo: "finds no overflow:hidden|clip or clip-path rule in the real compiled dist/ output" },
       {
         archivo: UTILIDADES,
@@ -70,20 +72,29 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // PR6 — the project's own `[hidden]` duplicate was deleted from
     // base.css (design.md slice B); Tailwind Preflight's equivalent rule
     // is now the sole `!important display` rule, visible only in compiled
-    // output. The CSS-scoped test now proves the negative (no rule was
-    // reintroduced); the compiled test proves Preflight's rule is alone.
+    // output. PR14 (final confirmation) — `EscanerDeMac.tsx`'s camera-preview
+    // `<video>` redesigns off the retired `.escaner-de-mac__video` BEM
+    // class; a rendered component test confirms the converted element is
+    // hidden by the `[hidden]` attribute and never by the `hidden` class,
+    // whose plain `display: none` a later `cn()` merge could reorder away.
+    // `block` beside the attribute is fine — Preflight's rule is `!important`.
+    // PR19 (task 19.2/19.3) — base.css itself is deleted; the negative it
+    // used to prove ("no project-authored [hidden] rule survives") is now
+    // structurally true (there is no hand-authored sheet left to declare
+    // one in), so the ESTILOS-owned test and archivoCss both drop. The
+    // compiled test still proves Preflight's rule is the sole owner.
     numero: 2,
     protege: "Exactly one !important display declaration ([hidden])",
     disposicion: "AMBOS",
-    archivoCss: "estilos/base.css",
     pruebas: [
-      {
-        archivo: ESTILOS,
-        titulo: "declares no project-authored [hidden] rule in estilos/base.css — Preflight's own rule is the sole owner now",
-      },
       {
         archivo: COMPILADO,
         titulo: "finds exactly one !important display rule in the real compiled dist/ output — Preflight's own [hidden] rule",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "EscanerDeMac's real camera-preview <video> carries the hidden ATTRIBUTE and never the hidden class",
       },
     ],
   },
@@ -103,12 +114,16 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
-    // PR7 — variant half only: Boton's destructivo cva variant proves the
+    // PR7 — variant half: Boton's destructivo cva variant proves the
     // colour-not-position half plus a fixture composition's >=32px gap.
-    // Final confirmation against LienzoDeFirma's real composition lands in
-    // PR13, where this entry's pruebas gain that second owning test.
+    // PR13 (task 13.2/13.6) — final confirmation: LienzoDeFirma's real composition proves both hold there too.
+    // PR17b (task 17b.3) — second real-composition confirmation:
+    // AccionesDeContrato's Anular/Dar de baja pair, the office's own
+    // destructive control. No mb-N assertion here (unlike LienzoDeFirma's
+    // Firmar) — the confirmation form the row opens into never co-exists
+    // with it in the DOM, so there is no simultaneous next control to clear.
     numero: 4,
-    protege: "32px gap + destructive colour-not-position (signature actions)",
+    protege: "32px gap + destructive colour-not-position (signature + office actions)",
     disposicion: "JSX",
     pruebas: [
       {
@@ -119,17 +134,41 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
         archivo: UTILIDADES,
         titulo: "keeps at least ${SEPARACION_MINIMA_PX}px of gap in a fixture composition of adjacent Boton controls",
       },
+      {
+        archivo: UTILIDADES,
+        titulo: "colours Borrar as destructive by its own variant in LienzoDeFirma's real composition, never by position",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "keeps at least ${SEPARACION_MINIMA_PX}px between Deshacer and Borrar, and below the row before Firmar, in LienzoDeFirma's real composition",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "colours Anular as destructive by its own variant in AccionesDeContrato's real composition, never by position",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "keeps at least ${SEPARACION_MINIMA_PX}px of gap between Dar de baja and Anular in AccionesDeContrato's real composition",
+      },
     ],
   },
   {
+    // PR15 (task 15.1) — TablaDeContratos redesigned; ownership moves fully
+    // to the JSX scan, ported as a token ban over every real <tr>/<td>/<th>:
+    // no >=48px sizing token, no cursor-pointer. The CSS-scoped test
+    // (`convencionesDeEstilos.spec.ts`) now reads only the frozen BEM sheet
+    // (`panel.css`, deleted PR16) and stays live but unowned here.
     numero: 5,
     protege: "48px floor explicitly absent on table rows",
-    disposicion: "CSS",
-    archivoCss: "estilos/panel.css",
+    disposicion: "JSX",
     pruebas: [
       {
-        archivo: ESTILOS,
-        titulo: "does NOT impose the 48px floor on table rows or cells, across every declaration of each selector",
+        archivo: UTILIDADES,
+        titulo:
+          "rejects every real <tr>/<td>/<th> in TablaDeContratos whose className carries a sizing token or cursor-pointer",
       },
     ],
   },
@@ -153,9 +192,22 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     numero: 7,
     // task 3.9 — mechanism now lives in convencionesDeUtilidades.spec.ts's
     // breakpoint-prefix whitelist; the CSS-scoped min-width scan stays live
-    // for the still-BEM stylesheets until PR16 deletes them. Rebind/read-back
-    // half retires MOOT once literal utilities replace inheritance (D4).
-    protege: "Exactly the 640/1024 breakpoints (tableta/escritorio prefixes); rebind/read-back half MOOT after PR16",
+    // for the still-BEM stylesheets until PR19 deletes them. PR16 (task
+    // 16.3, D4): the rebind/read-back half is RESUELTA, not merely MOOT —
+    // `LayoutPanel` states its 16px base as a literal `text-[16px]` utility
+    // on the same wrapper element instead of rebinding an inherited
+    // `--fuente-base` custom property and reading it back, so the "rebind
+    // alone is inert" bug class is now structurally impossible for this
+    // shell, with a real mechanism behind it rather than a promise. The
+    // PR19 (task 19.2/19.3) — `tokens.css`/`base.css` are deleted along with
+    // the GLOBAL `--fuente-base` custom property their `body` rule rebound;
+    // `tema.css`'s surviving `@layer base` rule states `--text-base` (18px)
+    // directly on `body`, never rebound or read back elsewhere, so the
+    // rebind-without-readback pattern this half protected against is now
+    // structurally impossible everywhere, not only in `LayoutPanel`.
+    // Disposition stays JSX — the breakpoint-prefix scan is still live.
+    protege:
+      "Exactly the 640/1024 breakpoints (tableta/escritorio prefixes); rebind/read-back half RESUELTA structurally in LayoutPanel (PR16)",
     disposicion: "JSX",
     pruebas: [
       {
@@ -166,12 +218,35 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
   },
   {
     // PR9 (task 9.5/9.7, D4) — axis moves from CSS filename (`panel.css`,
-    // deleted PR16) to a component-path matcher.
+    // deleted PR19) to a component-path matcher: componentes/organismos/,
+    // componentes/moleculas/, funcionalidades/contratos/. Deliberately
+    // excludes componentes/atomos/ (the too-broad trap PR9's own comment
+    // names) and, re-checked here, componentes/plantillas/ (task 16.4):
+    // `LayoutPanel.tsx`'s literal `text-[16px]` utility (task 16.3) is
+    // *not* actually sub-1rem — this project sets no `html { font-size }`
+    // anywhere, so `rem` resolves against the browser's un-overridden 16px
+    // root and 16px === 1rem exactly, which `MINIMO_REM_JSX = 1`'s strict
+    // `<` comparison does not flag. PR16's gate found the scan blind to
+    // `text-[Npx]` altogether (`text-[12px]` on `LayoutTecnico.tsx` stayed
+    // green); it now converts px by the browser's 16px rem basis, and a
+    // second test pins that basis by asserting no sheet sets font-size on
+    // `html`. Falsified both ways: `text-sm` and `text-[12px]` on
+    // `LayoutTecnico.tsx` fail naming the file; `LayoutPanel.tsx` needs no
+    // axis entry because 16px is exactly 1rem, not because it is exempt.
+    // PR17 (task 17.1b) — `PREFIJOS_RUTA_PANEL` exempts componentes/organismos/
+    // wholesale, which blinds the tree-wide scan to the two técnico
+    // organisms that live there. A dedicated component-level render scan
+    // closes that hole, falsified genuinely (text-sm injected, both
+    // organisms, reverted) since real converted markup carries no sub-1rem
+    // attempt to catch naturally.
     numero: 8,
     protege: "No font-size<1rem outside the panel subtree",
     disposicion: "JSX",
     pruebas: [
       { archivo: UTILIDADES, titulo: "rejects every real .tsx file outside the panel subtree that attempts sub-1rem type" },
+      { archivo: UTILIDADES, titulo: "keeps rem anchored to the browser default: no hand-authored sheet sets font-size on html" },
+      { archivo: UTILIDADES, titulo: "finds zero sub-1rem attempts in FormularioComodatario's real rendered markup" },
+      { archivo: UTILIDADES, titulo: "finds zero sub-1rem attempts in FormularioEquipos' real rendered markup" },
     ],
   },
   {
@@ -300,45 +375,105 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // unchanged: `left: -10000px`, never `overflow:hidden`/`clip-path`.
     // The compiled scan (shared with guard 1) confirms it survives the
     // Tailwind swap without a `.sr-only`/clip-path regression reappearing.
+    // PR15 (task 15.3, final confirmation) — TablaDeContratos redesigned;
+    // the recipe is ported to utilities (`-left-[10000px] h-px w-px`,
+    // restored `table-header-group` at tableta) and a dedicated rendered
+    // test confirms no sr-only/overflow-hidden|clip token appears on the
+    // converted component. PR19 (task 19.2/19.3) — panel.css itself is
+    // deleted; the ESTILOS-owned test and archivoCss drop, the compiled +
+    // JSX halves carry the protection alone from here.
     numero: 16,
     protege: "Narrow-layout thead displaced, not clipped",
     disposicion: "AMBOS",
-    archivoCss: "estilos/panel.css",
     pruebas: [
-      { archivo: ESTILOS, titulo: "moves the narrow-layout thead off-screen instead of only clipping its pixels" },
       { archivo: COMPILADO, titulo: "finds no overflow:hidden|clip or clip-path rule in the real compiled dist/ output" },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "displaces the header off-screen with a 1px box below tableta, and restores it as a static table-header-group at tableta",
+      },
     ],
   },
   {
+    // PR12 (design.md slice F1, task 12.3) — ownership moves to the JSX
+    // scan: VisorDeDocumento no longer renders `.visor-documento__iframe`,
+    // so the CSS-scoped test (`convencionesDeEstilos.spec.ts`, "finds and
+    // constrains .visor-documento__iframe in estilos/organismos.css") now
+    // reads only the frozen BEM sheet (`organismos.css`, deleted PR16) and
+    // stays live but unowned here. The rebuilt guard is stated over every
+    // <iframe> in apps/web/src, not scoped to VisorDeDocumento by name —
+    // guard 15's PR11 lesson applied here before it needed a correction.
     numero: 17,
     protege: "Document-viewer iframe bounded vh (legal reading gate)",
-    disposicion: "CSS",
-    archivoCss: "estilos/organismos.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "finds and constrains .visor-documento__iframe in estilos/organismos.css" }],
+    disposicion: "JSX",
+    pruebas: [
+      {
+        archivo: UTILIDADES,
+        titulo: "rejects every real <iframe> under apps/web/src whose className is not bounded to an explicit vh fraction",
+      },
+    ],
   },
   {
+    // PR19 (task 19.3) — confirmed globally MOOT, not merely deferred: no
+    // `@apply`-based custom class exists anywhere in `apps/web/src` (the
+    // whole-tree zero-BEM scan, retired this same PR once its own sheets
+    // were the only thing keeping its anti-rot floor non-vacuous, already
+    // proved zero hand-authored BEM classNames remain). A modifier can only
+    // be "declared above the base it overrides" inside a hand-authored BEM
+    // sheet; with all six deleted (task 19.2) there is no sheet left in
+    // which that ordering mistake could occur, so the cascade footgun this
+    // guard watched is now structurally impossible, not merely unobserved.
     numero: 18,
     protege: "BEM modifier never declared above the base it overrides",
-    disposicion: "CSS",
-    archivoCss: "estilos/organismos.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "declares every `.%s--*` modifier after the bare `.%s`" }],
+    disposicion: "MOOT",
+    porque:
+      "no @apply-based custom class exists anywhere in apps/web/src — every hand-authored BEM sheet was deleted in PR19 (task 19.2), so there is no sheet left in which a modifier could be declared above its base",
   },
   {
+    // PR13 (task 13.6) — JSX tree-wide scan, same shape as guard 17's. The
+    // runtime half (elementFromPoint at S3) has no jsdom equivalent, not registered here.
     numero: 19,
     protege: "Signature canvas bounded, controls never covered",
-    disposicion: "CSS",
-    archivoCss: "estilos/organismos.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "bounds .lienzo-de-firma__lienzo to an explicit vh fraction" }],
+    disposicion: "JSX",
+    pruebas: [
+      {
+        archivo: UTILIDADES,
+        titulo: "rejects every real <canvas> under apps/web/src whose className is not bounded to an explicit vh fraction",
+      },
+    ],
   },
   {
     // PR9 (task 9.1-9.4/9.7, D5) — `pisoDeToque.ts` lands, proven on
     // fixtures first; TablaDeContratos (primary target) converts in PR15,
     // site-wide confirm PR16.
+    // PR15 (task 15.2) — primary-target confirmed: the row link meets the
+    // floor, and both of `EXENCIONES`' real entries (`tbody tr`,
+    // `desplazamiento`) now correspond to a real scanned candidate.
+    // PR17 (task 17.1a) — the técnico organisms confirmed; native
+    // radio/checkbox controls resolved against base.css's `@layer base`
+    // rule (`esControlNativoDeToque`, D5) rather than flagged.
+    // PR17b (task 17b.1) — the office organisms confirmed: DetalleDeContrato's
+    // downloads and AccionesDeContrato's both states (actions row and the
+    // confirmation form it opens into).
     numero: 20,
     protege: "Universal touch-floor scan over every interactive control",
     disposicion: "JSX",
     pruebas: [
       { archivo: UTILIDADES, titulo: "finds and clears CampoTexto's and Boton's (every variante x tamano) rendered controls" },
+      {
+        archivo: UTILIDADES,
+        titulo: "clears every non-exempt interactive control, and every EXENCIONES entry corresponds to a real scanned candidate",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "anchors esControlNativoDeToque: a hand-authored sheet still sizes native radio/checkbox controls to the touch token",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "clears AccionesDeContrato's real rendered controls, both the actions row and its confirmation form",
+      },
     ],
   },
   {
@@ -437,10 +572,13 @@ export function erroresDePruebas(
 }
 
 /**
- * `styling-guards` D2 register assertion 3 — every `CSS`/`AMBOS` entry
- * names a `src/estilos/*.css` file that still exists, so a lingering `CSS`
- * disposition fails once the last sheet is deleted, rather than silently
- * scanning nothing.
+ * `styling-guards` D2 register assertion 3 — every `CSS`/`AMBOS` entry that
+ * declares a `src/estilos/*.css` file must have that file still exist, so a
+ * lingering `CSS` disposition fails once the last sheet is deleted, rather
+ * than silently scanning nothing. `CSS` always requires one. `AMBOS` does
+ * not once its CSS half has retired (PR19, task 19.3) — the compiled and
+ * JSX scanners carry the protection alone at that point, so `archivoCss` is
+ * optional for `AMBOS`; when present it is still checked for existence.
  */
 export function erroresDeArchivoCss(
   registro: readonly EntradaDeRegistro[],
@@ -454,7 +592,9 @@ export function erroresDeArchivoCss(
     }
 
     if (!entrada.archivoCss) {
-      errores.push(`entry #${entrada.numero} (${entrada.disposicion}) names no CSS file`);
+      if (entrada.disposicion === "CSS") {
+        errores.push(`entry #${entrada.numero} (${entrada.disposicion}) names no CSS file`);
+      }
       continue;
     }
 
