@@ -769,6 +769,71 @@ function esperaControlesEnElPiso(contenedor: HTMLElement): void {
   }
 }
 
+/**
+ * Guard 20's JSX half above renders a **named list** of components. That is
+ * the exact shape guard 20 exists to escape: the CSS engine replaced an
+ * enumerated list precisely because one had already let two real 24px office
+ * links ship. The port reproduced the defect the original was built to avoid.
+ *
+ * It has a concrete hole. `Boton` carries the floor in its `tamano` variant,
+ * but `className` merges through `cn()`, so any caller can override it from
+ * outside the atom — and every guard above tests the atom in isolation.
+ * Verified, not reasoned: adding `min-h-8 min-w-8` to `BarraDeBusqueda`'s
+ * filter chips left all 757 specs green. A 32px control for a gloved thumb,
+ * shipped silently.
+ *
+ * So this states the rule over the tree instead. Every `<Boton>` call site in
+ * first-party source is read statically, and any explicit sizing utility it
+ * passes must still satisfy the floor on the axis it names. A caller may make
+ * a button wider or taller; it may not make it smaller than a thumb.
+ */
+describe("guard 20 (tree-wide): no Boton call site overrides the touch floor below 48px", () => {
+  const SIN_PISO_VERTICAL = /\b(?:min-)?h-(\d+)\b/;
+  const SIN_PISO_HORIZONTAL = /\b(?:min-)?w-(\d+)\b/;
+
+  /** Every `className="…"` passed to a `<Boton>` element in `contenido`. */
+  function clasesDeLlamadasABoton(contenido: string): string[] {
+    return [...contenido.matchAll(/<Boton\b[\s\S]*?(?:\/>|>)/g)].flatMap((elemento) =>
+      [...(elemento[0] ?? "").matchAll(/className="([^"]*)"/g)].map((atributo) => atributo[1] ?? ""),
+    );
+  }
+
+  it("flags a fixture call site that shrinks the button below the floor", () => {
+    expect(clasesDeLlamadasABoton('<Boton className="rounded-full min-h-8">Filtro</Boton>')).toEqual([
+      "rounded-full min-h-8",
+    ]);
+  });
+
+  it("rejects every real Boton call site that names a sub-floor height or width", () => {
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    let llamadasEncontradas = 0;
+
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      for (const clases of clasesDeLlamadasABoton(contenido)) {
+        llamadasEncontradas += 1;
+        for (const [eje, patron] of [
+          ["height", SIN_PISO_VERTICAL],
+          ["width", SIN_PISO_HORIZONTAL],
+        ] as const) {
+          const declarado = patron.exec(clases);
+          if (declarado === null) {
+            continue;
+          }
+          expect(
+            Number(declarado[1]) * 4,
+            `${rutaRelativa} passes ${declarado[0]} to a <Boton>, overriding the 48px touch floor on ${eje} through cn(): ${clases}`,
+          ).toBeGreaterThanOrEqual(48);
+        }
+      }
+    }
+
+    // Anti-rot: a scan that finds no call sites reports zero violations and
+    // looks identical to a clean tree.
+    expect(llamadasEncontradas, "no <Boton> call sites found — the scan went vacuous").toBeGreaterThan(3);
+  });
+});
+
 describe("guard 20: pisoDeToque confirms every PR7/PR8-converted atom, zero pre-existing violations (D5, PR9)", () => {
   it("finds and clears CampoTexto's and Boton's (every variante x tamano) rendered controls", () => {
     const { container: campo, unmount: cerrar1 } = render(createElement(CampoTexto, { value: "", onCambiar: () => {} }));
