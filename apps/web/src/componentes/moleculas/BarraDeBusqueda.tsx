@@ -32,6 +32,13 @@ const ESTADOS: ReadonlyArray<{ readonly valor: EstadoContrato; readonly etiqueta
  * 48×48 (`base.css:81-86`) would make a filter bar that is mostly checkbox.
  * Reusing `Boton` — which already satisfies the 48px guard — sidesteps that
  * rule instead of fighting it.
+ *
+ * design-system-migration PR10 (guard 13, D6) — off is `Boton`'s
+ * `secundario` variant (outline), on is `primario` (fill): the exact fix
+ * for the historical 1.32:1 defect (`panel.css:107-109`), where two dark
+ * greens read as the same filled button. Both variants share
+ * `border-primario`, so the state is never carried by a border colour
+ * alone. `aria-pressed` is unchanged.
  */
 export function BarraDeBusqueda({
   termino,
@@ -52,25 +59,58 @@ export function BarraDeBusqueda({
   }
 
   return (
-    <form role="search" onSubmit={manejarEnvio} className="barra-de-busqueda">
-      <Etiqueta htmlFor="busqueda-contratos">Buscar por nombre o DNI</Etiqueta>
-      <CampoTexto
-        id="busqueda-contratos"
-        type="search"
-        value={termino}
-        onCambiar={onCambiarTermino}
-        onKeyDown={manejarTecla}
-        placeholder="Nombre o DNI"
-      />
-      <div role="group" aria-label="Filtrar por estado" className="barra-de-busqueda__estados">
+    // No bottom margin of its own (PR22): the list page pins this form in a
+    // sticky wrapper, and the 24px that used to be `mb-6` here must be the
+    // WRAPPER's opaque padding — a margin below a pinned block is a
+    // transparent window rows scroll through. The wrapper owns the gap.
+    <form role="search" onSubmit={manejarEnvio} className="flex flex-wrap items-end gap-3">
+      {/*
+        The label and its field share one flex item. `Etiqueta` is `block`,
+        which does nothing when it is itself a flex child — it became a
+        column beside the input instead of a line above it, which is how it
+        shipped after PR10 and what the user saw. The wrapper restores the
+        stack without touching the atom.
+      */}
+      <div>
+        <Etiqueta htmlFor="busqueda-contratos">Buscar por nombre o DNI</Etiqueta>
+        <CampoTexto
+          id="busqueda-contratos"
+          type="search"
+          value={termino}
+          onCambiar={onCambiarTermino}
+          onKeyDown={manejarTecla}
+          placeholder="Nombre o DNI"
+          /*
+            `mb-0` (PR20 review): the form's `items-end` aligns border
+            boxes, and the atom's default `mb-4` sat between the visible
+            input and the alignment edge — the chips lined up with the
+            phantom margin, 16px below the field. The atom's bottom margin
+            must not participate in this row; `cn()` lets the instance win.
+          */
+          className="w-60 mb-0"
+        />
+      </div>
+      <div role="group" aria-label="Filtrar por estado" className="flex flex-wrap gap-2">
         {ESTADOS.map(({ valor, etiqueta }) => {
           const activo = estados.includes(valor);
           return (
             <Boton
               key={valor}
               type="button"
+              variante={activo ? "primario" : "secundario"}
+              /*
+                Four full-weight buttons outweighed the table they filter and
+                read as four actions. What shrinks is the ink, never the box:
+                `min-h-toque min-w-toque` still comes from `tamano`, so the
+                target a gloved thumb has to hit is unchanged at 48px, and
+                guard 3 iterates variante x tamano to keep it that way.
+                `px-4 font-medium` merge through `cn()` and beat the atom's
+                `px-5 font-semibold`; the frame — `rounded-base border-2` —
+                stays the atom's own (PR20 review: the earlier pill override
+                gave these four a different border than every other button).
+              */
+              className="px-4 font-medium"
               aria-pressed={activo}
-              className={activo ? "boton--filtro-activo" : undefined}
               onClick={() => onAlternarEstado(valor)}
             >
               {etiqueta}

@@ -13,7 +13,7 @@ import { act } from "@testing-library/react";
  * `vi.useFakeTimers()`. Under fake timers that leaves a test with two
  * independent clocks:
  *
- *   1. A real one, invisible in the test body, that quietly imposes a 1000 ms
+ *   1. A real one, out of sight in the test body, that quietly imposes a 1000 ms
  *      deadline on a machine the test does not control. Measured on a loaded
  *      12-core box, the signing-confirmation wait consumed 74–90 ms of that
  *      budget; the same contention was simultaneously blowing OTHER tests'

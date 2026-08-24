@@ -13,6 +13,7 @@ import { LienzoDeFirma, type DatosLienzoDeFirma } from "../../../componentes/org
 import { VisorDeDocumento } from "../../../componentes/organismos/VisorDeDocumento";
 import { crearColaDeGuardado, type ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { obtenerPrevisualizacion } from "../../../datos/revision/obtenerPrevisualizacion";
+import { CLASE_PROGRESO } from "../../../estilos/progreso";
 import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
 import { estadoInicialDePuerta, type EstadoPuerta } from "../../revision/logica/puertaDeLectura";
 import { ensamblarFirmas } from "../logica/capturaDeFirma";
@@ -22,6 +23,17 @@ const TITULOS: Record<TipoDocumentoFirmado, string> = {
   condiciones_generales: "Condiciones Generales de Uso",
   comodato: "Contrato de Comodato",
 };
+
+/**
+ * design-system-migration PR18 (task 18.4) — ported 1:1 from `.paso-firma` /
+ * `.paso-firma__documento` / `.paso-firma__pendientes` /
+ * `.paso-firma__pendientes-titulo` (organismos.css). espacio-3/4/6 map onto
+ * Tailwind's 4px step as 3/4/8 (D3).
+ */
+const CLASE_PASO_FIRMA = "p-4";
+const CLASE_DOCUMENTO = "mb-8";
+const CLASE_PENDIENTES = "mx-4 mt-4 rounded-base border-2 border-borde-suave px-4 py-3 text-texto";
+const CLASE_PENDIENTES_TITULO = "m-0 mb-2 font-bold";
 
 type Fase =
   | { readonly tipo: "vaciando" }
@@ -122,7 +134,7 @@ export function PasoFirmaDual({
 
   if (fase.tipo === "vaciando") {
     return (
-      <div role="status" className="progreso">
+      <div role="status" className={CLASE_PROGRESO} data-progreso>
         <span aria-hidden="true">
           <Spinner etiqueta="Guardando los últimos cambios antes de continuar" />
         </span>
@@ -144,7 +156,7 @@ export function PasoFirmaDual({
 
   if (fase.tipo === "cargando") {
     return (
-      <div role="status" className="progreso">
+      <div role="status" className={CLASE_PROGRESO} data-progreso>
         <span aria-hidden="true">
           <Spinner etiqueta="Cargando los documentos para la revisión" />
         </span>
@@ -211,11 +223,11 @@ export function PasoFirmaDual({
   }
 
   return (
-    <div className="paso-firma">
+    <div className={CLASE_PASO_FIRMA}>
       {DOCUMENTOS_DEL_CONTRATO.map((documento) => {
         const html = previsualizacion.documentos.find((doc) => doc.documento === documento)?.html ?? "";
         return (
-          <section key={documento} className="paso-firma__documento">
+          <section key={documento} className={CLASE_DOCUMENTO}>
             <VisorDeDocumento
               html={html}
               titulo={TITULOS[documento]}
@@ -238,8 +250,8 @@ export function PasoFirmaDual({
         interrupt a screen reader on every scroll.
       */}
       {pendientes.length > 0 && (
-        <div role="status" aria-label="Qué falta para poder firmar" className="paso-firma__pendientes">
-          <p className="paso-firma__pendientes-titulo">Para firmar falta:</p>
+        <div role="status" aria-label="Qué falta para poder firmar" className={CLASE_PENDIENTES}>
+          <p className={CLASE_PENDIENTES_TITULO}>Para firmar falta:</p>
           <ul>
             {pendientes.map((falta) => (
               <li key={falta}>{falta}</li>

@@ -6,6 +6,7 @@ import {
   ESTADOS_ESPERADOS,
   PISO_DE_CONTROLES_POR_ESTADO,
   PISO_DE_TOQUE_PX,
+  controlTapadoPorOtroElemento,
   erroresDeCobertura,
   erroresDePrecondicion,
   esControlBajoElPiso,
@@ -136,7 +137,28 @@ describe("committed constants", () => {
     expect(ANCHOS_HANDHELD).toEqual([360, 390, 430]);
   });
 
-  it("commits the pre-slice-F states-reached constant at 5 (task 5.6) — PR13 bumps this to 6", () => {
-    expect(ESTADOS_ESPERADOS).toBe(5);
+  it("commits the slice-F states-reached constant at 6 (task 13.5) — S3 added, LienzoDeFirma/VisorDeDocumento now converted", () => {
+    expect(ESTADOS_ESPERADOS).toBe(6);
+  });
+});
+
+/**
+ * Guard 19's runtime half (task 13.1/13.4/13.5) — real Chrome only, jsdom's
+ * `elementFromPoint` is unimplemented. `medirCoberturaDeControles` (CLI-only,
+ * exercised by `pnpm handheld` at S3) hands this pure predicate the plain
+ * boolean facts — never the `Element` itself, which cannot cross
+ * `page.evaluate()`'s serialization boundary.
+ */
+describe("controlTapadoPorOtroElemento", () => {
+  it("flags a control as covered when the resolved element is neither the control nor a descendant of it", () => {
+    expect(controlTapadoPorOtroElemento({ esElControl: false, esDescendienteDelControl: false })).toBe(true);
+  });
+
+  it("clears a control when the resolved element IS the control itself", () => {
+    expect(controlTapadoPorOtroElemento({ esElControl: true, esDescendienteDelControl: false })).toBe(false);
+  });
+
+  it("clears a control when the resolved element is a descendant of the control (e.g. its own label text node)", () => {
+    expect(controlTapadoPorOtroElemento({ esElControl: false, esDescendienteDelControl: true })).toBe(false);
   });
 });

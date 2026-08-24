@@ -1,8 +1,37 @@
+import { cva } from "class-variance-authority";
+
 /**
  * The draft form's two steps, named once so the two organisms that render
  * them cannot drift into describing the same journey differently.
  */
 export const PASOS_DEL_BORRADOR = ["Datos del cliente", "Equipos entregados"] as const;
+
+/**
+ * design-system-migration PR11 — visual redesign, `estadoPaso` variant keyed
+ * the same way the retired BEM modifiers were: a step is filled (`actual`),
+ * outlined (`cumplido`), or neutral (`pendiente`), never two of these at
+ * once. Fill, not tint, keeps the live step unmistakable at arm's length in
+ * direct sun — the same reasoning the retired CSS comment recorded.
+ */
+const pasoDelIndicador = cva("flex items-center gap-2 rounded-base border-2 px-3 py-2", {
+  variants: {
+    estadoPaso: {
+      pendiente: "border-borde-suave text-texto-suave",
+      actual: "border-primario bg-primario font-bold text-fondo",
+      cumplido: "border-primario text-primario",
+    },
+  },
+});
+
+const numeroDelPaso = cva("inline-flex size-6 items-center justify-center rounded-full font-bold", {
+  variants: {
+    estadoPaso: {
+      pendiente: "bg-borde-suave text-texto-suave",
+      actual: "bg-fondo text-primario",
+      cumplido: "bg-primario text-fondo",
+    },
+  },
+});
 
 interface PropiedadesIndicadorDePaso {
   readonly pasos: readonly string[];
@@ -29,32 +58,27 @@ interface PropiedadesIndicadorDePaso {
  */
 export function IndicadorDePaso({ pasos, actual }: PropiedadesIndicadorDePaso) {
   return (
-    <nav className="indicador-de-paso" aria-label="Progreso del contrato">
-      <p className="indicador-de-paso__resumen">
+    <nav className="mb-4" aria-label="Progreso del contrato">
+      <p className="mb-2 font-bold uppercase tracking-wide text-texto-suave">
         Paso {actual} de {pasos.length}
       </p>
-      <ol className="indicador-de-paso__lista">
+      <ol className="m-0 flex list-none flex-wrap gap-2 p-0">
         {pasos.map((nombre, indice) => {
           const numero = indice + 1;
           const esActual = numero === actual;
           const cumplido = numero < actual;
+          const estadoPaso = esActual ? "actual" : cumplido ? "cumplido" : "pendiente";
 
           return (
             <li
               key={nombre}
-              className={[
-                "indicador-de-paso__paso",
-                esActual ? "indicador-de-paso__paso--actual" : "",
-                cumplido ? "indicador-de-paso__paso--cumplido" : "",
-              ]
-                .filter((clase) => clase !== "")
-                .join(" ")}
+              className={pasoDelIndicador({ estadoPaso })}
               {...(esActual ? { "aria-current": "step" as const } : {})}
             >
-              <span className="indicador-de-paso__numero" aria-hidden="true">
+              <span className={numeroDelPaso({ estadoPaso })} aria-hidden="true">
                 {numero}
               </span>
-              <span className="indicador-de-paso__nombre">{nombre}</span>
+              <span>{nombre}</span>
             </li>
           );
         })}
