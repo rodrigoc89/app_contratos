@@ -103,10 +103,9 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
-    // PR7 — variant half only: Boton's destructivo cva variant proves the
+    // PR7 — variant half: Boton's destructivo cva variant proves the
     // colour-not-position half plus a fixture composition's >=32px gap.
-    // Final confirmation against LienzoDeFirma's real composition lands in
-    // PR13, where this entry's pruebas gain that second owning test.
+    // PR13 (task 13.2/13.6) — final confirmation: LienzoDeFirma's real composition proves both hold there too.
     numero: 4,
     protege: "32px gap + destructive colour-not-position (signature actions)",
     disposicion: "JSX",
@@ -118,6 +117,15 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
       {
         archivo: UTILIDADES,
         titulo: "keeps at least ${SEPARACION_MINIMA_PX}px of gap in a fixture composition of adjacent Boton controls",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo: "colours Borrar as destructive by its own variant in LienzoDeFirma's real composition, never by position",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "keeps at least ${SEPARACION_MINIMA_PX}px of gap between Deshacer and Borrar in LienzoDeFirma's real composition, not just PR7's atom-level fixture",
       },
     ],
   },
@@ -336,11 +344,17 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     pruebas: [{ archivo: ESTILOS, titulo: "declares every `.%s--*` modifier after the bare `.%s`" }],
   },
   {
+    // PR13 (task 13.6) — JSX tree-wide scan, same shape as guard 17's. The
+    // runtime half (elementFromPoint at S3) has no jsdom equivalent, not registered here.
     numero: 19,
     protege: "Signature canvas bounded, controls never covered",
-    disposicion: "CSS",
-    archivoCss: "estilos/organismos.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "bounds .lienzo-de-firma__lienzo to an explicit vh fraction" }],
+    disposicion: "JSX",
+    pruebas: [
+      {
+        archivo: UTILIDADES,
+        titulo: "rejects every real <canvas> under apps/web/src whose className is not bounded to an explicit vh fraction",
+      },
+    ],
   },
   {
     // PR9 (task 9.1-9.4/9.7, D5) — `pisoDeToque.ts` lands, proven on

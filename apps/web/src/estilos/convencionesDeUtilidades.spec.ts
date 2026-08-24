@@ -18,6 +18,7 @@ import { BarraDeBusqueda } from "../componentes/moleculas/BarraDeBusqueda";
 import { Paginador } from "../componentes/moleculas/Paginador";
 import { Toast } from "../componentes/moleculas/Toast";
 import { etiquetaDeEstado, InsigniaDeEstado } from "../componentes/organismos/estadoDeContrato";
+import { LienzoDeFirma } from "../componentes/organismos/LienzoDeFirma";
 import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
 import { cumplePisoHorizontal, cumplePisoVertical, esControlInteractivo } from "./guardias/pisoDeToque";
 
@@ -572,6 +573,39 @@ describe("guard 4: destructivo variant differs by colour, not position, at >=32p
 
     const gap = /\bgap-(\d+)\b/.exec(envoltorio?.className ?? "");
     expect(gap, `fixture composition has no gap-N utility: ${envoltorio?.className}`).not.toBeNull();
+    // Tailwind's default (unmodified, D3) spacing scale: N * 4px per step.
+    expect(Number(gap?.[1]) * 4).toBeGreaterThanOrEqual(SEPARACION_MINIMA_PX);
+    unmount();
+  });
+});
+
+/**
+ * Guard 4 (task 13.2/13.6), final confirmation — PR7's block above proves
+ * the shape on an atom-level fixture only. This renders the REAL
+ * `LienzoDeFirma` composition instead, the surface the historical
+ * `elementFromPoint` bug (guard 19) actually happened on.
+ */
+describe("guard 4 (final confirmation, PR13): LienzoDeFirma's real composition confirms colour-not-position and the button gap, not just PR7's atom-level fixture", () => {
+  const SEPARACION_MINIMA_PX = 32;
+
+  it("colours Borrar as destructive by its own variant in LienzoDeFirma's real composition, never by position", () => {
+    const { getByRole, unmount } = render(createElement(LienzoDeFirma, { etiqueta: "Firma" }));
+
+    const borrar = getByRole("button", { name: "Borrar" });
+    const deshacer = getByRole("button", { name: "Deshacer" });
+    expect(borrar).toHaveClass("bg-error");
+    expect(deshacer).not.toHaveClass("bg-error");
+    unmount();
+  });
+
+  it(`keeps at least ${SEPARACION_MINIMA_PX}px of gap between Deshacer and Borrar in LienzoDeFirma's real composition, not just PR7's atom-level fixture`, () => {
+    const { getByRole, unmount } = render(createElement(LienzoDeFirma, { etiqueta: "Firma" }));
+
+    const acciones = getByRole("button", { name: "Deshacer" }).parentElement;
+    expect(acciones, "actions wrapper not found").not.toBeNull();
+
+    const gap = /\bgap-(\d+)\b/.exec(acciones?.className ?? "");
+    expect(gap, `LienzoDeFirma's real actions row has no gap-N utility: ${acciones?.className}`).not.toBeNull();
     // Tailwind's default (unmodified, D3) spacing scale: N * 4px per step.
     expect(Number(gap?.[1]) * 4).toBeGreaterThanOrEqual(SEPARACION_MINIMA_PX);
     unmount();
@@ -1312,6 +1346,46 @@ describe("guard 17: the document-viewer iframe stays bounded to an explicit vh f
     expect(
       iframesEncontrados,
       "no <iframe> found under apps/web/src — the legal reading gate this guard protects has disappeared or moved",
+    ).toBeGreaterThanOrEqual(1);
+  });
+});
+
+const PATRON_CANVAS_CON_CLASE_JSX = /<canvas\b[^>]*\bclassName="([^"]+)"/g;
+
+/**
+ * Guard 19 (design.md `styling-guards` "legal-evidence guards get dedicated
+ * verification", task 13.1), static half — same shape and same
+ * `tieneAlturaAcotadaVh` helper as guard 17's `<iframe>` scan above, ported
+ * to the signature canvas: the historical bug was an inline `height: 100%`
+ * canvas that consumed its wrapper whole and pushed `Deshacer`/`Borrar`
+ * past the parent's bottom edge, where the NEXT document's iframe covered
+ * them. Stated over the whole tree, not scoped to `LienzoDeFirma` by name —
+ * guard 15's PR11 lesson, applied here as guard 17 applied it in PR12.
+ *
+ * The RUNTIME half — `elementFromPoint` at each control's centre — has no
+ * jsdom equivalent (unimplemented/a stub there) and is exercised for real
+ * by `scripts/geometriaHandheld.ts` at S3 (task 13.4/13.5), not here.
+ */
+describe("guard 19: the signature canvas stays bounded to an explicit vh fraction, never auto or unbounded (PR13, legal-evidence composition, static half)", () => {
+  it("rejects every real <canvas> under apps/web/src whose className is not bounded to an explicit vh fraction", () => {
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    let canvasesEncontrados = 0;
+
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      for (const coincidencia of contenido.matchAll(PATRON_CANVAS_CON_CLASE_JSX)) {
+        canvasesEncontrados += 1;
+        const clases = coincidencia[1] ?? "";
+        expect(
+          tieneAlturaAcotadaVh(clases),
+          `${rutaRelativa} renders a <canvas> ("${clases}") not bounded to an explicit vh fraction — an unbounded signature canvas can consume its wrapper whole and push Deshacer/Borrar past it, letting the next document's iframe cover them (guard 19, elementFromPoint)`,
+        ).toBe(true);
+      }
+    }
+
+    expect(
+      canvasesEncontrados,
+      "no <canvas> found under apps/web/src — the signature canvas this guard protects has disappeared or moved",
     ).toBeGreaterThanOrEqual(1);
   });
 });
