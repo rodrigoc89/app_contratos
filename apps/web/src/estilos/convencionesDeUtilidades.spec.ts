@@ -1388,53 +1388,32 @@ describe("guard 19: the signature canvas stays bounded to an explicit vh fractio
   });
 });
 
-const TOKENS_DISPLAY_O_HIDDEN = new Set([
-  "hidden",
-  "block",
-  "inline-block",
-  "inline",
-  "flex",
-  "inline-flex",
-  "grid",
-  "inline-grid",
-  "contents",
-  "table",
-  "flow-root",
-  "list-item",
-]);
-
 /**
- * Guard 2, final confirmation (task 14.1). Guard 6/PR6's compiled scan
- * established that Preflight's `[hidden]` rule is the ONE `!important
- * display` rule in compiled output — that fact is only load-bearing while a
- * hidden element's markup relies on the ATTRIBUTE alone, never on the
- * cascade winning a fight. A redesign can silently defeat that coherence two
- * ways: dropping the `hidden` ATTRIBUTE for Tailwind's `hidden` CLASS (a
- * plain, non-important `display:none` any later `block`/`flex` utility or a
- * `cn()` merge can reorder away), or keeping the attribute but adding a
- * display utility to the same element, so visibility now depends on
- * Preflight's `!important` rule winning rather than the markup being
- * coherent on its own. Checked at author time here — the compiled half
- * above already confirms Preflight's rule is the sole survivor.
+ * Guard 2, final confirmation (task 14.1). PR6's compiled scan established
+ * that Preflight's `[hidden]` rule is the ONE `!important display` rule in
+ * the output. An `!important` declaration beats any normal-layer utility
+ * regardless of order, so `block` beside the attribute is not a fight — the
+ * retired `.escaner-de-mac__video` rule declared `display: block` for a
+ * reason (an inline replaced element leaves a baseline gap below it). The
+ * one silent break is swapping the ATTRIBUTE for Tailwind's `hidden` CLASS:
+ * a plain `display: none` that any later `block`/`flex` utility or a `cn()`
+ * merge reorders away. The first cut of this guard banned every display
+ * utility and cost the `<video>` its `block`; narrowed at the gate.
  */
-function tieneUtilidadDeDisplayOHidden(clases: string): boolean {
-  return clases.split(/\s+/).some((token) => TOKENS_DISPLAY_O_HIDDEN.has(token));
+function usaLaClaseHiddenEnLugarDelAtributo(clases: string): boolean {
+  return clases.split(/\s+/).includes("hidden");
 }
 
-describe("guard 2 (final confirmation, PR14): EscanerDeMac's camera-preview <video> stays governed by the hidden ATTRIBUTE alone", () => {
-  it("flags a className carrying the hidden utility class instead of the attribute", () => {
-    expect(tieneUtilidadDeDisplayOHidden("hidden w-full")).toBe(true);
+describe("guard 2 (final confirmation, PR14): EscanerDeMac's camera-preview <video> is hidden by the ATTRIBUTE, never the class", () => {
+  it("flags a className carrying the hidden utility class", () => {
+    expect(usaLaClaseHiddenEnLugarDelAtributo("hidden w-full")).toBe(true);
   });
 
-  it("flags a className carrying a display utility alongside the attribute", () => {
-    expect(tieneUtilidadDeDisplayOHidden("block w-full")).toBe(true);
+  it("does not flag a display utility — Preflight's !important attribute rule wins over it regardless of order", () => {
+    expect(usaLaClaseHiddenEnLugarDelAtributo("block w-full max-h-[40vh]")).toBe(false);
   });
 
-  it("does not flag a className with no display-related utility", () => {
-    expect(tieneUtilidadDeDisplayOHidden("w-full max-h-[40vh] rounded-base")).toBe(false);
-  });
-
-  it("EscanerDeMac's real camera-preview <video> carries the hidden ATTRIBUTE, not a class, and no display utility fights it", () => {
+  it("EscanerDeMac's real camera-preview <video> carries the hidden ATTRIBUTE and never the hidden class", () => {
     const { getByLabelText, unmount } = render(
       createElement(EscanerDeMac, { valor: "", onCambiar: () => {}, comprobarDisponibilidad: () => Promise.resolve(false) }),
     );
@@ -1445,8 +1424,8 @@ describe("guard 2 (final confirmation, PR14): EscanerDeMac's camera-preview <vid
       "EscanerDeMac's <video> is not hidden by the ATTRIBUTE while the preview is inactive",
     ).toBe(true);
     expect(
-      tieneUtilidadDeDisplayOHidden(video.className),
-      `EscanerDeMac's <video> className ("${video.className}") carries a display/hidden utility — visibility must depend on the hidden attribute alone, not on Preflight's !important rule winning a fight`,
+      usaLaClaseHiddenEnLugarDelAtributo(video.className),
+      `EscanerDeMac's <video> className ("${video.className}") carries the hidden class — a plain display:none any later utility or cn() merge reorders away; the attribute is the mechanism`,
     ).toBe(false);
     unmount();
   });

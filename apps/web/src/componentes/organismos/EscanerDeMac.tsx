@@ -161,21 +161,21 @@ export function EscanerDeMac({
       )}
       {/*
         Guard 2 final confirmation (task 14.1/14.2): visibility is governed by
-        the [hidden] ATTRIBUTE alone — this className carries no display
-        utility and no class token matching that attribute, so there is
-        nothing here that could fight Preflight's !important [hidden] rule
-        (PR6's compiled scan, guard 2). Sizing/border/radius are a 1:1 port of
-        the retired `.escaner-de-mac__video` rule (`estilos/organismos.css`):
-        full-width, capped at 40vh, 12px bottom margin, 2px bordered,
-        rounded, black background while the feed loads, cropped to fill via
-        object-cover.
+        the [hidden] ATTRIBUTE — Preflight's !important rule (PR6's compiled
+        scan) beats `block` regardless of order, so the retired
+        `.escaner-de-mac__video` rule ports 1:1 (`estilos/organismos.css`):
+        block (an inline replaced element leaves a baseline gap), full-width,
+        capped at 40vh, 12px bottom margin, 2px bordered, rounded, black
+        background while the feed loads, cropped to fill via object-cover.
+        What the guard bans is the class of the same name replacing the
+        attribute.
       */}
       <video
         ref={videoRef}
         muted
         playsInline
         aria-label="Vista de la cámara"
-        className="w-full max-h-[40vh] mb-3 rounded-base border-2 border-borde bg-black object-cover"
+        className="block w-full max-h-[40vh] mb-3 rounded-base border-2 border-borde bg-black object-cover"
         hidden={estado !== "escaneando" && estado !== "abriendo"}
       />
       {estado === "abriendo" && <p>Abriendo cámara…</p>}
