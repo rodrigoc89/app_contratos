@@ -177,9 +177,20 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     numero: 7,
     // task 3.9 — mechanism now lives in convencionesDeUtilidades.spec.ts's
     // breakpoint-prefix whitelist; the CSS-scoped min-width scan stays live
-    // for the still-BEM stylesheets until PR16 deletes them. Rebind/read-back
-    // half retires MOOT once literal utilities replace inheritance (D4).
-    protege: "Exactly the 640/1024 breakpoints (tableta/escritorio prefixes); rebind/read-back half MOOT after PR16",
+    // for the still-BEM stylesheets until PR19 deletes them. PR16 (task
+    // 16.3, D4): the rebind/read-back half is RESUELTA, not merely MOOT —
+    // `LayoutPanel` states its 16px base as a literal `text-[16px]` utility
+    // on the same wrapper element instead of rebinding an inherited
+    // `--fuente-base` custom property and reading it back, so the "rebind
+    // alone is inert" bug class is now structurally impossible for this
+    // shell, with a real mechanism behind it rather than a promise. The
+    // GLOBAL `--fuente-base` custom property (tokens.css/base.css's `body`
+    // rule) still exists and still governs the rest of the app until PR19
+    // deletes those sheets — that unscoped usage was never the buggy
+    // rebind-without-readback pattern this half protected against, so
+    // disposition stays JSX (the breakpoint-prefix scan is still live).
+    protege:
+      "Exactly the 640/1024 breakpoints (tableta/escritorio prefixes); rebind/read-back half RESUELTA structurally in LayoutPanel (PR16)",
     disposicion: "JSX",
     pruebas: [
       {
@@ -190,7 +201,23 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
   },
   {
     // PR9 (task 9.5/9.7, D4) — axis moves from CSS filename (`panel.css`,
-    // deleted PR16) to a component-path matcher.
+    // deleted PR19) to a component-path matcher: componentes/organismos/,
+    // componentes/moleculas/, funcionalidades/contratos/. Deliberately
+    // excludes componentes/atomos/ (the too-broad trap PR9's own comment
+    // names) and, re-checked here, componentes/plantillas/ (task 16.4):
+    // `LayoutPanel.tsx`'s literal `text-[16px]` utility (task 16.3) is
+    // *not* actually sub-1rem — this project sets no `html { font-size }`
+    // anywhere, so `rem` resolves against the browser's un-overridden 16px
+    // root and 16px === 1rem exactly, which `MINIMO_REM_JSX = 1`'s strict
+    // `<` comparison does not flag. Separately, `tamanosDeTextoBajoElPiso`'s
+    // arbitrary-value pattern only recognises `text-[Nrem]`, not
+    // `text-[Npx]` — a second, independent reason a literal px value is
+    // invisible to this guard regardless of its numeric size. Falsified
+    // both ways: a genuine sub-1rem token (`text-sm`, 0.875rem) on
+    // `LayoutTecnico.tsx` and on `LayoutPanel.tsx` (still outside this
+    // axis) both correctly fail today, naming the file; `LayoutPanel.tsx`
+    // needs no axis entry because it declares no sub-1rem type, not
+    // because it is exempt.
     numero: 8,
     protege: "No font-size<1rem outside the panel subtree",
     disposicion: "JSX",

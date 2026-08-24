@@ -1615,3 +1615,97 @@ describe("guard 20 (final, PR15): TablaDeContratos' primary target — every gen
     );
   });
 });
+
+/**
+ * Guard endpoint for PR16 task 16.1 (design.md's Phase 16 preamble, D2) —
+ * `componentes/plantillas/` must carry zero hand-authored BEM classNames.
+ * "Hand-authored BEM class" is defined structurally, never lexically: a
+ * naive shape-based regex would flag `block`, `flex-1`, `min-h-full` as BEM
+ * just as readily as `layout-panel__contenido`. Instead, the banned set is
+ * every class token that STILL appears as a real CSS selector in the frozen
+ * hand-authored sheets under `estilos/*.css` — every sheet except the
+ * Tailwind entry point, identified by its own `@import "tailwindcss"`
+ * rather than by filename, so the set stays correct as sheets are deleted
+ * through the rest of this migration (PR19). PR18's whole-tree assertion
+ * reuses `clasesBemDeclaradas`/`clasesBemEnArchivo` unchanged, only
+ * widening the scanned directory prefix.
+ */
+function quitarComentariosCss(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
+function esPuntoDeEntradaTailwind(contenidoCss: string): boolean {
+  return /@import\s+["']tailwindcss["']/.test(contenidoCss);
+}
+
+/** Every class token declared as a real selector (never inside a rule's body) in one stylesheet. */
+export function clasesDeclaradasComoSelector(cssSinComentarios: string): ReadonlySet<string> {
+  const clases = new Set<string>();
+  const textosDeSelector = cssSinComentarios.match(/[^{}]+(?=\{)/g) ?? [];
+  for (const selector of textosDeSelector) {
+    for (const coincidencia of selector.matchAll(/\.([a-zA-Z_][\w-]*)/g)) {
+      const clase = coincidencia[1];
+      if (clase !== undefined) clases.add(clase);
+    }
+  }
+  return clases;
+}
+
+/** Every class token declared in every hand-authored `estilos/*.css` sheet, Tailwind entry excluded. */
+export function clasesBemDeclaradas(): ReadonlySet<string> {
+  const clases = new Set<string>();
+  for (const nombre of readdirSync(DIRECTORIO_ESTILOS)) {
+    if (!nombre.endsWith(".css")) continue;
+    const contenido = readFileSync(join(DIRECTORIO_ESTILOS, nombre), "utf8");
+    if (esPuntoDeEntradaTailwind(contenido)) continue;
+    for (const clase of clasesDeclaradasComoSelector(quitarComentariosCss(contenido))) {
+      clases.add(clase);
+    }
+  }
+  return clases;
+}
+
+const PATRON_CLASSNAME_LITERAL = /className\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+
+/** Every hand-authored BEM class token a `.tsx` file's literal `className`s carry. */
+export function clasesBemEnArchivo(contenidoTsx: string, clasesBem: ReadonlySet<string>): readonly string[] {
+  const encontradas = new Set<string>();
+  for (const coincidencia of contenidoTsx.matchAll(PATRON_CLASSNAME_LITERAL)) {
+    const valor = coincidencia[1] ?? coincidencia[2] ?? "";
+    for (const token of valor.split(/\s+/).filter(Boolean)) {
+      if (clasesBem.has(token)) encontradas.add(token);
+    }
+  }
+  return [...encontradas];
+}
+
+describe("guard endpoint (task 16.1, D2): componentes/plantillas/ carries no hand-authored BEM className", () => {
+  const PREFIJO_PLANTILLAS = "componentes/plantillas/";
+
+  it("finds a non-trivial set of banned BEM class tokens in the frozen hand-authored sheets", () => {
+    // Anti-rot floor on the CSS side: if this ever goes to (near) zero
+    // before the sheets are actually deleted (PR19), the scan below would
+    // pass vacuously against real BEM markup.
+    expect(clasesBemDeclaradas().size).toBeGreaterThan(3);
+  });
+
+  it("rejects every real .tsx file under componentes/plantillas/ that carries a hand-authored BEM className", () => {
+    const clasesBem = clasesBemDeclaradas();
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      return rutaRelativa.startsWith(PREFIJO_PLANTILLAS) && rutaRelativa.endsWith(".tsx");
+    });
+    expect(fuentes.length, "no .tsx files found under componentes/plantillas/ — the scan matched nothing").toBeGreaterThan(0);
+
+    const ofensores: string[] = [];
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      const encontradas = clasesBemEnArchivo(contenido, clasesBem);
+      if (encontradas.length > 0) {
+        ofensores.push(`${rutaRelativa}: ${encontradas.join(", ")}`);
+      }
+    }
+
+    expect(ofensores, `hand-authored BEM className found under componentes/plantillas/ — ${ofensores.join(" | ")}`).toEqual([]);
+  });
+});
