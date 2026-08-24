@@ -310,11 +310,23 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
+    // PR12 (design.md slice F1, task 12.3) — ownership moves to the JSX
+    // scan: VisorDeDocumento no longer renders `.visor-documento__iframe`,
+    // so the CSS-scoped test (`convencionesDeEstilos.spec.ts`, "finds and
+    // constrains .visor-documento__iframe in estilos/organismos.css") now
+    // reads only the frozen BEM sheet (`organismos.css`, deleted PR16) and
+    // stays live but unowned here. The rebuilt guard is stated over every
+    // <iframe> in apps/web/src, not scoped to VisorDeDocumento by name —
+    // guard 15's PR11 lesson applied here before it needed a correction.
     numero: 17,
     protege: "Document-viewer iframe bounded vh (legal reading gate)",
-    disposicion: "CSS",
-    archivoCss: "estilos/organismos.css",
-    pruebas: [{ archivo: ESTILOS, titulo: "finds and constrains .visor-documento__iframe in estilos/organismos.css" }],
+    disposicion: "JSX",
+    pruebas: [
+      {
+        archivo: UTILIDADES,
+        titulo: "rejects every real <iframe> under apps/web/src whose className is not bounded to an explicit vh fraction",
+      },
+    ],
   },
   {
     numero: 18,

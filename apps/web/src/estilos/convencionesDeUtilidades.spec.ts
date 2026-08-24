@@ -1163,3 +1163,90 @@ describe("guards 9-11: InsigniaDeEstado's estado tokens resolve real colours fro
     }
   });
 });
+
+const PATRON_IFRAME_CON_CLASE_JSX = /<iframe\b[^>]*\bclassName="([^"]+)"/g;
+const PATRON_ALTURA_AUTO_JSX = /\bh-auto\b/;
+const PATRON_MIN_ALTURA_JSX = /\bmin-h-/;
+const PATRON_ALTURA_ACOTADA_VH_JSX = /\b(?:h|max-h)-\[\d+(?:\.\d+)?vh\]/;
+
+/**
+ * Guard 17 (design.md `styling-guards` "legal-evidence guards get dedicated
+ * verification", task 12.1), ported to JSX class names — the highest-stakes
+ * single guard in this file, per its own dedicated verification pass rather
+ * than batch treatment.
+ *
+ * `funcionalidades/revision/logica/puertaDeLectura.ts` distinguishes
+ * "scrolled to the end" (`desplazado_al_final`) from "fits without
+ * scrolling — confirmation pending" (`cabe_sin_desplazar_falta_confirmar`),
+ * and that distinction IS the legal evidence that a comodante actually saw
+ * what they signed. An iframe sized to its content (`h-auto`) or left
+ * unbounded (any `min-h-*`, with or without a `vh` bound — `min-height`
+ * lets content stretch the frame exactly like `height: auto` does) makes a
+ * real two-page comodato fit without scrolling, which silently routes
+ * every signing onto the weaker "confirmation pending" branch instead of
+ * "scrolled to the end". So a bounded iframe MUST declare `h-[Nvh]` or
+ * `max-h-[Nvh]` and MUST NOT declare `h-auto` or any `min-h-*` at all —
+ * same three-part shape as the CSS-scoped predecessor
+ * (`convencionesDeEstilos.spec.ts`'s `PATRON_ALTURA_ACOTADA_VH`), only the
+ * input changes from a raw CSS declaration to a Tailwind arbitrary-value
+ * utility.
+ *
+ * Stated over the whole tree, not scoped to `VisorDeDocumento` by name —
+ * the same correction guard 15 needed after its `CabeceraDeSesion` gap
+ * (PR11): an enumerated list only covers what someone thought to name, and
+ * this scan instead protects any `<iframe>` this app ever renders, today or
+ * later.
+ */
+export function tieneAlturaAcotadaVh(clases: string): boolean {
+  if (PATRON_ALTURA_AUTO_JSX.test(clases)) {
+    return false;
+  }
+  if (PATRON_MIN_ALTURA_JSX.test(clases)) {
+    return false;
+  }
+  return PATRON_ALTURA_ACOTADA_VH_JSX.test(clases);
+}
+
+describe("guard 17: the document-viewer iframe stays bounded to an explicit vh fraction, never auto or unbounded (PR12, legal reading gate)", () => {
+  it("rejects height sized to content — h-auto would let a real two-page comodato fit without scrolling", () => {
+    expect(tieneAlturaAcotadaVh("h-auto w-full")).toBe(false);
+  });
+
+  it("rejects a bare min-h-* with no vh bound — an unbounded min-height stretches to content exactly like h-auto does", () => {
+    expect(tieneAlturaAcotadaVh("min-h-64 w-full")).toBe(false);
+  });
+
+  it("rejects an arbitrary height value that is not a vh fraction — a fixed px height is not what this guard requires", () => {
+    expect(tieneAlturaAcotadaVh("h-[400px] w-full")).toBe(false);
+  });
+
+  it("accepts an explicit vh-bounded height", () => {
+    expect(tieneAlturaAcotadaVh("h-[45vh] w-full")).toBe(true);
+  });
+
+  it("accepts an explicit vh-bounded max-height", () => {
+    expect(tieneAlturaAcotadaVh("max-h-[60vh] w-full")).toBe(true);
+  });
+
+  it("rejects every real <iframe> under apps/web/src whose className is not bounded to an explicit vh fraction", () => {
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    let iframesEncontrados = 0;
+
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      for (const coincidencia of contenido.matchAll(PATRON_IFRAME_CON_CLASE_JSX)) {
+        iframesEncontrados += 1;
+        const clases = coincidencia[1] ?? "";
+        expect(
+          tieneAlturaAcotadaVh(clases),
+          `${rutaRelativa} renders an <iframe> ("${clases}") not bounded to an explicit vh fraction — an unbounded document viewer silently routes every reading onto the "confirmation pending" branch instead of "scrolled to the end" (funcionalidades/revision/logica/puertaDeLectura.ts)`,
+        ).toBe(true);
+      }
+    }
+
+    expect(
+      iframesEncontrados,
+      "no <iframe> found under apps/web/src — the legal reading gate this guard protects has disappeared or moved",
+    ).toBeGreaterThanOrEqual(1);
+  });
+});
