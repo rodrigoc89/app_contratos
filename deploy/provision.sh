@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
 # Bring a bare Ubuntu host to a state where the API can render a correct,
-# complete PDF: apt packages, PostgreSQL 17, Chromium's runtime libraries,
-# Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user
-# with its directories — all idempotent, so a second run on an
-# already-provisioned host is a safe no-op (server-provisioning spec.md).
+# complete PDF: apt packages, PostgreSQL 17, Node.js and pnpm, Chromium's
+# runtime libraries, Spanish-capable fonts, a 2 GB swapfile, and the
+# `contratos` service user with its directories — all idempotent, so a
+# second run on an already-provisioned host is a safe no-op
+# (server-provisioning spec.md).
 #
 # Usage:
 #   sudo deploy/provision.sh              # apply
@@ -37,6 +38,20 @@ SWAP_SIZE_MB="${SWAP_SIZE_MB:-2048}"
 FSTAB_FILE="${FSTAB_FILE:-/etc/fstab}"
 GIT_EXCLUDE_FILE="${GIT_EXCLUDE_FILE:-$APP_DIR/.git/info/exclude}"
 PUPPETEER_VERSION="${PUPPETEER_VERSION:-25.4.0}"
+# Root package.json: `engines.node >=22`, `packageManager: pnpm@11.11.0`.
+# 24 is the Active LTS line and what .github/workflows/ci.yml pins (the
+# web suite does not pass on 22). provision.spec.ts reads the manifest and
+# fails when these defaults drift from it.
+NODE_MAJOR="${NODE_MAJOR:-24}"
+PNPM_VERSION="${PNPM_VERSION:-11.11.0}"
+# NodeSource's `nodejs` package puts node and npm in /usr/bin, so npm's own
+# default global prefix is /usr and `npm install -g` would land pnpm at
+# /usr/bin/pnpm — but contratos-api.service's ExecStart is
+# /usr/local/bin/pnpm. Installing under /usr/local puts the binary exactly
+# there, and /usr/local/bin is on root's PATH, on sudo's secure_path, and on
+# the `contratos` user's non-root login PATH (deploy.sh runs pnpm as that
+# user via `sudo -u`), so every caller resolves the same pnpm.
+NPM_GLOBAL_PREFIX="${NPM_GLOBAL_PREFIX:-/usr/local}"
 
 log() {
   printf '%s\n' "$*"
@@ -69,6 +84,13 @@ provision_packages() {
     ca-certificates
     gnupg
     lsb-release
+    # puppeteer / @puppeteer/browsers extract Chrome-for-Testing zips with
+    # `unzip`, falling back to the optional `yauzl` package. npm (the npx in
+    # the Chromium step below) does not install that optional peer, and a
+    # fresh Ubuntu host ships no `unzip`, so puppeteer's postinstall failed
+    # at extraction — silently. pnpm's lockfile does pin yauzl for
+    # deploy.sh's install; the system package simply covers both paths.
+    unzip
     fontconfig
     fonts-dejavu-core
     fonts-liberation
@@ -104,6 +126,81 @@ provision_postgresql() {
   apt-get install -y postgresql-17
 }
 
+# ------------------------------------------------------------ node + pnpm
+
+# The Chromium step below runs `npx`, and deploy.sh later runs `pnpm` as the
+# `contratos` user; neither exists on a bare host, and the first real run
+# aborted at `npx: command not found` for exactly that reason. This step has
+# to come before provision_chromium_deps.
+#
+# Node.js comes from NodeSource's apt repository, set up by hand with the
+# steps its own setup_${NODE_MAJOR}.x script performs (dearmored key under
+# /usr/share/keyrings, a DEB822 sources file pinned to the `nodistro` suite)
+# — the same shape as the PGDG step above, and no remote script executed as
+# root. pnpm is installed with npm rather than corepack: corepack is no
+# longer bundled with current Node lines, and a pnpm other than the one
+# `packageManager` names refuses the frozen lockfile deploy.sh installs from.
+node_major_on_path() {
+  command -v node > /dev/null 2>&1 || return 1
+
+  local version
+  version="$(node --version 2>/dev/null || true)"
+  version="${version#v}"
+  version="${version%%.*}"
+  case "$version" in
+    '' | *[!0-9]*) return 1 ;;
+  esac
+  printf '%s' "$version"
+}
+
+pnpm_version_on_path() {
+  command -v pnpm > /dev/null 2>&1 || return 1
+  pnpm --version 2>/dev/null || true
+}
+
+install_nodesource_nodejs() {
+  local keyring=/usr/share/keyrings/nodesource.gpg
+  local arch
+  arch="$(dpkg --print-architecture)"
+
+  install -d -m 755 /usr/share/keyrings
+  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+    | gpg --dearmor --batch --yes -o "$keyring"
+  chmod 644 "$keyring"
+  printf 'Types: deb\nURIs: https://deb.nodesource.com/node_%s.x\nSuites: nodistro\nComponents: main\nArchitectures: %s\nSigned-By: %s\n' \
+    "$NODE_MAJOR" "$arch" "$keyring" > /etc/apt/sources.list.d/nodesource.sources
+  apt-get update
+  apt-get install -y nodejs
+  log "installed $(node --version) from NodeSource (node_${NODE_MAJOR}.x)"
+}
+
+provision_node() {
+  local node_major pnpm_version
+  node_major="$(node_major_on_path || true)"
+  pnpm_version="$(pnpm_version_on_path || true)"
+
+  if [ -n "$node_major" ] && [ "$node_major" -ge "$NODE_MAJOR" ] \
+    && [ "$pnpm_version" = "$PNPM_VERSION" ]; then
+    skip "node $(node --version) (>= $NODE_MAJOR) and pnpm $PNPM_VERSION already installed"
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]; then
+    plan "would install Node.js $NODE_MAJOR (NodeSource) and pnpm $PNPM_VERSION"
+    return
+  fi
+
+  # The two halves are re-checked separately so a host with the right Node
+  # but a stale pnpm (or the reverse) only touches the half that is behind.
+  if [ -z "$node_major" ] || [ "$node_major" -lt "$NODE_MAJOR" ]; then
+    install_nodesource_nodejs
+  fi
+  if [ "$pnpm_version" != "$PNPM_VERSION" ]; then
+    npm install -g --prefix "$NPM_GLOBAL_PREFIX" "pnpm@${PNPM_VERSION}"
+    log "installed pnpm $PNPM_VERSION at $NPM_GLOBAL_PREFIX/bin/pnpm"
+  fi
+}
+
 # --------------------------------------------------------------- chromium
 
 # D1: root resolves and installs the *system libraries* Chromium needs
@@ -111,15 +208,23 @@ provision_postgresql() {
 # binary itself is installed later, at deploy time, by the unprivileged
 # `contratos` user (deploy.sh), whose own $HOME/.cache/puppeteer is where
 # the running service actually looks.
+#
+# `npx --yes puppeteer@…` first installs the package, whose postinstall
+# downloads Chrome on its own before the CLI command ever runs.
+# PUPPETEER_SKIP_DOWNLOAD=1 turns that postinstall download off; it does not
+# affect the explicit `browsers install chrome` that follows, which still
+# performs a real download into the scratch cache — and that download is
+# the one `--install-deps` resolves the system libraries against.
 provision_chromium_deps() {
   if [ "$DRY_RUN" = true ]; then
-    plan "would run: npx --yes puppeteer@${PUPPETEER_VERSION} browsers install chrome --install-deps (scratch PUPPETEER_CACHE_DIR, deleted afterward)"
+    plan "would run: npx --yes puppeteer@${PUPPETEER_VERSION} browsers install chrome --install-deps (PUPPETEER_SKIP_DOWNLOAD=1 for the postinstall; scratch PUPPETEER_CACHE_DIR, deleted afterward)"
     return
   fi
 
   local scratch_cache
   scratch_cache="$(mktemp -d)"
   PUPPETEER_CACHE_DIR="$scratch_cache" \
+    PUPPETEER_SKIP_DOWNLOAD=1 \
     npx --yes "puppeteer@${PUPPETEER_VERSION}" browsers install chrome --install-deps
   rm -rf "$scratch_cache"
 }
@@ -274,6 +379,7 @@ main() {
 
   provision_packages
   provision_postgresql
+  provision_node
   provision_chromium_deps
   provision_fonts_cache
   provision_swap

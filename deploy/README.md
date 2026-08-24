@@ -25,7 +25,7 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 
 | Order | Script | What it does | Status |
 |---|---|---|---|
-| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | Done |
+| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Node.js 24 (NodeSource) + pnpm 11.11.0 at `/usr/local/bin/pnpm` (the path `contratos-api.service` executes), Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | Done |
 | 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5); the `publish` step calls `publicar-assets.sh` (D4, row 2a) | Done |
 | 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | Done |
 | 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) — see "TLS bootstrap" below | Done |
@@ -50,12 +50,20 @@ requirement:
 | `$APP_DIR`, `$DOCUMENT_STORE_DIR` | `[skip] directory '…' already exists` | `[plan] would create directory '…'` |
 | Swapfile + its `/etc/fstab` entry | `[skip] swapfile '…' already exists` / `[skip] fstab entry for '…' already present` | `[plan] would create a 2048MB swapfile at '…'` / `[plan] would append '… none swap sw 0 0' to '…'` |
 | `.cache/` in the git exclude file | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
+| Node.js ≥ `NODE_MAJOR` and pnpm = `PNPM_VERSION` on `$PATH` | `[skip] node v… (>= 24) and pnpm 11.11.0 already installed` | `[plan] would install Node.js 24 (NodeSource) and pnpm 11.11.0` |
 
-All four are asserted by `deploy/provision.spec.ts` against a scratch temp
+All five are asserted by `deploy/provision.spec.ts` against a scratch temp
 directory — every path (`SERVICE_USER`, `APP_DIR`, `DOCUMENT_STORE_DIR`,
 `SWAP_FILE`, `FSTAB_FILE`, `GIT_EXCLUDE_FILE`) is overridable by environment
 variable for exactly this reason, in production those variables keep their
 defaults (`contratos`, `/opt/contratos`, `/swapfile`, `/etc/fstab`, …).
+The Node/pnpm guard reads `$PATH` rather than a path variable, so the spec
+runs the script under a scratch `bin/` — empty for the bare host, fake
+`node`/`pnpm` printing versions for the provisioned one — because the first
+real run died at `npx: command not found` on a step this harness had only
+ever exercised from a developer machine that already had Node; that plan
+line must precede the `npx --yes puppeteer` one, and the spec asserts the
+order.
 
 ### `.cache/` and the git-exclude step
 
@@ -80,6 +88,20 @@ binary itself is installed later, at deploy time, by the unprivileged
 actually looks (the same command `.github/workflows/ci.yml:167` already
 runs, for the same reason: a warm pnpm store skips Puppeteer's postinstall
 download).
+
+Two things about that step only surfaced on the first real host. Puppeteer's
+postinstall runs *before* the CLI command and extracts the Chrome zip with
+`unzip`, falling back to the optional `yauzl` package; `npx`'s npm does not
+install that optional peer, and a fresh Ubuntu ships no `unzip`, so the
+postinstall died at extraction with no output — `provision.sh` now installs
+`unzip` as a system package. (`deploy.sh`'s `pnpm install --frozen-lockfile`
+was never at risk: `pnpm-lock.yaml` pins `yauzl` as `@puppeteer/browsers`'
+optional dependency, so that path extracts without `unzip`; the system
+package simply covers both.) The root step also sets
+`PUPPETEER_SKIP_DOWNLOAD=1`, so that postinstall does not download Chrome
+once before `browsers install chrome` downloads it again into the scratch
+cache — `--install-deps` still resolves libraries against that second,
+explicit download.
 
 ### Render verdict (`pnpm --filter @contratos/api verify:render`)
 
@@ -1129,6 +1151,7 @@ gate** — see "Next step" below.
 
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
 - [ ] Re-running it exits 0 with every guard reporting `[skip]`
+- [ ] `node --version` ≥ 22 and `pnpm --version` = 11.11.0 as the `contratos` user after provision (`sudo -u contratos -- bash -lc 'node --version; pnpm --version'`)
 - [ ] Headless Chromium launches with `--no-sandbox --disable-setuid-sandbox` and no missing-library error
 - [ ] `pnpm --filter @contratos/api verify:render` prints `Veredicto final: APROBADO` (all three layers, see "Render verdict" above)
 - [ ] `free -h` shows the 2 GB swapfile active, and it survives a reboot
