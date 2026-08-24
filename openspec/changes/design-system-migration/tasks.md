@@ -459,7 +459,23 @@ that bites hardest.*
 
 - [ ] 17B.1 Run the full suite plus `pnpm size && pnpm handheld`; record results.
 - [ ] 17B.2 User visual review of the office detail and form screens.
-- [ ] 17B.3 Open PR #17 targeting PR #16's branch.
+- [x] 17B.3 Open PR #17 targeting PR #16's branch. (PR17a #115 — técnico forms, login, shared `.formulario` shape, harness hooks; the office half moved to PR17b below)
+
+## Phase 17b — PR17b: the two office organisms (split from PR17)
+
+*A faithful conversion of all four organisms plus the shared form shape
+measured 721 changed lines against a 300–360 estimate — the estimate was
+made before every retired rule had been read. Under `auto-chain` the batch
+split: PR17a (#115) shipped the técnico half; this phase carries the office
+half, which was built and verified green before being reverted for budget.*
+
+- [ ] 17b.1 RED: guard 20 rendered scan and the zero-BEM endpoint over `DetalleDeContrato` and `AccionesDeContrato`; must fail against their pre-redesign markup (raw `boton--destructivo`, `p.campo` + `campo-texto` inputs, ~20 `detalle-contrato__*` classes).
+- [ ] 17b.2 GREEN: redesign both off BEM (local `CLASE_*` constants, `<Boton variante="destructivo">`, `<CampoTexto>`/`<Etiqueta>` replacing raw markup, `gap-8` on the actions row).
+- [ ] 17b.3 Guard 4 in `AccionesDeContrato`'s real composition: destructive by its own variant, ≥32px gap (and ≥32px below the row where another control follows, as PR13's gate corrected) — carries task 17.3.
+- [ ] 17b.4 Update `registro.ts` entries 4 and 20 with the `AccionesDeContrato` titles; extend the zero-BEM `RUTAS_OBJETIVO` list — carries task 17.4 for these two files.
+- [ ] 17b.5 Run the full suite plus `pnpm size && pnpm handheld`; record results.
+- [ ] 17b.6 User visual review of the office detail screen.
+- [ ] 17b.7 Open PR #17b targeting PR17a's branch.
 
 ## Phase 18 — PR18: the six remaining containers (inventory gap)
 
