@@ -160,6 +160,70 @@ describe("PaginaListaContratos", () => {
     }
   });
 
+  /**
+   * PR22 — the user's report: scrolling the list moved EVERYTHING, working
+   * chrome included. The header already pins (guard 15's tree-wide scan);
+   * this freezes the second tier: the search box + estado chips pin
+   * directly under the header from `tableta:` up, offset by the SAME
+   * `--altura-cabecera-panel` token the header sizes itself with. Below
+   * `tableta:` the block measured 209px tall (chips stack at 360px) — plus
+   * the 65px header and the ~73px sticky paginator that would pin over
+   * half of a 640px viewport, so on handheld widths only the header pins.
+   * jsdom performs no layout; the class list is the observable contract.
+   */
+  it("pins the search chrome under the header from tableta up, with its own opaque background", async () => {
+    buscarContratosSimulado.mockResolvedValue(listaConUnContrato());
+
+    renderizarConCliente(clientePrueba());
+    await screen.findByRole("table");
+
+    const buscador = screen.getByRole("search");
+    const envoltorio = buscador.parentElement as HTMLElement;
+    const clases = envoltorio.className;
+
+    expect(clases).toMatch(/\btableta:sticky\b/);
+    // The offset is the header's height token — bracket var() spelling, the
+    // form guard 15's tree-wide inset regex recognises.
+    expect(clases).toMatch(/\btableta:top-\[var\(--altura-cabecera-panel\)\]/);
+    expect(clases).toMatch(/\bbg-fondo\b/);
+  });
+
+  /**
+   * The 24px gap below the search block used to be the form's own `mb-6` —
+   * a transparent margin. A margin below a pinned block is a window: rows
+   * scroll visibly through it. The gap must be the wrapper's own PADDING,
+   * covered by its opaque background.
+   */
+  it("owns the gap below the pinned search block as opaque padding, never a transparent margin", async () => {
+    buscarContratosSimulado.mockResolvedValue(listaConUnContrato());
+
+    renderizarConCliente(clientePrueba());
+    await screen.findByRole("table");
+
+    const buscador = screen.getByRole("search");
+    const envoltorio = buscador.parentElement as HTMLElement;
+
+    expect(envoltorio.className).toMatch(/\bpb-6\b/);
+    expect(buscador.className).not.toMatch(/\bmb-6\b/);
+  });
+
+  /**
+   * A page title may scroll away; the working controls may not. The h1
+   * outside the sticky wrapper is what makes the pinned chrome cost 103px
+   * instead of 160px of every scrolled viewport.
+   */
+  it("leaves the Contratos title outside the pinned block, free to scroll away", async () => {
+    buscarContratosSimulado.mockResolvedValue(listaConUnContrato());
+
+    renderizarConCliente(clientePrueba());
+    await screen.findByRole("table");
+
+    const envoltorio = screen.getByRole("search").parentElement as HTMLElement;
+    const titulo = screen.getByRole("heading", { level: 1, name: "Contratos" });
+
+    expect(envoltorio.contains(titulo)).toBe(false);
+  });
+
   it("Enter in the search box flushes the debounce immediately and never navigates", async () => {
     buscarContratosSimulado.mockResolvedValue(listaVacia());
     vi.useFakeTimers({ shouldAdvanceTime: true });

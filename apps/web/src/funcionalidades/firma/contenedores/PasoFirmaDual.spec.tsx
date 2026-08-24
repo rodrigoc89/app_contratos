@@ -185,8 +185,11 @@ describe("PasoFirmaDual", () => {
     expect(region).toHaveTextContent("Guardando los últimos cambios");
     // The Spinner atom is wired in beside the words (design.md "Progress"),
     // hidden from the accessibility tree so this status region stays the
-    // one live region a screen reader announces.
-    expect(region.querySelector(".spinner")).not.toBeNull();
+    // one live region a screen reader announces. Selected structurally
+    // (PR8 retires `.spinner`'s BEM class) rather than by Spinner's own
+    // Tailwind classes, which are an implementation detail this test
+    // should not depend on.
+    expect(region.querySelector('span[aria-hidden="true"] [role="status"]')).not.toBeNull();
 
     act(() => {
       vi.advanceTimersByTime(10_000);

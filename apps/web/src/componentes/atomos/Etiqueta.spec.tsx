@@ -10,10 +10,10 @@ describe("Etiqueta", () => {
     expect(screen.getByText("DNI")).toHaveAttribute("for", "dni");
   });
 
-  it("carries the shared label styling class (PR24a — atoms are the styling seam)", () => {
+  it("carries the shared label styling class (PR8 — inline-flex is now block)", () => {
     render(<Etiqueta htmlFor="dni">DNI</Etiqueta>);
 
-    expect(screen.getByText("DNI")).toHaveClass("etiqueta");
+    expect(screen.getByText("DNI")).toHaveClass("block");
   });
 });
 
@@ -27,7 +27,7 @@ describe("Etiqueta — className", () => {
   it("keeps its base class when no modifier is asked for", () => {
     render(<Etiqueta htmlFor="x">Nombre</Etiqueta>);
 
-    expect(screen.getByText("Nombre").className).toBe("etiqueta");
+    expect(screen.getByText("Nombre")).toHaveClass("block");
   });
 
   it("merges a caller's modifier instead of dropping it", () => {
@@ -38,7 +38,7 @@ describe("Etiqueta — className", () => {
     );
 
     const etiqueta = screen.getByText("Nombre");
-    expect(etiqueta.className).toContain("etiqueta");
-    expect(etiqueta.className).toContain("etiqueta--opcion");
+    expect(etiqueta).toHaveClass("block");
+    expect(etiqueta).toHaveClass("etiqueta--opcion");
   });
 });
