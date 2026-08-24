@@ -99,6 +99,49 @@ describe("the register validator catches a deleted guard, not an absent one (fal
   });
 });
 
+describe("the register leaves no entry dispositioned CSS once the sheets are gone (task 19.1)", () => {
+  it("names every entry still dispositioned CSS — none may remain before PR19 deletes the sheets", () => {
+    const entradasCss = REGISTRO.filter((entrada) => entrada.disposicion === "CSS");
+    expect(
+      entradasCss.map((entrada) => `#${entrada.numero} (${entrada.protege})`),
+      "entries still dispositioned CSS — the BEM sheets they read cannot be deleted yet",
+    ).toEqual([]);
+  });
+});
+
+describe("the register validator treats archivoCss as optional once a guard's CSS half retires (AMBOS, task 19.3)", () => {
+  const ENTRADA_AMBOS_SIN_CSS: EntradaDeRegistro = {
+    numero: 1,
+    protege: "fixture guard used only by this test",
+    disposicion: "AMBOS",
+    pruebas: [{ archivo: "estilos/convencionesDeCompilado.compilado.spec.ts", titulo: "fixture title, not checked here" }],
+  };
+
+  it("[naive-stub falsification] a stub requiring archivoCss unconditionally wrongly flags a retired-CSS AMBOS entry", () => {
+    const stubSiempreExigeArchivo = (registro: readonly EntradaDeRegistro[]): string[] =>
+      registro
+        .filter((entrada) => entrada.disposicion === "CSS" || entrada.disposicion === "AMBOS")
+        .filter((entrada) => !entrada.archivoCss)
+        .map((entrada) => `entry #${entrada.numero} names no CSS file`);
+
+    expect(stubSiempreExigeArchivo([ENTRADA_AMBOS_SIN_CSS])).not.toEqual([]);
+  });
+
+  it("does not flag an AMBOS entry that declares no archivoCss — its CSS half has retired", () => {
+    expect(erroresDeArchivoCss([ENTRADA_AMBOS_SIN_CSS], existeArchivoReal)).toEqual([]);
+  });
+
+  it("still flags a CSS-dispositioned entry that declares no archivoCss", () => {
+    const entradaCssSinArchivo: EntradaDeRegistro = { ...ENTRADA_AMBOS_SIN_CSS, disposicion: "CSS" };
+    expect(erroresDeArchivoCss([entradaCssSinArchivo], existeArchivoReal)).toHaveLength(1);
+  });
+
+  it("still flags an AMBOS entry whose declared archivoCss no longer exists", () => {
+    const entradaConCssBorrado: EntradaDeRegistro = { ...ENTRADA_AMBOS_SIN_CSS, archivoCss: "estilos/no-existe.css" };
+    expect(erroresDeArchivoCss([entradaConCssBorrado], existeArchivoReal)).toHaveLength(1);
+  });
+});
+
 describe("the register validator catches a dangling CSS reference, not an absent one (falsification, task 3.3)", () => {
   const ARCHIVO_CSS_BORRADO = "estilos/eliminado-en-este-fixture.css";
 

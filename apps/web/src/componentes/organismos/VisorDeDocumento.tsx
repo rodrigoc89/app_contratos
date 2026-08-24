@@ -76,13 +76,23 @@ export function VisorDeDocumento({ html, titulo, onCambiaEstado, crearObservador
     estado.estado === "pendiente" && estado.motivo === "cabe_sin_desplazar_falta_confirmar";
 
   return (
-    <div className="visor-documento">
+    <div className="mb-6">
+      {/*
+        Bounded to a FRACTION of the viewport height — never to content,
+        never unbounded. `puertaDeLectura.ts` distinguishes "scrolled to the
+        end" from "fits without scrolling — confirmation pending"; sizing
+        this to content (`h-auto`) or leaving it unbounded (any `min-h-*`)
+        would silently move every real two-page comodato onto the
+        confirmation branch by making it fit without scrolling. `h-[45vh]`
+        only — deliberately no `min-h-*` here (guard 17,
+        estilos/convencionesDeUtilidades.spec.ts).
+      */}
       <iframe
         ref={iframeRef}
         title={titulo}
         srcDoc={html}
         sandbox="allow-same-origin"
-        className="visor-documento__iframe"
+        className="block h-[45vh] w-full rounded-base border-2 border-borde-suave bg-fondo"
       />
       {requiereConfirmacionExplicita ? (
         <Boton type="button" onClick={() => establecerEstado((previo) => confirmar(previo))}>

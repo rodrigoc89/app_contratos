@@ -19,9 +19,11 @@ describe("MarcaProducto", () => {
     // children (`IES.NET` lives in a nested <span>), so the full rendered
     // name is read from the element's `textContent` instead — the same
     // concatenation an accessible-name computation performs.
+    // `[data-marca-producto]` replaces `.marca-producto` (PR8 — the BEM
+    // class is retired along with the rest of this atom's CSS styling).
     const { container } = render(<MarcaProducto />);
 
-    const marca = container.querySelector(".marca-producto");
+    const marca = container.querySelector("[data-marca-producto]");
     expect(marca).not.toBeNull();
     expect(marca?.textContent).toBe("IES.NET Contratos");
   });

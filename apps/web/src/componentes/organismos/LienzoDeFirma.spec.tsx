@@ -312,13 +312,14 @@ describe("LienzoDeFirma", () => {
     }).not.toThrow();
   });
 
-  it("carries the viewport-bounded signature-canvas class (PR24b — as large as the viewport reasonably allows, but never unbounded)", () => {
+  it("carries the bounded signature-canvas classes (design-system-migration PR13) — vh-boundedness itself is policed by guard 19 in convencionesDeUtilidades.spec.ts, not here", () => {
     const { superficie } = superficieFalsa();
     render(<LienzoDeFirma etiqueta="Firma" crearSuperficie={() => superficie} />);
     const lienzo = screen.getByRole("img", { name: "Firma" });
 
-    expect(lienzo).toHaveClass("lienzo-de-firma__lienzo");
-    expect(lienzo.parentElement).toHaveClass("lienzo-de-firma");
+    expect(lienzo.className).toMatch(/\bh-\[40vh\]/);
+    expect(lienzo.className).not.toMatch(/\bh-auto\b/);
+    expect(lienzo.className).not.toMatch(/\bmin-h-/);
   });
 
   /**
@@ -455,7 +456,10 @@ describe("LienzoDeFirma — la superficie se acota desde la hoja, no en línea",
     const envoltorio = lienzo.parentElement;
     const acciones = screen.getByRole("button", { name: "Deshacer" }).parentElement;
 
-    expect(envoltorio?.className).toContain("lienzo-de-firma");
+    // `data-lienzo-de-firma` (design-system-migration PR13) — same
+    // `data-*` hook pattern `[data-cabecera-de-sesion]` established: a
+    // Tailwind wrapper carries no stable BEM class name to assert on.
+    expect(envoltorio?.hasAttribute("data-lienzo-de-firma")).toBe(true);
     expect(envoltorio?.contains(acciones ?? null)).toBe(true);
   });
 });
