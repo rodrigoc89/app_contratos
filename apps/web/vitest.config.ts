@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defaultExclude, defineConfig } from "vitest/config";
 
 /**
  * `apps/web` is the only package in this monorepo whose unit suite touches
@@ -13,7 +13,17 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
-    include: ["src/**/*.spec.ts", "src/**/*.spec.tsx"],
+    // `scripts/**` holds standalone jiti CLI tools, same split `apps/api`'s
+    // own `vitest.config.ts` already uses — `techoDeDist.spec.ts` is the
+    // pure, filesystem-free unit suite for the dist/ size ceiling (design.md
+    // D7); the CLI driver itself needs a real `dist/` and runs only via
+    // `pnpm size`.
+    include: ["src/**/*.spec.ts", "src/**/*.spec.tsx", "scripts/**/*.spec.ts"],
+    // Compiled-output guards (design.md D2, guards 1/2/16) need a real
+    // `dist/` from `vite build`, which does not exist on a clean checkout —
+    // they run only via `pnpm test:compilado`
+    // (vitest.compilado.config.ts), in the bundle CI job, never here.
+    exclude: [...defaultExclude, "src/**/*.compilado.spec.ts"],
     environment: "jsdom",
     setupFiles: ["./src/tests/configuracionPruebas.ts"],
     passWithNoTests: true,

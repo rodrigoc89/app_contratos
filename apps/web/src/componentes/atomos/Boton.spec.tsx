@@ -30,10 +30,17 @@ describe("Boton", () => {
     expect(alHacerClic).not.toHaveBeenCalled();
   });
 
-  it("carries the shared button styling class (PR24a — atoms are the styling seam)", () => {
+  /**
+   * PR24a's "atoms are the styling seam" claim survives the redesign; only
+   * the literal marker changes. The BEM `.boton` class the migration
+   * retires (design-system-migration PR7) is replaced by `varianteBoton`'s
+   * `cva` base classes — `inline-flex` is the structural one every variant
+   * shares, so it is what proves the seam is still one place.
+   */
+  it("carries the shared cva base class (PR24a — atoms are the styling seam)", () => {
     render(<Boton onClick={() => {}}>Guardar</Boton>);
 
-    expect(screen.getByRole("button", { name: "Guardar" })).toHaveClass("boton");
+    expect(screen.getByRole("button", { name: "Guardar" })).toHaveClass("inline-flex");
   });
 
   /**

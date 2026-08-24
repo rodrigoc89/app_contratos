@@ -1,7 +1,7 @@
 import type { RouteObject } from "react-router-dom";
 
 import { LayoutPanel } from "../componentes/plantillas/LayoutPanel";
-import { LayoutTablet } from "../componentes/plantillas/LayoutTablet";
+import { LayoutTecnico } from "../componentes/plantillas/LayoutTecnico";
 import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
 import { GuardiaDeRolTecnico, GuardiaDeRoles, GuardiaDeSesion } from "../funcionalidades/auth/contenedores/GuardiasDeRuta";
 import { InicioTecnico } from "../funcionalidades/auth/contenedores/InicioTecnico";
@@ -16,7 +16,7 @@ import { TituloDeDocumento } from "./TituloDeDocumento";
  * placeholder. Exported separately from `enrutador.tsx` so tests can mount
  * it with `createMemoryRouter` instead of the real browser history.
  *
- * `GuardiaDeRolTecnico` (→ `/`, inside `LayoutTablet`) and
+ * `GuardiaDeRolTecnico` (→ `/`, inside `LayoutTecnico`) and
  * `GuardiaDeRoles permitidos={["oficina", "admin"]}` (→ `/contratos`,
  * `LayoutPanel`) are siblings directly under `GuardiaDeSesion`, the same as
  * `/panel-no-disponible` — that sibling placement is what lets a role
@@ -46,7 +46,7 @@ export const rutas: RouteObject[] = [
             children: [
               {
                 /*
-                  `LayoutTablet` existed but nothing ever mounted it, so the
+                  `LayoutTecnico` existed but nothing ever mounted it, so the
                   técnico's screens rendered with no shell — and therefore
                   with no way to sign out. On a tablet that passes between
                   technicians that is the half of the logout gap that
@@ -55,9 +55,9 @@ export const rutas: RouteObject[] = [
                 */
                 path: "/",
                 element: (
-                  <LayoutTablet cabecera={<CabeceraDeSesion />}>
+                  <LayoutTecnico cabecera={<CabeceraDeSesion />}>
                     <InicioTecnico />
-                  </LayoutTablet>
+                  </LayoutTecnico>
                 ),
                 handle: { titulo: "Inicio" },
               },

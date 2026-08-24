@@ -44,12 +44,13 @@ describe("CabeceraDeSesion", () => {
    *
    * `getByText`'s default matcher reads only a node's OWN direct text-node
    * children ("IES.NET" lives in a nested `<span>`), so the full rendered
-   * name is read from `.marca-producto`'s `textContent` instead.
+   * name is read from `[data-marca-producto]`'s `textContent` instead
+   * (PR8 — `.marca-producto` is retired along with the atom's BEM styling).
    */
   it("shows the IES.NET Contratos wordmark, without displacing the username or the logout button", () => {
     const { container } = render(<CabeceraDeSesion nombreUsuario="oficina" />);
 
-    expect(container.querySelector(".marca-producto")?.textContent).toBe("IES.NET Contratos");
+    expect(container.querySelector("[data-marca-producto]")?.textContent).toBe("IES.NET Contratos");
     expect(screen.getByText("oficina")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeInTheDocument();
   });
@@ -126,5 +127,50 @@ describe("CabeceraDeSesion", () => {
     } finally {
       process.off("unhandledRejection", anotarEscapada);
     }
+  });
+
+  /**
+   * The logout control is a `Power` glyph with no text, so its name has to
+   * come from an attribute — and `aria-label` is the only acceptable source
+   * here. `title` is not: screen readers treat it as a last-resort fallback
+   * and several do not announce it at all, yet it *does* satisfy the
+   * accessible-name computation `getByRole({ name })` uses.
+   *
+   * That is not theoretical. Deleting `aria-label` from the component was
+   * tried, and all 691 web specs still passed — every existing
+   * `getByRole("button", { name: "Cerrar sesión" })` was being satisfied by
+   * `title` alone. The suite looked like it guarded the label and did not.
+   *
+   * This test closes that gap by asserting the attribute itself, so removing
+   * `aria-label` fails here even while the accessible name survives.
+   */
+  it("names the icon-only logout control with aria-label, not only title", () => {
+    render(<CabeceraDeSesion nombreUsuario="oficina" />);
+
+    const salir = screen.getByRole("button", { name: "Cerrar sesión" });
+
+    expect(salir.getAttribute("aria-label")).toBe("Cerrar sesión");
+  });
+
+  /**
+   * PR22 — the header pins (guard 15's tree-wide scan already holds the
+   * sticky+inset+background triple), and now at an EXPLICIT height: the
+   * list page's search block anchors its own sticky offset at
+   * `--altura-cabecera-panel`, so the header must render exactly that tall
+   * (65px, the measured natural height — 48px control + 2x8px padding +
+   * 1px border) or the second tier would pin over a gap or under a lip.
+   * jsdom performs no layout, so the class list is the observable contract.
+   */
+  it("pins at the token height the panel's second sticky tier anchors below", () => {
+    const { container } = render(<CabeceraDeSesion nombreUsuario="oficina" />);
+
+    const cabecera = container.querySelector("[data-cabecera-de-sesion]");
+    expect(cabecera, "the [data-cabecera-de-sesion] hook is gone").not.toBeNull();
+    const clases = cabecera?.className ?? "";
+
+    expect(clases).toMatch(/\bsticky\b/);
+    expect(clases).toMatch(/\btop-0\b/);
+    expect(clases).toMatch(/\bbg-fondo\b/);
+    expect(clases).toMatch(/\bh-\[var\(--altura-cabecera-panel\)\]/);
   });
 });

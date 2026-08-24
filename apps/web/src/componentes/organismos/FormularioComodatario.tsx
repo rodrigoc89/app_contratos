@@ -4,6 +4,12 @@ import { Boton } from "../atomos/Boton";
 import { CampoTexto } from "../atomos/CampoTexto";
 import { Etiqueta } from "../atomos/Etiqueta";
 import { IndicadorDePaso, PASOS_DEL_BORRADOR } from "../moleculas/IndicadorDePaso";
+import {
+  CLASE_CAMPO_FORMULARIO,
+  CLASE_ETIQUETA_FORMULARIO,
+  CLASE_FORMULARIO,
+  CLASE_TITULO_FORMULARIO,
+} from "../../estilos/formulario";
 
 /**
  * Step 1 of the `borrador` form — `EsquemaComodatario`'s five fields
@@ -50,12 +56,14 @@ export function FormularioComodatario({
   }
 
   return (
-    <form onSubmit={manejarEnvio} className="formulario">
+    <form onSubmit={manejarEnvio} className={CLASE_FORMULARIO} data-formulario>
       <IndicadorDePaso pasos={PASOS_DEL_BORRADOR} actual={1} />
-      <h1>Nuevo contrato</h1>
+      <h1 className={CLASE_TITULO_FORMULARIO}>Nuevo contrato</h1>
       {CAMPOS.map(({ campo, etiqueta }) => (
-        <div key={campo} className="formulario__campo">
-          <Etiqueta htmlFor={campo}>{etiqueta}</Etiqueta>
+        <div key={campo} className={CLASE_CAMPO_FORMULARIO}>
+          <Etiqueta htmlFor={campo} className={CLASE_ETIQUETA_FORMULARIO}>
+            {etiqueta}
+          </Etiqueta>
           <CampoTexto
             id={campo}
             value={valores[campo]}
@@ -65,7 +73,9 @@ export function FormularioComodatario({
         </div>
       ))}
       {error !== null && <p role="alert">{error}</p>}
-      <Boton type="submit" disabled={deshabilitado}>
+      {/* `.formulario > .boton`'s 24px breathing room, ported directly since
+          this is the step's only bare action (no `.formulario__acciones` row). */}
+      <Boton type="submit" className="mt-6" disabled={deshabilitado}>
         Continuar
       </Boton>
     </form>
