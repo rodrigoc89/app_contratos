@@ -396,14 +396,14 @@ finding; that window is three draft PRs, none of which gate anything.*
 
 ## Phase 14 — PR14: `EscanerDeMac` redesign (slice F3, guard 2 final)
 
-- [ ] 14.1 RED: real `[hidden]` containment on the converted `<video hidden>` camera preview — confirms PR6's compiled-scan guard still catches a regression on this specific component. Must fail if `hidden` is dropped or replaced incorrectly during redesign.
-- [ ] 14.2 GREEN: redesign `EscanerDeMac.tsx`, preserving the `[hidden]` containment.
+- [x] 14.1 RED: real `[hidden]` containment on the converted `<video hidden>` camera preview — confirms PR6's compiled-scan guard still catches a regression on this specific component. Must fail if `hidden` is dropped or replaced incorrectly during redesign.
+- [x] 14.2 GREEN: redesign `EscanerDeMac.tsx`, preserving the `[hidden]` containment.
 
 ## Phase 14B — PR14 close-out
 
-- [ ] 14B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 14B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
 - [ ] 14B.2 User visual review.
-- [ ] 14B.3 Open PR #14 targeting PR #13's branch.
+- [x] 14B.3 Open PR #14 targeting PR #13's branch. (#112)
 
 ## Phase 15 — PR15: `TablaDeContratos` redesign (slice F4, guards 5/16/20 final)
 
