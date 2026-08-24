@@ -25,7 +25,7 @@
 # Every path is overridable via environment variable, same harness pattern
 # as the other deploy/ scripts (design.md D8): restore.spec.ts execFiles
 # this script against scratch temp directories, never against a real
-# database or /srv/contratos/documentos.
+# database or /opt/contratos/var/documentos.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

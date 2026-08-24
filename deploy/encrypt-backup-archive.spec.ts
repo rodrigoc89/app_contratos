@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -216,11 +216,24 @@ describe("encrypt-backup-archive.sh", () => {
     await writeFile(fixtureFile, "irrelevant\n", "utf-8");
     const outputFile = join(scratch, "fixture.txt.enc");
 
-    // No AGE_RECIPIENT, no GPG_RECIPIENT — age is not installed here, so
-    // this exercises the gpg branch's guard.
+    // No AGE_RECIPIENT, no GPG_RECIPIENT, and a PATH holding only `bash`
+    // (for the shebang), so age is absent whatever this machine has
+    // installed — the day `age` landed on a developer box this test went
+    // red for exercising the age branch instead. The gpg branch's guard
+    // refuses before it ever looks for gpg itself, so nothing else is
+    // needed on that PATH.
+    const binDir = join(scratch, "bin-without-age");
+    await mkdir(binDir, { recursive: true });
+    await symlink("/bin/bash", join(binDir, "bash"));
+
     const error = await expectToFail(
       execFileAsync(SCRIPT, [fixtureFile, outputFile], {
-        env: { ...process.env, GPG_RECIPIENT: undefined, AGE_RECIPIENT: undefined },
+        env: {
+          ...process.env,
+          PATH: binDir,
+          GPG_RECIPIENT: undefined,
+          AGE_RECIPIENT: undefined,
+        },
       }),
     );
 

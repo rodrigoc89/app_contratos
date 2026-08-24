@@ -1,7 +1,11 @@
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import { describe, expect, it } from "vitest";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * The systemd units are the only artifacts under `deploy/` that had no spec,
@@ -30,6 +34,29 @@ function leerUnidad(nombre: string): Map<string, string[]> {
 
 const unaSola = (directivas: Map<string, string[]>, clave: string): string | undefined =>
   directivas.get(clave)?.at(-1);
+
+/**
+ * provision.sh installs these units from the checkout, so every path a unit
+ * needs to exist must be one provision.sh creates — read from its own
+ * dry-run plan, never restated here. With ProtectSystem=strict systemd
+ * bind-mounts each ReadWritePaths entry before ExecStart; a path that does
+ * not exist fails the start with status=226/NAMESPACE (seen on the real
+ * host, gap #7), and no `mkdir -p` inside the script can help by then.
+ */
+async function directoriosQueProvisionCrea(): Promise<{
+  appDir: string | undefined;
+  directorios: string[];
+}> {
+  const { stdout } = await execFileAsync(join(import.meta.dirname, "provision.sh"), ["--dry-run"]);
+  const appDir = /^== provision\.sh plan for (.+) \(dry-run=/m.exec(stdout)?.[1];
+  const directorios = [...stdout.matchAll(/^\[(?:plan|skip)\] .*directory '([^']+)'/gm)]
+    .map((coincidencia) => coincidencia[1])
+    .filter((ruta): ruta is string => ruta !== undefined);
+  return { appDir, directorios };
+}
+
+const rutasDeEscritura = (unidad: Map<string, string[]>): string[] =>
+  (unidad.get("ReadWritePaths") ?? []).flatMap((valor) => valor.split(/\s+/));
 
 describe("contratos-backup.service", () => {
   const unidad = leerUnidad("contratos-backup.service");
@@ -68,6 +95,22 @@ describe("contratos-backup.service", () => {
     ).toBe(true);
   });
 
+  it("only names directories provision.sh creates in ReadWritePaths and GNUPGHOME", async () => {
+    // On the real host /etc/contratos/gnupg did not exist when the timer
+    // was installed; backup.sh creates its work directory itself, but under
+    // this unit the namespace is assembled first, so both have to be
+    // provisioned ahead of the first run.
+    const { directorios } = await directoriosQueProvisionCrea();
+    const gnupgHome = (unidad.get("Environment") ?? [])
+      .map((entrada) => /^"?GNUPGHOME=(.+?)"?$/.exec(entrada)?.[1])
+      .find((valor): valor is string => valor !== undefined);
+
+    for (const ruta of rutasDeEscritura(unidad)) {
+      expect(directorios, `ReadWritePaths entry '${ruta}'`).toContain(ruta);
+    }
+    expect(directorios, `GNUPGHOME '${gnupgHome}'`).toContain(gnupgHome);
+  });
+
   it("orders itself after the database it dumps", () => {
     expect(unaSola(unidad, "After")).toContain("postgresql.service");
   });
@@ -81,6 +124,27 @@ describe("contratos-backup.service", () => {
 
   it("is triggered by the timer, never enabled on its own", () => {
     expect(unidad.get("WantedBy")).toBeUndefined();
+  });
+});
+
+describe("contratos-api.service", () => {
+  const unidad = leerUnidad("contratos-api.service");
+
+  it("grants write access to the exact directory provision.sh creates for the documents", async () => {
+    // provision.sh installs this unit from the checkout, so the repository
+    // copy is what runs. On the real host it named /srv/contratos/documentos
+    // while provision.sh (DOCUMENT_STORE_DIR) and backup.sh create
+    // /opt/contratos/var/documentos; systemd could not mount a path that
+    // does not exist and the first deploy died with status=226/NAMESPACE.
+    // The default is read from provision.sh's own plan, not restated here:
+    // the document store is the one directory it creates under $APP_DIR.
+    const { appDir, directorios } = await directoriosQueProvisionCrea();
+    const documentStoreDir = directorios.find(
+      (ruta) => ruta !== appDir && ruta.startsWith(`${appDir}/`),
+    );
+    expect(documentStoreDir).toBeDefined();
+
+    expect(rutasDeEscritura(unidad)).toEqual([documentStoreDir]);
   });
 });
 

@@ -37,6 +37,21 @@ SWAP_FILE="${SWAP_FILE:-/swapfile}"
 SWAP_SIZE_MB="${SWAP_SIZE_MB:-2048}"
 FSTAB_FILE="${FSTAB_FILE:-/etc/fstab}"
 GIT_EXCLUDE_FILE="${GIT_EXCLUDE_FILE:-$APP_DIR/.git/info/exclude}"
+# Root-only configuration: api.env, backup.env, the database password below,
+# and the gpg keyring contratos-backup.service points GNUPGHOME at.
+ETC_CONTRATOS_DIR="${ETC_CONTRATOS_DIR:-/etc/contratos}"
+GNUPG_HOME_DIR="${GNUPG_HOME_DIR:-$ETC_CONTRATOS_DIR/gnupg}"
+# backup.sh's staging + local-retention directory (same variable name there).
+BACKUP_WORK_DIR="${BACKUP_WORK_DIR:-/var/backups/contratos-offsite}"
+SYSTEMD_UNIT_DIR="${SYSTEMD_UNIT_DIR:-/etc/systemd/system}"
+API_UNIT_SOURCE="${API_UNIT_SOURCE:-$APP_DIR/deploy/contratos-api.service}"
+API_UNIT_TARGET="${API_UNIT_TARGET:-$SYSTEMD_UNIT_DIR/contratos-api.service}"
+DB_ROLE="${DB_ROLE:-contratos}"
+DB_NAME="${DB_NAME:-contratos}"
+# Written once, when the role is created, and nowhere else — the operator
+# composes DATABASE_URL in /etc/contratos/api.env from it (deploy/README.md,
+# "Database").
+DB_PASSWORD_FILE="${DB_PASSWORD_FILE:-$ETC_CONTRATOS_DIR/db.password}"
 PUPPETEER_VERSION="${PUPPETEER_VERSION:-25.4.0}"
 # Root package.json: `engines.node >=22`, `packageManager: pnpm@11.11.0`.
 # 24 is the Active LTS line and what .github/workflows/ci.yml pins (the
@@ -84,6 +99,9 @@ provision_packages() {
     ca-certificates
     gnupg
     lsb-release
+    # A bare Ubuntu server image ships no git; the safe.directory step below
+    # and every `git -C $APP_DIR` in deploy.sh need it.
+    git
     # puppeteer / @puppeteer/browsers extract Chrome-for-Testing zips with
     # `unzip`, falling back to the optional `yauzl` package. npm (the npx in
     # the Chromium step below) does not install that optional peer, and a
@@ -94,6 +112,15 @@ provision_packages() {
     fontconfig
     fonts-dejavu-core
     fonts-liberation
+    # pdffonts + pdftotext: the render verdict's two PDF layers (D2), which
+    # the post-VPS checklist requires to pass — RECHAZADO on the fresh host
+    # until this was installed by hand.
+    poppler-utils
+    # backup.sh (D7): rclone pushes the archive offsite, age encrypts it to
+    # the operator's public key (the gpg fallback stays) — both absent on
+    # the real host until installed by hand.
+    rclone
+    age
   )
 
   if [ "$DRY_RUN" = true ]; then
@@ -124,6 +151,92 @@ provision_postgresql() {
     "$codename" > /etc/apt/sources.list.d/pgdg.list
   apt-get update
   apt-get install -y postgresql-17
+}
+
+# --------------------------------------------------------------- database
+
+# Installing postgresql-17 gives a running cluster and nothing in it; the
+# role and database DATABASE_URL points at existed on the real host only
+# because nobody had asked yet — deploy.sh's `prisma migrate deploy` was the
+# first to, and failed. Two guards, like the swapfile and its fstab entry:
+# the role and the database can each exist without the other.
+#
+# Every statement reaches psql on STDIN, never on argv: `ps` shows every
+# process's arguments to every user on the host, and one of these
+# statements carries the password. The password itself is generated on the
+# host, only when the role is being created, and written to exactly one
+# place — $DB_PASSWORD_FILE, root:root 0600 — from which the operator
+# composes DATABASE_URL. An existing role is never altered: this script does
+# not know its password and must not rotate it out from under a working
+# DATABASE_URL.
+#
+# The probes run in --dry-run too (as root they answer; as a non-root
+# operator `sudo -n` refuses without prompting and the step plans), so a
+# root dry run reports skip/plan accurately, same as every other guard.
+require_sql_identifier() {
+  local name="$1" value="$2"
+  case "$value" in
+    '' | [0-9]* | *[!A-Za-z0-9_]*)
+      echo "provision.sh: $name must be a plain SQL identifier ([A-Za-z_][A-Za-z0-9_]*), got '$value'" >&2
+      exit 1
+      ;;
+  esac
+}
+
+# `cd /` first: sudo switching to `postgres` from a cwd that user cannot
+# read makes psql warn "could not change directory" on every call.
+psql_as_postgres() {
+  (cd / && sudo -n -u postgres psql -X -qtA -v ON_ERROR_STOP=1 -d postgres)
+}
+
+database_role_exists() {
+  local found
+  found="$(printf "SELECT 1 FROM pg_roles WHERE rolname = '%s';\n" "$DB_ROLE" \
+    | psql_as_postgres 2>/dev/null)" || return 1
+  [ "$found" = 1 ]
+}
+
+database_exists() {
+  local found
+  found="$(printf "SELECT 1 FROM pg_database WHERE datname = '%s';\n" "$DB_NAME" \
+    | psql_as_postgres 2>/dev/null)" || return 1
+  [ "$found" = 1 ]
+}
+
+create_database_role() {
+  local password
+  password="$(openssl rand -hex 24)"
+  printf "CREATE ROLE \"%s\" LOGIN PASSWORD '%s';\n" "$DB_ROLE" "$password" | psql_as_postgres
+
+  local dir
+  dir="$(dirname "$DB_PASSWORD_FILE")"
+  [ -d "$dir" ] || install -d -m 700 "$dir"
+  (umask 077 && printf '%s\n' "$password" > "$DB_PASSWORD_FILE")
+  chown root:root "$DB_PASSWORD_FILE"
+  chmod 600 "$DB_PASSWORD_FILE"
+  log "created postgres role '$DB_ROLE'; its password is in '$DB_PASSWORD_FILE' (root:root, mode 600) — set DATABASE_URL=postgresql://$DB_ROLE:<that password>@localhost:5432/$DB_NAME in /etc/contratos/api.env"
+}
+
+provision_database() {
+  require_sql_identifier DB_ROLE "$DB_ROLE"
+  require_sql_identifier DB_NAME "$DB_NAME"
+
+  if database_role_exists; then
+    skip "postgres role '$DB_ROLE' already exists (password left untouched)"
+  elif [ "$DRY_RUN" = true ]; then
+    plan "would create postgres role '$DB_ROLE' (LOGIN) with a generated password written only to '$DB_PASSWORD_FILE' (root:root, mode 600)"
+  else
+    create_database_role
+  fi
+
+  if database_exists; then
+    skip "postgres database '$DB_NAME' already exists"
+  elif [ "$DRY_RUN" = true ]; then
+    plan "would create postgres database '$DB_NAME' owned by '$DB_ROLE'"
+  else
+    printf 'CREATE DATABASE "%s" OWNER "%s";\n' "$DB_NAME" "$DB_ROLE" | psql_as_postgres
+    log "created postgres database '$DB_NAME' owned by '$DB_ROLE'"
+  fi
 }
 
 # ------------------------------------------------------------ node + pnpm
@@ -322,8 +435,16 @@ provision_user() {
 # idempotency for every OTHER directory (starting with
 # $DOCUMENT_STORE_DIR / ALMACEN_DOCUMENTOS_RUTA) on both a fresh host and a
 # re-run.
+#
+# Owner, group and mode default to the service user's 750; the root-only
+# directories below pass root:root 700. Every directory a unit lists in
+# ReadWritePaths= has to exist before that unit first starts: with
+# ProtectSystem=strict systemd bind-mounts them BEFORE ExecStart, so a
+# missing one is status=226/NAMESPACE and no `mkdir -p` inside the script
+# ever gets to run — which is why backup.sh creating $BACKUP_WORK_DIR itself
+# was not enough on the real host.
 provision_dir() {
-  local dir="$1"
+  local dir="$1" owner="${2:-$SERVICE_USER}" group="${3:-$SERVICE_USER}" mode="${4:-750}"
 
   if [ -d "$dir" ]; then
     skip "directory '$dir' already exists"
@@ -331,11 +452,11 @@ provision_dir() {
   fi
 
   if [ "$DRY_RUN" = true ]; then
-    plan "would create directory '$dir' (owner $SERVICE_USER:$SERVICE_USER, mode 750)"
+    plan "would create directory '$dir' (owner $owner:$group, mode $mode)"
     return
   fi
 
-  install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$dir"
+  install -d -o "$owner" -g "$group" -m "$mode" "$dir"
   log "created directory '$dir'"
 }
 
@@ -348,25 +469,162 @@ provision_dir() {
 # own .gitignore (verified: `git check-ignore .cache` reports no match), so
 # this has to live in the local, unshared `info/exclude` instead.
 #
+# The same home/checkout overlap has a second consequence, seen on the real
+# host: `useradd --create-home` copies /etc/skel into $APP_DIR, so
+# `.bash_logout`, `.bashrc` and `.profile` sit untracked inside the checkout
+# and the very first `deploy.sh` refuses over a "dirty" worktree. They are
+# excluded here too, each entry guarded on its own line so a host provisioned
+# before they were added still gains them.
+#
 # This step is safe to run before the repository is ever cloned into
 # $APP_DIR: it only creates the directory chain that would hold that
 # exclude file. Clone the repository into $APP_DIR before or after running
 # this script — either order works, since re-running provision.sh is
 # exactly what this guard is for.
+GIT_EXCLUDE_ENTRIES=('.cache/' '.bash_logout' '.bashrc' '.profile')
+
+git_exclude_entry_present() {
+  [ -f "$GIT_EXCLUDE_FILE" ] && grep -qxF "$1" "$GIT_EXCLUDE_FILE"
+}
+
 provision_git_exclude() {
-  if [ -f "$GIT_EXCLUDE_FILE" ] && grep -qxF '.cache/' "$GIT_EXCLUDE_FILE"; then
-    skip "'.cache/' already present in '$GIT_EXCLUDE_FILE'"
+  local entry
+  for entry in "${GIT_EXCLUDE_ENTRIES[@]}"; do
+    if git_exclude_entry_present "$entry"; then
+      skip "'$entry' already present in '$GIT_EXCLUDE_FILE'"
+      continue
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+      plan "would append '$entry' to '$GIT_EXCLUDE_FILE'"
+      continue
+    fi
+
+    mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
+    printf '%s\n' "$entry" >> "$GIT_EXCLUDE_FILE"
+    log "added '$entry' to '$GIT_EXCLUDE_FILE'"
+  done
+}
+
+# ---------------------------------------------------- git safe.directory
+
+# deploy.sh runs as root (`sudo TAG=… deploy/deploy.sh`) against a checkout
+# owned by $SERVICE_USER. git refuses to read a repository owned by another
+# user ("detected dubious ownership") unless that path is listed in
+# safe.directory, so on the real host every `git -C $APP_DIR` in deploy.sh
+# failed and its repository guard reported "not a git checkout". The
+# system-wide config (/etc/gitconfig) is the right scope: it applies to root
+# no matter which HOME sudo hands it, and it is exactly what was run by hand
+# on the host. Read through git itself, so the spec can point it at a scratch
+# file with GIT_CONFIG_SYSTEM instead of this machine's real one.
+git_safe_directory_present() {
+  local listed dir
+  listed="$(git config --system --get-all safe.directory 2>/dev/null || true)"
+  while IFS= read -r dir; do
+    if [ "$dir" = "$APP_DIR" ]; then
+      return 0
+    fi
+  done <<< "$listed"
+  return 1
+}
+
+provision_git_safe_directory() {
+  if git_safe_directory_present; then
+    skip "'$APP_DIR' already listed in git's system-wide safe.directory"
     return
   fi
 
   if [ "$DRY_RUN" = true ]; then
-    plan "would append '.cache/' to '$GIT_EXCLUDE_FILE'"
+    plan "would run: git config --system --add safe.directory '$APP_DIR'"
     return
   fi
 
-  mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
-  printf '.cache/\n' >> "$GIT_EXCLUDE_FILE"
-  log "added '.cache/' to '$GIT_EXCLUDE_FILE'"
+  git config --system --add safe.directory "$APP_DIR"
+  log "added '$APP_DIR' to git's system-wide safe.directory"
+}
+
+# ---------------------------------------------------------- systemd units
+
+# The units are taken from the checkout itself, so these steps need the
+# clone to exist and therefore run last — on a first run before the clone
+# they skip and say to re-run, which is what idempotent provisioning is
+# for. Each guard is "byte-identical AND enabled", so an edited unit in the
+# checkout is reinstalled and a disabled one is re-enabled.
+unit_file_current() {
+  local source="$1" target="$2"
+  [ -f "$target" ] && cmp -s "$source" "$target"
+}
+
+unit_enabled() {
+  systemctl is-enabled --quiet "$1" 2>/dev/null
+}
+
+unit_active() {
+  systemctl is-active --quiet "$1" 2>/dev/null
+}
+
+# deploy.sh's start step assumes contratos-api.service exists, and nothing
+# installed it: the README only ever documented copying the backup units.
+# It is never started here: deploy.sh starts it, after migrate/seed/publish.
+provision_api_unit() {
+  local unit="${API_UNIT_TARGET##*/}"
+
+  if [ ! -f "$API_UNIT_SOURCE" ]; then
+    skip "'$API_UNIT_SOURCE' not found — clone the repository into '$APP_DIR' and re-run provision.sh to install $unit"
+    return
+  fi
+
+  if unit_file_current "$API_UNIT_SOURCE" "$API_UNIT_TARGET" && unit_enabled "$unit"; then
+    skip "$unit already installed at '$API_UNIT_TARGET' (identical) and enabled"
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]; then
+    plan "would install '$API_UNIT_SOURCE' as '$API_UNIT_TARGET' (mode 644), run systemctl daemon-reload, and enable $unit — never start it"
+    return
+  fi
+
+  install -m 644 "$API_UNIT_SOURCE" "$API_UNIT_TARGET"
+  systemctl daemon-reload
+  systemctl enable "$unit"
+  log "installed and enabled $unit from '$API_UNIT_SOURCE' (not started — deploy.sh starts it)"
+}
+
+# contratos-backup.service is triggered by contratos-backup.timer and has no
+# [Install] section of its own, so only the timer is enabled — and started
+# (`--now`), otherwise it waits for a reboot. Enabling it before
+# /etc/contratos/backup.env exists is deliberate: backup.sh exits 1 naming
+# the missing file, so a premature nightly run fails loudly in the journal
+# instead of the schedule silently not existing until someone remembers.
+provision_backup_units() {
+  local service_source="$APP_DIR/deploy/contratos-backup.service"
+  local timer_source="$APP_DIR/deploy/contratos-backup.timer"
+  local service_target="$SYSTEMD_UNIT_DIR/contratos-backup.service"
+  local timer_target="$SYSTEMD_UNIT_DIR/contratos-backup.timer"
+  local timer="${timer_target##*/}"
+
+  if [ ! -f "$service_source" ] || [ ! -f "$timer_source" ]; then
+    skip "'$service_source' or '$timer_source' not found — clone the repository into '$APP_DIR' and re-run provision.sh to install and enable $timer"
+    return
+  fi
+
+  if unit_file_current "$service_source" "$service_target" \
+    && unit_file_current "$timer_source" "$timer_target" \
+    && unit_enabled "$timer" && unit_active "$timer"; then
+    skip "${service_target##*/} and $timer already installed in '$SYSTEMD_UNIT_DIR' (identical), $timer enabled and active"
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]; then
+    plan "would install '$service_source' and '$timer_source' into '$SYSTEMD_UNIT_DIR' (mode 644), run systemctl daemon-reload, and enable --now $timer"
+    return
+  fi
+
+  install -m 644 "$service_source" "$service_target"
+  install -m 644 "$timer_source" "$timer_target"
+  systemctl daemon-reload
+  systemctl enable --now "$timer"
+  log "installed ${service_target##*/} and $timer from '$APP_DIR/deploy'; $timer enabled and started (backup.sh refuses until '$ETC_CONTRATOS_DIR/backup.env' exists)"
 }
 
 main() {
@@ -379,6 +637,7 @@ main() {
 
   provision_packages
   provision_postgresql
+  provision_database
   provision_node
   provision_chromium_deps
   provision_fonts_cache
@@ -386,7 +645,13 @@ main() {
   provision_user
   provision_dir "$APP_DIR"
   provision_dir "$DOCUMENT_STORE_DIR"
+  provision_dir "$ETC_CONTRATOS_DIR" root root 700
+  provision_dir "$GNUPG_HOME_DIR" root root 700
+  provision_dir "$BACKUP_WORK_DIR" root root 700
   provision_git_exclude
+  provision_git_safe_directory
+  provision_api_unit
+  provision_backup_units
 
   log "== done =="
 }

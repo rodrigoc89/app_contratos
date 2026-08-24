@@ -5,12 +5,12 @@
 # Before installing, replace:
 #   - `/opt/contratos`            → where the repository is deployed
 #   - `/usr/local/bin/pnpm`       → the output of `which pnpm` on the server
-#   - `/srv/contratos/documentos` → the signed-PDF archive root, which must
+#   - `/opt/contratos/var/documentos` → the signed-PDF archive root, which must
 #                                   match ALMACEN_DOCUMENTOS_RUTA exactly
 #
 # Install:
 #   sudo useradd --system --home /opt/contratos --shell /usr/sbin/nologin contratos
-#   sudo install -m 0750 -o contratos -g contratos -d /srv/contratos/documentos
+#   sudo install -m 0750 -o contratos -g contratos -d /opt/contratos/var/documentos
 #   sudo install -m 0700 -o root -g root -d /etc/contratos
 #   # write /etc/contratos/api.env, then:
 #   sudo chown root:contratos /etc/contratos/api.env
@@ -43,7 +43,7 @@ WorkingDirectory=/opt/contratos/apps/api
 #
 # Two variables are easy to get wrong and both are called out below:
 #   CONFIAR_EN_PROXY=true
-#   ALMACEN_DOCUMENTOS_RUTA=/srv/contratos/documentos
+#   ALMACEN_DOCUMENTOS_RUTA=/opt/contratos/var/documentos
 EnvironmentFile=/etc/contratos/api.env
 
 # `jiti src/main.ts` is the real entry point, in production as well as in dev
@@ -81,7 +81,7 @@ ProtectControlGroups=true
 # the moment it is stored. This path must equal ALMACEN_DOCUMENTOS_RUTA — note
 # that the schema's default is the RELATIVE `var/documentos`, which resolves
 # against WorkingDirectory and is not what you want in production.
-ReadWritePaths=/srv/contratos/documentos
+ReadWritePaths=/opt/contratos/var/documentos
 
 # Deliberately NOT set: RestrictNamespaces, PrivateUsers, SystemCallFilter.
 # Chromium's own sandbox needs user and PID namespaces, and restricting them

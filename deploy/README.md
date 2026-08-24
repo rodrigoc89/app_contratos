@@ -9,12 +9,21 @@ and where the one remaining question this chain cannot answer gets resolved.
 
 ## Quick path
 
-1. Provision the host once, as root: `sudo deploy/provision.sh`
-2. Deploy the application: `TAG=v1.2.3 deploy/deploy.sh`
-3. Bootstrap TLS: `sudo CONTRATOS_HOST=contratos.example.com deploy/tls-bootstrap.sh`
-4. Schedule daily backups: `sudo systemctl enable --now contratos-backup.timer`
-   (offsite, encrypted — see "Backup" below)
-5. **Before the first real customer *comodato* is signed**, run one real
+1. Provision the host once, as root: `sudo deploy/provision.sh`, then write
+   `/etc/contratos/api.env` with a `DATABASE_URL` built from the password
+   it left in `/etc/contratos/db.password` (see "Database" below)
+2. Clone the repository into `/opt/contratos` (as `contratos`), then run
+   `sudo deploy/provision.sh` again: the last step installs and enables
+   `contratos-api.service` from the checkout and skips with a reminder
+   while there is none — every other step reports `[skip]` on that re-run
+3. Deploy the application: `TAG=v1.2.3 deploy/deploy.sh`
+4. Bootstrap TLS: `sudo CONTRATOS_HOST=contratos.example.com deploy/tls-bootstrap.sh`
+5. Configure backups: write `/etc/contratos/backup.env` and import the
+   recipient's public key (see "Backup" and "Scheduled backups" below).
+   `provision.sh` already installed and enabled `contratos-backup.timer`
+   on the re-run in step 2 — until `backup.env` exists every nightly run
+   fails loudly in the journal, which is the intended state, not an error
+6. **Before the first real customer *comodato* is signed**, run one real
    restore drill (see "Restore drill" below) — this is the go-live gate
    (task 10.4).
 
@@ -25,7 +34,7 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 
 | Order | Script | What it does | Status |
 |---|---|---|---|
-| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Node.js 24 (NodeSource) + pnpm 11.11.0 at `/usr/local/bin/pnpm` (the path `contratos-api.service` executes), Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | Done |
+| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17 with the `contratos` role + database (password written once to `/etc/contratos/db.password` — see "Database" below), Node.js 24 (NodeSource) + pnpm 11.11.0 at `/usr/local/bin/pnpm` (the path `contratos-api.service` executes), Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, the `contratos` service user + directories, git's `safe.directory` for root, and — last, from the checkout — `contratos-api.service` installed and enabled (never started) plus `contratos-backup.service`/`.timer` installed with the timer enabled and started | Done |
 | 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5); the `publish` step calls `publicar-assets.sh` (D4, row 2a) | Done |
 | 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | Done |
 | 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) — see "TLS bootstrap" below | Done |
@@ -46,17 +55,30 @@ requirement:
 
 | Resource | Already present | Not yet present |
 |---|---|---|
+| Postgres role `DB_ROLE` and database `DB_NAME` (two guards) | `[skip] postgres role 'contratos' already exists (password left untouched)` / `[skip] postgres database 'contratos' already exists` | `[plan] would create postgres role 'contratos' (LOGIN) with a generated password written only to '/etc/contratos/db.password' (root:root, mode 600)` / `[plan] would create postgres database 'contratos' owned by 'contratos'` |
 | `contratos` system user | `[skip] user '…' already exists` | `[plan] would create system user '…'` |
-| `$APP_DIR`, `$DOCUMENT_STORE_DIR` | `[skip] directory '…' already exists` | `[plan] would create directory '…'` |
+| `$APP_DIR`, `$DOCUMENT_STORE_DIR` (`contratos:contratos` 750); `/etc/contratos`, `/etc/contratos/gnupg`, `/var/backups/contratos-offsite` (`root:root` 700 — every path `contratos-backup.service` lists in `ReadWritePaths=`/`GNUPGHOME`) | `[skip] directory '…' already exists` | `[plan] would create directory '…' (owner …, mode …)` |
 | Swapfile + its `/etc/fstab` entry | `[skip] swapfile '…' already exists` / `[skip] fstab entry for '…' already present` | `[plan] would create a 2048MB swapfile at '…'` / `[plan] would append '… none swap sw 0 0' to '…'` |
-| `.cache/` in the git exclude file | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
+| `.cache/`, `.bash_logout`, `.bashrc`, `.profile` in the git exclude file (one guard per entry) | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
 | Node.js ≥ `NODE_MAJOR` and pnpm = `PNPM_VERSION` on `$PATH` | `[skip] node v… (>= 24) and pnpm 11.11.0 already installed` | `[plan] would install Node.js 24 (NodeSource) and pnpm 11.11.0` |
+| `$APP_DIR` in git's system-wide `safe.directory` (`/etc/gitconfig`) | `[skip] '…' already listed in git's system-wide safe.directory` | `[plan] would run: git config --system --add safe.directory '…'` |
+| `contratos-api.service` installed from `$APP_DIR/deploy/` (byte-identical) and enabled | `[skip] contratos-api.service already installed at '…' (identical) and enabled` | `[plan] would install '…' as '/etc/systemd/system/contratos-api.service' (mode 644), run systemctl daemon-reload, and enable contratos-api.service — never start it` — or `[skip] '…' not found — clone the repository into '…' and re-run provision.sh …` while there is no checkout yet |
+| `contratos-backup.service` + `.timer` installed from `$APP_DIR/deploy/` (both byte-identical), timer enabled **and active** | `[skip] contratos-backup.service and contratos-backup.timer already installed in '…' (identical), contratos-backup.timer enabled and active` | `[plan] would install '…/contratos-backup.service' and '…/contratos-backup.timer' into '/etc/systemd/system' (mode 644), run systemctl daemon-reload, and enable --now contratos-backup.timer` — or the same clone-and-re-run `[skip]` as the API unit |
 
-All five are asserted by `deploy/provision.spec.ts` against a scratch temp
+All nine are asserted by `deploy/provision.spec.ts` against a scratch temp
 directory — every path (`SERVICE_USER`, `APP_DIR`, `DOCUMENT_STORE_DIR`,
-`SWAP_FILE`, `FSTAB_FILE`, `GIT_EXCLUDE_FILE`) is overridable by environment
-variable for exactly this reason, in production those variables keep their
-defaults (`contratos`, `/opt/contratos`, `/swapfile`, `/etc/fstab`, …).
+`ETC_CONTRATOS_DIR`, `GNUPG_HOME_DIR`, `BACKUP_WORK_DIR`, `SWAP_FILE`,
+`FSTAB_FILE`, `GIT_EXCLUDE_FILE`, `DB_ROLE`, `DB_NAME`, `DB_PASSWORD_FILE`,
+`SYSTEMD_UNIT_DIR`, `API_UNIT_SOURCE`, `API_UNIT_TARGET`, and git's own
+`GIT_CONFIG_SYSTEM` for the `safe.directory` guard) is overridable by
+environment variable for exactly this reason, in production those variables
+keep their defaults (`contratos`, `/opt/contratos`, `/etc/contratos`,
+`/var/backups/contratos-offsite`, `/swapfile`, `/etc/fstab`,
+`/etc/contratos/db.password`, `/etc/systemd/system`, …). The Postgres and systemd
+guards ask the host (`sudo -u postgres psql`, `systemctl is-enabled`), so
+the spec puts fakes for `sudo`/`psql`/`systemctl` on that scratch `bin/`
+that answer the existence probes and exit 99 on anything that would
+mutate — a dry run that reaches DDL or `daemon-reload` fails the spec.
 The Node/pnpm guard reads `$PATH` rather than a path variable, so the spec
 runs the script under a scratch `bin/` — empty for the bare host, fake
 `node`/`pnpm` printing versions for the provisioned one — because the first
@@ -76,6 +98,78 @@ on every single deploy, so `provision.sh` appends `.cache/` to the
 unshared `.git/info/exclude` instead. That step only needs the directory
 chain to exist, not a real clone yet, so it is safe to run before or after
 the first `git clone` into `/opt/contratos`.
+
+The same overlap bites a second time, and it did on the real host:
+`useradd --create-home` copies `/etc/skel` into the new home, so
+`.bash_logout`, `.bashrc` and `.profile` land untracked inside the checkout,
+and `git status --porcelain` (untracked files included) makes the very first
+`deploy.sh` refuse over a "dirty" worktree. `provision.sh` excludes those
+three as well, one guard per line, so a host provisioned before they were
+added still gains them on the next re-run — the table above shows the
+`.cache/` line; the other three print the same `[skip]`/`[plan]` shape.
+
+### Database
+
+Installing `postgresql-17` gives a running cluster with nothing in it. On the
+real host nothing created the role and database `DATABASE_URL` points at, so
+the first thing to ask for them was `deploy.sh`'s `prisma migrate deploy` —
+which failed. `provision.sh` now creates both, right after installing
+PostgreSQL, as two separate guards (the role and the database can each exist
+without the other, like the swapfile and its fstab entry):
+
+- role `contratos` (`LOGIN`), overridable as `DB_ROLE`;
+- database `contratos` owned by that role, overridable as `DB_NAME`.
+
+**The password contract.** The password is generated on the host
+(`openssl rand -hex 24`) only at the moment the role is created, and written
+to exactly one place: `/etc/contratos/db.password` (`root:root`, mode `600`,
+overridable as `DB_PASSWORD_FILE`). It is never printed, never passed on a
+command line (every statement reaches `psql` on stdin, so `ps` never shows
+it), and never stored anywhere else by this script. The operator composes
+`DATABASE_URL` from it — the value **must** name this role and database,
+otherwise the migration, the seed, `backup.sh` and the service all point at
+nothing:
+
+```sh
+# /etc/contratos/api.env — root:contratos 0640, see contratos-api.service
+DATABASE_URL=postgresql://contratos:<contents of /etc/contratos/db.password>@localhost:5432/contratos
+```
+
+**An existing role is never touched.** If `contratos` already exists —
+created by hand, or by an earlier run — the step reports
+`[skip] postgres role 'contratos' already exists (password left untouched)`
+and does not rotate anything: `provision.sh` does not know that role's
+password and must not change it out from under a working `DATABASE_URL`.
+Rotating is an operator action (`ALTER ROLE … PASSWORD`, then update both
+the file and `api.env`). The file is only (re)written together with a
+`CREATE ROLE`, so it always holds the password of a role this script made.
+
+Both existence probes run as `sudo -u postgres psql` and are part of
+`--dry-run` too: as root the dry run reports `[skip]`/`[plan]` accurately,
+as a non-root operator `sudo -n` refuses without prompting and the step
+simply plans. A dry run never generates or writes a password
+(`provision.spec.ts` asserts the file is absent afterward).
+
+### The API unit's documents path
+
+`provision.sh` installs `contratos-api.service` from the checkout, so the
+repository copy is the one that runs — and it was the outlier: it named
+`/srv/contratos/documentos` while `provision.sh` (`DOCUMENT_STORE_DIR`) and
+`backup.sh` both default to `/opt/contratos/var/documentos`. With
+`ProtectSystem=strict`, systemd bind-mounts every `ReadWritePaths` entry
+into the service's namespace, and a path that does not exist cannot be
+mounted: the first real deploy died at
+`status=226/NAMESPACE — Failed to set up mount namespacing:
+/run/systemd/unit-root/srv/contratos/documentos: No such file or directory`
+until the installed unit was rewritten by hand. The unit now says
+`/opt/contratos/var/documentos` everywhere (its header, the `api.env`
+example, `ReadWritePaths=`), and `unidades-systemd.spec.ts` reads
+`provision.sh`'s own dry-run plan and asserts `ReadWritePaths` equals the
+directory it creates — the two cannot drift apart silently again. That same
+value is what `ALMACEN_DOCUMENTOS_RUTA` in `/etc/contratos/api.env` must
+carry; the schema's default is the *relative* `var/documentos`, resolved
+against `WorkingDirectory` (`/opt/contratos/apps/api`), which is not the
+same directory.
 
 ## Chromium and fonts (D1, D2)
 
@@ -155,7 +249,13 @@ on a tofu render, not the default mechanism.
 project dependencies (same status `pdftotext` already had in
 `GeneradorDeDocumentosPuppeteer.integration.spec.ts`). A tool missing on
 PATH is reported plainly as a failed layer, never silently skipped and never
-faked.
+faked — which is exactly what the fresh host did: `verify:render` came back
+`RECHAZADO` with both PDF layers reporting a missing tool, and `APROBADO`
+right after `apt-get install poppler-utils`. Opportunistic for the
+*verifier*, required for the *checklist*: `provision.sh` installs
+`poppler-utils` (`pdffonts`, `pdftotext`) in its package list, so the
+verdict below can pass on a host it provisioned; `fc-match` comes with
+`fontconfig`, already there.
 
 **Pre-VPS caveat, stated explicitly:** `verify:render`'s pure parser
 (`apps/api/scripts/renderVerdict.ts`) is unit-tested from fixtures, and its
@@ -299,6 +399,15 @@ real deploy:
 | 1 | Git repository selection (threat matrix, **Applicable**) | `$APP_DIR` is missing, is not a git checkout, or its `git rev-parse --show-toplevel` disagrees with `$APP_DIR` itself, or it has no `$GIT_REMOTE_NAME` remote configured | `deploy.sh` always runs `git -C "$APP_DIR"`, never bare `git` reading cwd — this guard additionally refuses to fall back to whatever repository the operator happens to be standing in when `$APP_DIR` itself is not a valid target |
 | 2 | Commit state (threat matrix, **Applicable**) | `git -C "$APP_DIR" status --porcelain` is non-empty | A hot-fixed server worktree must never be silently discarded. The guard only *reads* `git status` — `deploy.sh` never calls `git reset --hard` or any `--force` flag anywhere, so there is nothing in the script that could discard the uncommitted change even if this check were bypassed |
 | 3 | Required configuration (deployment-configuration spec.md) | `$ENV_FILE` is missing, or `DATABASE_URL`/`JWT_SECRET` is absent or empty in it | The app itself needs both to boot at all; failing here, before the stop, means the previous version keeps running instead of going down for a config typo |
+
+**Root and a `contratos`-owned checkout.** `deploy.sh` runs as root, but
+`/opt/contratos` belongs to `contratos`, and git refuses to read a repository
+owned by another user ("detected dubious ownership") — on the real host every
+`git -C /opt/contratos` failed and guard 1 reported "not a git checkout" for
+a perfectly good clone. `provision.sh` therefore runs
+`git config --system --add safe.directory /opt/contratos` (idempotent — it
+skips when the path is already listed). System scope on purpose: it applies
+to root no matter which `HOME` `sudo` hands it, unlike `--global`.
 
 Only after all three pass does `deploy.sh` stop the service and run the rest
 of the sequence: dump the database (`pg_dump -Fc`, local, pre-migration —
@@ -626,6 +735,14 @@ needs only the recipient's public key string (`age1...`) to encrypt; the
 VPS never needs a local keyring or an import step, and the matching secret
 key never has to exist anywhere the backup pipeline touches.
 
+Packaged is not installed: on the real host neither `age` nor `rclone` was
+present, and the first backup attempt stopped at the tool lookup until both
+were apt-installed by hand (`age 1.0.0`, `rclone v1.53.3`, jammy's
+`universe`). `provision.sh` now installs both in its package list — `rclone`
+for the offsite push, `age` for the encryption — so a host it provisioned
+can run `backup.sh` without that detour; the `gpg --recipient` fallback
+below stays exactly as it is.
+
 **Fallback: `gpg --recipient` (asymmetric — not `gpg --symmetric`).** If
 `age` is ever absent from `$PATH` at runtime, `encrypt-backup-archive.sh`
 falls back to gpg's own asymmetric mode. This still satisfies D7: `gpg
@@ -637,7 +754,9 @@ rejected, only judged less convenient than `age`.
 
 **Honesty about what ran for real here.** `age` itself is not an installed
 binary on the machine this PR was implemented on (only `gpg` is present),
-and this apply run does not install system packages. `encrypt-backup-archive.spec.ts`'s
+and this apply run does not install system packages — on the VPS it is now
+`provision.sh`'s job (see above), which changes nothing about what this
+development machine can prove. `encrypt-backup-archive.spec.ts`'s
 round-trip test therefore exercises the **gpg fallback** for real: a
 throwaway keypair generated in the test's own temp `$GNUPGHOME`, a real
 encrypt, a real decrypt proving byte-identical output, and a real decrypt
@@ -895,12 +1014,31 @@ by the identity that was current when it was made.
 
 ## Scheduled backups (`contratos-backup.timer`)
 
+`provision.sh` installs both units from the checkout and runs
+`systemctl enable --now contratos-backup.timer` — the manual sequence the
+unit's own header describes (`cp` into `/etc/systemd/system/`,
+`daemon-reload`, `enable --now`), done by the same idempotent guard as the
+API unit: byte-identical copies plus a timer that is enabled **and active**
+report `[skip]`, anything else is reinstalled and re-enabled. On the real
+host neither unit had been installed and the timer had never been enabled;
+this README only documented the `cp`.
+
 ```
-sudo cp deploy/contratos-backup.service deploy/contratos-backup.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now contratos-backup.timer
-systemctl list-timers contratos-backup.timer
+systemctl list-timers contratos-backup.timer      # next firing, last run
+sudo systemctl start contratos-backup.service     # run once by hand, then:
+journalctl -u contratos-backup.service -n 50
 ```
+
+**The timer is enabled before `backup.env` exists, on purpose.** `backup.sh`
+refuses at its first check when `/etc/contratos/backup.env` is missing —
+`backup.sh: configuration file '/etc/contratos/backup.env' does not exist`,
+exit 1, before touching the database — so a nightly run that fires before
+the operator has configured the offsite remote fails *loudly* in
+`journalctl -u contratos-backup.service`, every night, until it is
+configured. The alternative — leave the timer disabled until configuration
+is done — is a schedule that silently does not exist until someone
+remembers, which is the failure D7 exists to prevent. Enabling early costs
+one visible error per night; forgetting costs every backup.
 
 Runs `backup.sh` once a day at 03:15 local time (a low-traffic hour,
 `RandomizedDelaySec=15m`), `Persistent=true` so a run missed while the VPS
@@ -939,13 +1077,22 @@ attempt as the moment anyone finds out.
 
 The unit therefore sets `Environment=GNUPGHOME=/etc/contratos/gnupg`, beside
 the other root-owned 0600 configuration, and lists it in `ReadWritePaths`
-because gpg writes lockfiles into its keyring directory. Create it and
-import the recipient's **public** key before enabling the timer — the secret
-half must never reach this box, which is the entire point of D7's asymmetric
-choice:
+because gpg writes lockfiles into its keyring directory. That listing is
+also why the directory has to exist before the unit ever starts: with
+`ProtectSystem=strict`, systemd bind-mounts every `ReadWritePaths` entry
+*before* `ExecStart`, and a missing one fails the start with
+`status=226/NAMESPACE` (gap #7's failure, seen again here when the timer was
+installed on the real host without this directory). The same applies to
+`/var/backups/contratos-offsite`: `backup.sh` does `mkdir -p` on it, but
+under the unit that line never runs — the namespace is assembled first. So
+`provision.sh` creates both, plus `/etc/contratos` itself, as `root:root`
+`0700`, and `unidades-systemd.spec.ts` asserts every `ReadWritePaths` entry
+and `GNUPGHOME` of this unit is a directory `provision.sh`'s own dry-run
+plan creates. Import the recipient's **public** key into that keyring — the
+secret half must never reach this box, which is the entire point of D7's
+asymmetric choice:
 
 ```sh
-sudo install -d -m 700 /etc/contratos/gnupg
 sudo GNUPGHOME=/etc/contratos/gnupg gpg --import /path/to/recipient-public.asc
 ```
 
@@ -1130,14 +1277,14 @@ why `age` itself did not run on this machine). What none of that proves:
   invoked in a spec — `pg_dump` is not installed on this machine, and there
   is no live database to dump from pre-VPS.
 - **A real `rclone` push to a real offsite remote.** `rclone` itself is not
-  installed on this machine either; `backup.spec.ts`'s retention tests mock
-  it entirely. The credentialed remote is blocked on the
+  installed on this machine either (`provision.sh` installs it on the VPS;
+  here `backup.spec.ts`'s retention tests mock it entirely). The credentialed remote is blocked on the
   `offsite-backup-destination` external dependency (`state.yaml`), same as
   the full restore drill (task 9.8, below).
 - **The real `age` binary, encrypting for real.** Confirmed packaged for
-  the target Ubuntu release (see "Backup (D7)"), but not installed on this
-  development machine — the real round-trip proof here used the `gpg`
-  fallback path instead. Both paths satisfy design D7's property
+  the target Ubuntu release and installed there by `provision.sh` (see
+  "Backup (D7)"), but not installed on this development machine — the real
+  round-trip proof here used the `gpg` fallback path instead. Both paths satisfy design D7's property
   identically; only one was cryptographically exercised on this machine.
 - **A scheduled, unattended run against a live backup.** `contratos-backup.service`/`.timer`
   are installed and their unit files verify (see "Scheduled backups"
@@ -1161,6 +1308,10 @@ gate** — see "Next step" below.
 
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
 - [ ] Re-running it exits 0 with every guard reporting `[skip]`
+- [ ] `sudo -u postgres psql -tAc "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'contratos'"` prints `t`, `sudo -u postgres psql -tAc "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = 'contratos'"` prints `contratos`, and `sudo stat -c '%U:%G %a' /etc/contratos/db.password` prints `root:root 600`
+- [ ] With `DATABASE_URL` in `/etc/contratos/api.env` composed from that file, `psql "$(sudo grep '^DATABASE_URL=' /etc/contratos/api.env | cut -d= -f2-)" -c 'SELECT 1'` connects as `contratos`
+- [ ] After cloning into `/opt/contratos` and re-running it, `systemctl is-enabled contratos-api` prints `enabled`, `systemctl is-active contratos-api` prints `inactive` (provision never starts it), and `cmp /opt/contratos/deploy/contratos-api.service /etc/systemd/system/contratos-api.service` is silent
+- [ ] `sudo git -C /opt/contratos status --porcelain` runs as root without a "dubious ownership" refusal and prints nothing (skeleton dotfiles excluded)
 - [ ] `node --version` ≥ 22 and `pnpm --version` = 11.11.0 as the `contratos` user after provision (`sudo -u contratos -- bash -lc 'node --version; pnpm --version'`)
 - [ ] Headless Chromium launches with `--no-sandbox --disable-setuid-sandbox` and no missing-library error
 - [ ] `pnpm --filter @contratos/api verify:render` prints `Veredicto final: APROBADO` (all three layers, see "Render verdict" above)
@@ -1179,7 +1330,9 @@ gate** — see "Next step" below.
 - [ ] `age -d -i <the real recipient's identity file>` (kept off the VPS entirely) decrypts a real pushed archive byte-identical to the pre-encryption tar
 - [ ] After 31+ real daily runs, exactly 30 remote copies remain and the 31st-oldest is gone
 - [ ] `deploy/backup.sh --prune-only` run by hand against the real remote behaves identically to its mocked-`rclone` test — same head/tail split, no accidental deletion of a retained copy
-- [ ] `sudo systemctl enable --now contratos-backup.timer` schedules a real unattended run; `journalctl -u contratos-backup.service` shows a clean exit on its next scheduled firing (or after `sudo systemctl start contratos-backup.service` run by hand)
+- [ ] `sudo stat -c '%U:%G %a %n' /etc/contratos /etc/contratos/gnupg /var/backups/contratos-offsite` prints `root:root 700` for all three, and `systemctl list-timers contratos-backup.timer` shows the timer `provision.sh` enabled with a next firing
+- [ ] Before `/etc/contratos/backup.env` exists, `sudo systemctl start contratos-backup.service` fails and `journalctl -u contratos-backup.service` shows `backup.sh: configuration file '/etc/contratos/backup.env' does not exist` — a loud refusal, never `226/NAMESPACE` and never silence
+- [ ] After `backup.env` is written and the public key imported, `journalctl -u contratos-backup.service` shows a clean exit on the next scheduled firing (or after `sudo systemctl start contratos-backup.service` run by hand)
 - [ ] **The real backup-then-restore drill (task 9.8, and the go-live gate — task 10.4):** on a genuinely separate scratch host, `ARCHIVE_FILE=<the real pushed archive> AGE_IDENTITY_FILE=<the real identity, kept off the VPS> DATABASE_URL=<scratch> ALMACEN_DOCUMENTOS_RUTA=<scratch> deploy/restore.sh` completes, `verify-restore.sh` reports every real document `verificados` with zero `faltantes`/`desajustados`, and the exit code is `0`
 - [ ] The above drill has been run **at least once** and passed before any real customer *comodato* is signed on this server — see the go-live gate below
 
