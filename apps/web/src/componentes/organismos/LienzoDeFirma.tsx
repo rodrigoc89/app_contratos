@@ -224,9 +224,9 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
         onPointerUp={manejarFinDeTrazo}
         onPointerCancel={manejarFinDeTrazo}
       />
-      {/* design-system-migration PR13 (guard 4, final confirmation) —
-          gap-8 (32px): a técnico taps standing up, right above Firmar, and
-          Borrar destroys an already-captured signature. */}
+      {/* design-system-migration PR13 (guard 4, final confirmation) — gap-8
+          between the pair, mb-8 (32px) before Firmar below: a técnico taps
+          standing up, and Borrar destroys an already-captured signature. */}
       <div className="flex gap-8 mb-8">
         <Boton type="button" onClick={manejarDeshacer}>
           Deshacer

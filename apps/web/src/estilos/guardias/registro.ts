@@ -125,7 +125,7 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
       {
         archivo: UTILIDADES,
         titulo:
-          "keeps at least ${SEPARACION_MINIMA_PX}px of gap between Deshacer and Borrar in LienzoDeFirma's real composition, not just PR7's atom-level fixture",
+          "keeps at least ${SEPARACION_MINIMA_PX}px between Deshacer and Borrar, and below the row before Firmar, in LienzoDeFirma's real composition",
       },
     ],
   },
