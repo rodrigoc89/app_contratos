@@ -941,13 +941,22 @@ export function esRutaDelSubarbolDelPanel(rutaRelativa: string): boolean {
 }
 
 const MINIMO_REM_JSX = 1;
+/**
+ * `base.css` puts `--fuente-base` (18px) on `body`, never on `html`, so
+ * `rem` stays the browser's 16px default and a px value converts by this
+ * constant. Asserted by "keeps rem anchored…" below rather than assumed —
+ * an `html { font-size }` added later would silently move the floor.
+ */
+const PX_POR_REM = 16;
 const TAMANOS_TEXTO_TAILWIND_BAJO_PISO: ReadonlyMap<string, number> = new Map([
   ["text-xs", 0.75],
   ["text-sm", 0.875],
 ]);
 const PATRON_TEXTO_ARBITRARIO_REM = /\btext-\[(\d+(?:\.\d+)?)rem\]/g;
+// PR16's gate proved the rem pattern alone blind to `text-[12px]`.
+const PATRON_TEXTO_ARBITRARIO_PX = /\btext-\[(\d+(?:\.\d+)?)px\]/g;
 
-/** Every sub-1rem font-size value a class list attempts, named-scale or arbitrary. */
+/** Every sub-1rem font-size value a class list attempts — named scale, arbitrary rem or arbitrary px. */
 export function tamanosDeTextoBajoElPiso(clases: string): readonly number[] {
   const encontrados: number[] = [];
   for (const [clase, valor] of TAMANOS_TEXTO_TAILWIND_BAJO_PISO) {
@@ -955,6 +964,10 @@ export function tamanosDeTextoBajoElPiso(clases: string): readonly number[] {
   }
   for (const coincidencia of clases.matchAll(PATRON_TEXTO_ARBITRARIO_REM)) {
     const valor = Number(coincidencia[1]);
+    if (valor < MINIMO_REM_JSX) encontrados.push(valor);
+  }
+  for (const coincidencia of clases.matchAll(PATRON_TEXTO_ARBITRARIO_PX)) {
+    const valor = Number(coincidencia[1]) / PX_POR_REM;
     if (valor < MINIMO_REM_JSX) encontrados.push(valor);
   }
   return encontrados;
@@ -969,10 +982,22 @@ describe("guard 8: no font-size<1rem outside the panel subtree, matched by compo
     expect(esRutaDelSubarbolDelPanel(ruta)).toBe(esperado);
   });
 
-  it("flags sub-1rem type — named scale or arbitrary value alike — and clears the floor otherwise", () => {
+  it("flags sub-1rem type — named scale, arbitrary rem or arbitrary px alike — and clears the floor otherwise", () => {
     expect(tamanosDeTextoBajoElPiso("text-sm").length).toBeGreaterThan(0);
     expect(tamanosDeTextoBajoElPiso("text-[0.8125rem]")).toEqual([0.8125]);
-    expect(tamanosDeTextoBajoElPiso("text-base text-grande")).toEqual([]);
+    expect(tamanosDeTextoBajoElPiso("text-[12px]")).toEqual([0.75]);
+    expect(tamanosDeTextoBajoElPiso("text-base text-grande text-[16px]")).toEqual([]);
+  });
+
+  it("keeps rem anchored to the browser default: no hand-authored sheet sets font-size on html", () => {
+    for (const nombre of readdirSync(DIRECTORIO_ESTILOS)) {
+      if (!nombre.endsWith(".css")) continue;
+      const css = quitarComentariosCss(readFileSync(join(DIRECTORIO_ESTILOS, nombre), "utf8"));
+      expect(
+        /\bhtml\b[^{]*\{[^}]*font-size/.test(css),
+        `estilos/${nombre} sets font-size on html — PX_POR_REM (${PX_POR_REM}) would no longer be the rem basis`,
+      ).toBe(false);
+    }
   });
 
   it("rejects every real .tsx file outside the panel subtree that attempts sub-1rem type", () => {
@@ -1665,13 +1690,26 @@ export function clasesBemDeclaradas(): ReadonlySet<string> {
   return clases;
 }
 
-const PATRON_CLASSNAME_LITERAL = /className\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+/** Block, line and JSX comments go first, so prose naming a retired class never counts as a usage. */
+function quitarComentariosTsx(contenidoTsx: string): string {
+  return contenidoTsx.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/.*$/gm, "$1");
+}
 
-/** Every hand-authored BEM class token a `.tsx` file's literal `className`s carry. */
+const PATRON_LITERAL_DE_CADENA = /"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g;
+
+/**
+ * Every hand-authored BEM class token ANY string literal in a `.tsx` file
+ * carries — not only `className="…"`. `TablaDeContratos` (PR15) keeps its
+ * class lists in `const CLASE_* = "…"` and passes them as `className={…}`,
+ * and `cn("…")` arguments are strings too; a scan of the attribute alone
+ * was proven blind to `const CLASE_LEGADA = "layout-tecnico"` at PR16's
+ * gate. Splitting on whitespace keeps `[data-layout-panel]` and
+ * `.layout-panel` selectors in specs from matching the bare token.
+ */
 export function clasesBemEnArchivo(contenidoTsx: string, clasesBem: ReadonlySet<string>): readonly string[] {
   const encontradas = new Set<string>();
-  for (const coincidencia of contenidoTsx.matchAll(PATRON_CLASSNAME_LITERAL)) {
-    const valor = coincidencia[1] ?? coincidencia[2] ?? "";
+  for (const coincidencia of quitarComentariosTsx(contenidoTsx).matchAll(PATRON_LITERAL_DE_CADENA)) {
+    const valor = coincidencia[1] ?? coincidencia[2] ?? coincidencia[3] ?? "";
     for (const token of valor.split(/\s+/).filter(Boolean)) {
       if (clasesBem.has(token)) encontradas.add(token);
     }

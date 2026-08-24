@@ -209,20 +209,19 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // *not* actually sub-1rem — this project sets no `html { font-size }`
     // anywhere, so `rem` resolves against the browser's un-overridden 16px
     // root and 16px === 1rem exactly, which `MINIMO_REM_JSX = 1`'s strict
-    // `<` comparison does not flag. Separately, `tamanosDeTextoBajoElPiso`'s
-    // arbitrary-value pattern only recognises `text-[Nrem]`, not
-    // `text-[Npx]` — a second, independent reason a literal px value is
-    // invisible to this guard regardless of its numeric size. Falsified
-    // both ways: a genuine sub-1rem token (`text-sm`, 0.875rem) on
-    // `LayoutTecnico.tsx` and on `LayoutPanel.tsx` (still outside this
-    // axis) both correctly fail today, naming the file; `LayoutPanel.tsx`
-    // needs no axis entry because it declares no sub-1rem type, not
-    // because it is exempt.
+    // `<` comparison does not flag. PR16's gate found the scan blind to
+    // `text-[Npx]` altogether (`text-[12px]` on `LayoutTecnico.tsx` stayed
+    // green); it now converts px by the browser's 16px rem basis, and a
+    // second test pins that basis by asserting no sheet sets font-size on
+    // `html`. Falsified both ways: `text-sm` and `text-[12px]` on
+    // `LayoutTecnico.tsx` fail naming the file; `LayoutPanel.tsx` needs no
+    // axis entry because 16px is exactly 1rem, not because it is exempt.
     numero: 8,
     protege: "No font-size<1rem outside the panel subtree",
     disposicion: "JSX",
     pruebas: [
       { archivo: UTILIDADES, titulo: "rejects every real .tsx file outside the panel subtree that attempts sub-1rem type" },
+      { archivo: UTILIDADES, titulo: "keeps rem anchored to the browser default: no hand-authored sheet sets font-size on html" },
     ],
   },
   {
