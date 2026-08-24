@@ -21,6 +21,21 @@ describe("Toast", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Borrador creado. ID: c1");
   });
 
+  /**
+   * PR20 review — anchored to the TOP of the viewport, never the bottom.
+   * Bottom-anchored, the 5s confirmation sat exactly on the primary action
+   * of every wizard step ("Continuar"/submit lives at the bottom of a short
+   * handheld viewport — the PR13 harness had to dismiss it to tap the
+   * button). Covering the header for 5s is the deliberate tradeoff.
+   */
+  it("anchors to the top of the viewport so it never covers the bottom primary action", () => {
+    render(<Toast mensaje="Borrador creado. ID: c1" onDescartar={() => {}} />);
+
+    const toast = screen.getByRole("status");
+    expect(toast.className).toContain("top-4");
+    expect(toast.className).not.toContain("bottom-4");
+  });
+
   it("auto-dismisses on its own after ~5 seconds", () => {
     vi.useFakeTimers();
     const alDescartar = vi.fn();
