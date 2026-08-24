@@ -39,6 +39,12 @@ FSTAB_FILE="${FSTAB_FILE:-/etc/fstab}"
 GIT_EXCLUDE_FILE="${GIT_EXCLUDE_FILE:-$APP_DIR/.git/info/exclude}"
 API_UNIT_SOURCE="${API_UNIT_SOURCE:-$APP_DIR/deploy/contratos-api.service}"
 API_UNIT_TARGET="${API_UNIT_TARGET:-/etc/systemd/system/contratos-api.service}"
+DB_ROLE="${DB_ROLE:-contratos}"
+DB_NAME="${DB_NAME:-contratos}"
+# Written once, when the role is created, and nowhere else — the operator
+# composes DATABASE_URL in /etc/contratos/api.env from it (deploy/README.md,
+# "Database").
+DB_PASSWORD_FILE="${DB_PASSWORD_FILE:-/etc/contratos/db.password}"
 PUPPETEER_VERSION="${PUPPETEER_VERSION:-25.4.0}"
 # Root package.json: `engines.node >=22`, `packageManager: pnpm@11.11.0`.
 # 24 is the Active LTS line and what .github/workflows/ci.yml pins (the
@@ -86,6 +92,9 @@ provision_packages() {
     ca-certificates
     gnupg
     lsb-release
+    # A bare Ubuntu server image ships no git; the safe.directory step below
+    # and every `git -C $APP_DIR` in deploy.sh need it.
+    git
     # puppeteer / @puppeteer/browsers extract Chrome-for-Testing zips with
     # `unzip`, falling back to the optional `yauzl` package. npm (the npx in
     # the Chromium step below) does not install that optional peer, and a
@@ -126,6 +135,92 @@ provision_postgresql() {
     "$codename" > /etc/apt/sources.list.d/pgdg.list
   apt-get update
   apt-get install -y postgresql-17
+}
+
+# --------------------------------------------------------------- database
+
+# Installing postgresql-17 gives a running cluster and nothing in it; the
+# role and database DATABASE_URL points at existed on the real host only
+# because nobody had asked yet — deploy.sh's `prisma migrate deploy` was the
+# first to, and failed. Two guards, like the swapfile and its fstab entry:
+# the role and the database can each exist without the other.
+#
+# Every statement reaches psql on STDIN, never on argv: `ps` shows every
+# process's arguments to every user on the host, and one of these
+# statements carries the password. The password itself is generated on the
+# host, only when the role is being created, and written to exactly one
+# place — $DB_PASSWORD_FILE, root:root 0600 — from which the operator
+# composes DATABASE_URL. An existing role is never altered: this script does
+# not know its password and must not rotate it out from under a working
+# DATABASE_URL.
+#
+# The probes run in --dry-run too (as root they answer; as a non-root
+# operator `sudo -n` refuses without prompting and the step plans), so a
+# root dry run reports skip/plan accurately, same as every other guard.
+require_sql_identifier() {
+  local name="$1" value="$2"
+  case "$value" in
+    '' | [0-9]* | *[!A-Za-z0-9_]*)
+      echo "provision.sh: $name must be a plain SQL identifier ([A-Za-z_][A-Za-z0-9_]*), got '$value'" >&2
+      exit 1
+      ;;
+  esac
+}
+
+# `cd /` first: sudo switching to `postgres` from a cwd that user cannot
+# read makes psql warn "could not change directory" on every call.
+psql_as_postgres() {
+  (cd / && sudo -n -u postgres psql -X -qtA -v ON_ERROR_STOP=1 -d postgres)
+}
+
+database_role_exists() {
+  local found
+  found="$(printf "SELECT 1 FROM pg_roles WHERE rolname = '%s';\n" "$DB_ROLE" \
+    | psql_as_postgres 2>/dev/null)" || return 1
+  [ "$found" = 1 ]
+}
+
+database_exists() {
+  local found
+  found="$(printf "SELECT 1 FROM pg_database WHERE datname = '%s';\n" "$DB_NAME" \
+    | psql_as_postgres 2>/dev/null)" || return 1
+  [ "$found" = 1 ]
+}
+
+create_database_role() {
+  local password
+  password="$(openssl rand -hex 24)"
+  printf "CREATE ROLE \"%s\" LOGIN PASSWORD '%s';\n" "$DB_ROLE" "$password" | psql_as_postgres
+
+  local dir
+  dir="$(dirname "$DB_PASSWORD_FILE")"
+  [ -d "$dir" ] || install -d -m 700 "$dir"
+  (umask 077 && printf '%s\n' "$password" > "$DB_PASSWORD_FILE")
+  chown root:root "$DB_PASSWORD_FILE"
+  chmod 600 "$DB_PASSWORD_FILE"
+  log "created postgres role '$DB_ROLE'; its password is in '$DB_PASSWORD_FILE' (root:root, mode 600) — set DATABASE_URL=postgresql://$DB_ROLE:<that password>@localhost:5432/$DB_NAME in /etc/contratos/api.env"
+}
+
+provision_database() {
+  require_sql_identifier DB_ROLE "$DB_ROLE"
+  require_sql_identifier DB_NAME "$DB_NAME"
+
+  if database_role_exists; then
+    skip "postgres role '$DB_ROLE' already exists (password left untouched)"
+  elif [ "$DRY_RUN" = true ]; then
+    plan "would create postgres role '$DB_ROLE' (LOGIN) with a generated password written only to '$DB_PASSWORD_FILE' (root:root, mode 600)"
+  else
+    create_database_role
+  fi
+
+  if database_exists; then
+    skip "postgres database '$DB_NAME' already exists"
+  elif [ "$DRY_RUN" = true ]; then
+    plan "would create postgres database '$DB_NAME' owned by '$DB_ROLE'"
+  else
+    printf 'CREATE DATABASE "%s" OWNER "%s";\n' "$DB_NAME" "$DB_ROLE" | psql_as_postgres
+    log "created postgres database '$DB_NAME' owned by '$DB_ROLE'"
+  fi
 }
 
 # ------------------------------------------------------------ node + pnpm
@@ -476,6 +571,7 @@ main() {
 
   provision_packages
   provision_postgresql
+  provision_database
   provision_node
   provision_chromium_deps
   provision_fonts_cache

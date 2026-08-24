@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -39,11 +39,15 @@ const ROOT_PACKAGE_JSON = join(import.meta.dirname, "..", "package.json");
  * `systemctl` is a fake when `host.apiUnitEnabled` is given: it answers
  * `is-enabled` and exits 99 for anything else, so a dry run that reaches
  * `daemon-reload`/`enable` fails the spec instead of passing silently.
+ * `sudo` + `psql` are fakes when `host.databaseProvisioned` is given, on
+ * the same terms: `sudo` drops its `-n -u postgres` and execs the command
+ * on this PATH, `psql` answers the `SELECT 1 …` existence probes it reads
+ * on stdin (`1` = present, nothing = absent) and exits 99 on any DDL.
  */
 async function makeToolchainBin(
   scratch: string,
   present: { node?: string; pnpm?: string } = {},
-  host: { apiUnitEnabled?: boolean } = {},
+  host: { apiUnitEnabled?: boolean; databaseProvisioned?: boolean } = {},
 ): Promise<string> {
   const binDir = join(scratch, "bin");
   await mkdir(binDir);
@@ -72,6 +76,38 @@ async function makeToolchainBin(
       { mode: 0o755 },
     );
   }
+  if (host.databaseProvisioned !== undefined) {
+    await writeFile(
+      join(binDir, "sudo"),
+      [
+        "#!/bin/bash",
+        'while [ "$#" -gt 0 ]; do',
+        '  case "$1" in',
+        "    -n) shift ;;",
+        "    -u) shift 2 ;;",
+        "    --) shift; break ;;",
+        "    *) break ;;",
+        "  esac",
+        "done",
+        'exec "$@"',
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+    await writeFile(
+      join(binDir, "psql"),
+      [
+        "#!/bin/bash",
+        'sql="$(</dev/stdin)"',
+        'case "$sql" in',
+        `  SELECT*) ${host.databaseProvisioned ? "printf '1\\n'" : ":"} ;;`,
+        `  *) printf 'psql: a dry run must never reach DDL: %s\\n' "$sql" >&2; exit 99 ;;`,
+        "esac",
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+  }
   return binDir;
 }
 
@@ -94,8 +130,9 @@ describe("provision.sh --dry-run", () => {
     const swapFile = join(scratch, "swapfile");
     const fstabFile = join(scratch, "fstab");
     const excludeFile = join(appDir, ".git", "info", "exclude");
+    const dbPasswordFile = join(scratch, "etc-contratos", "db.password");
     await writeFile(fstabFile, "", "utf-8");
-    const binDir = await makeToolchainBin(scratch);
+    const binDir = await makeToolchainBin(scratch, {}, { databaseProvisioned: false });
 
     const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
       env: {
@@ -109,6 +146,7 @@ describe("provision.sh --dry-run", () => {
         FSTAB_FILE: fstabFile,
         GIT_EXCLUDE_FILE: excludeFile,
         GIT_CONFIG_SYSTEM: join(scratch, "gitconfig-that-does-not-exist"),
+        DB_PASSWORD_FILE: dbPasswordFile,
       },
     });
 
@@ -120,6 +158,20 @@ describe("provision.sh --dry-run", () => {
     expect(stdout).toContain(nodePlan);
     expect(stdout).toContain(chromiumPlan);
     expect(stdout.indexOf(nodePlan)).toBeLessThan(stdout.indexOf(chromiumPlan));
+    // Nothing created the role/database DATABASE_URL points at, so
+    // deploy.sh's `prisma migrate deploy` failed on the fresh host. Both are
+    // guarded separately (like swapfile + fstab), right after PostgreSQL
+    // itself is installed and before anything else.
+    const postgresPlan = "[plan] would add the PGDG apt repository and install postgresql-17";
+    const rolePlan = `[plan] would create postgres role 'contratos' (LOGIN) with a generated password written only to '${dbPasswordFile}' (root:root, mode 600)`;
+    const databasePlan = "[plan] would create postgres database 'contratos' owned by 'contratos'";
+    expect(stdout).toContain(rolePlan);
+    expect(stdout).toContain(databasePlan);
+    expect(stdout.indexOf(postgresPlan)).toBeLessThan(stdout.indexOf(rolePlan));
+    expect(stdout.indexOf(rolePlan)).toBeLessThan(stdout.indexOf(databasePlan));
+    expect(stdout.indexOf(databasePlan)).toBeLessThan(stdout.indexOf(nodePlan));
+    // A dry run plans a password; it never generates or writes one.
+    await expect(access(dbPasswordFile)).rejects.toMatchObject({ code: "ENOENT" });
     expect(stdout).toContain(
       "[plan] would create system user 'a-user-that-should-never-exist-anywhere'",
     );
@@ -176,7 +228,7 @@ describe("provision.sh --dry-run", () => {
     const binDir = await makeToolchainBin(
       scratch,
       { node: "v24.1.0", pnpm: "11.11.0" },
-      { apiUnitEnabled: true },
+      { apiUnitEnabled: true, databaseProvisioned: true },
     );
 
     const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
@@ -213,6 +265,46 @@ describe("provision.sh --dry-run", () => {
     expect(stdout).toContain(
       `[skip] contratos-api.service already installed at '${unitTarget}' (identical) and enabled`,
     );
+    // An existing role is never touched: provision.sh does not know its
+    // password and must never rotate it out from under a working
+    // DATABASE_URL.
+    expect(stdout).toContain(
+      "[skip] postgres role 'contratos' already exists (password left untouched)",
+    );
+    expect(stdout).toContain("[skip] postgres database 'contratos' already exists");
+  });
+
+  it("refuses a DB_ROLE or DB_NAME that is not a plain SQL identifier", async () => {
+    // Both are interpolated into SQL fed to psql as the postgres superuser;
+    // the guard keeps that to bare identifiers instead of trusting quoting.
+    const binDir = await makeToolchainBin(scratch, {}, { databaseProvisioned: false });
+
+    await expect(
+      execFileAsync(SCRIPT, ["--dry-run"], {
+        env: {
+          ...process.env,
+          PATH: binDir,
+          APP_DIR: join(scratch, "opt-contratos"),
+          GIT_CONFIG_SYSTEM: join(scratch, "gitconfig-that-does-not-exist"),
+          DB_ROLE: "contratos'; DROP ROLE postgres; --",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("DB_ROLE"),
+    });
+  });
+
+  it("installs git, which the safe.directory step and deploy.sh both need", async () => {
+    // A bare Ubuntu server image ships no git; the first host only had it
+    // because the operator installed it by hand to clone the repository.
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: join(scratch, "opt-contratos") },
+    });
+
+    const aptPlan = stdout.split("\n").find((line) => line.includes("apt-get install -y"));
+
+    expect(aptPlan?.split(" ")).toContain("git");
   });
 
   it("installs and enables contratos-api.service from the checkout, as the last step", async () => {

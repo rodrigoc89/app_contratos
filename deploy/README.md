@@ -9,7 +9,9 @@ and where the one remaining question this chain cannot answer gets resolved.
 
 ## Quick path
 
-1. Provision the host once, as root: `sudo deploy/provision.sh`
+1. Provision the host once, as root: `sudo deploy/provision.sh`, then write
+   `/etc/contratos/api.env` with a `DATABASE_URL` built from the password
+   it left in `/etc/contratos/db.password` (see "Database" below)
 2. Clone the repository into `/opt/contratos` (as `contratos`), then run
    `sudo deploy/provision.sh` again: the last step installs and enables
    `contratos-api.service` from the checkout and skips with a reminder
@@ -29,7 +31,7 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 
 | Order | Script | What it does | Status |
 |---|---|---|---|
-| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Node.js 24 (NodeSource) + pnpm 11.11.0 at `/usr/local/bin/pnpm` (the path `contratos-api.service` executes), Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, the `contratos` service user + directories, git's `safe.directory` for root, and — last, from the checkout — `contratos-api.service` installed and enabled (never started) | Done |
+| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17 with the `contratos` role + database (password written once to `/etc/contratos/db.password` — see "Database" below), Node.js 24 (NodeSource) + pnpm 11.11.0 at `/usr/local/bin/pnpm` (the path `contratos-api.service` executes), Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, the `contratos` service user + directories, git's `safe.directory` for root, and — last, from the checkout — `contratos-api.service` installed and enabled (never started) | Done |
 | 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5); the `publish` step calls `publicar-assets.sh` (D4, row 2a) | Done |
 | 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | Done |
 | 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) — see "TLS bootstrap" below | Done |
@@ -50,6 +52,7 @@ requirement:
 
 | Resource | Already present | Not yet present |
 |---|---|---|
+| Postgres role `DB_ROLE` and database `DB_NAME` (two guards) | `[skip] postgres role 'contratos' already exists (password left untouched)` / `[skip] postgres database 'contratos' already exists` | `[plan] would create postgres role 'contratos' (LOGIN) with a generated password written only to '/etc/contratos/db.password' (root:root, mode 600)` / `[plan] would create postgres database 'contratos' owned by 'contratos'` |
 | `contratos` system user | `[skip] user '…' already exists` | `[plan] would create system user '…'` |
 | `$APP_DIR`, `$DOCUMENT_STORE_DIR` | `[skip] directory '…' already exists` | `[plan] would create directory '…'` |
 | Swapfile + its `/etc/fstab` entry | `[skip] swapfile '…' already exists` / `[skip] fstab entry for '…' already present` | `[plan] would create a 2048MB swapfile at '…'` / `[plan] would append '… none swap sw 0 0' to '…'` |
@@ -58,11 +61,19 @@ requirement:
 | `$APP_DIR` in git's system-wide `safe.directory` (`/etc/gitconfig`) | `[skip] '…' already listed in git's system-wide safe.directory` | `[plan] would run: git config --system --add safe.directory '…'` |
 | `contratos-api.service` installed from `$APP_DIR/deploy/` (byte-identical) and enabled | `[skip] contratos-api.service already installed at '…' (identical) and enabled` | `[plan] would install '…' as '/etc/systemd/system/contratos-api.service' (mode 644), run systemctl daemon-reload, and enable contratos-api.service — never start it` — or `[skip] '…' not found — clone the repository into '…' and re-run provision.sh …` while there is no checkout yet |
 
-All seven are asserted by `deploy/provision.spec.ts` against a scratch temp
+All eight are asserted by `deploy/provision.spec.ts` against a scratch temp
 directory — every path (`SERVICE_USER`, `APP_DIR`, `DOCUMENT_STORE_DIR`,
-`SWAP_FILE`, `FSTAB_FILE`, `GIT_EXCLUDE_FILE`) is overridable by environment
-variable for exactly this reason, in production those variables keep their
-defaults (`contratos`, `/opt/contratos`, `/swapfile`, `/etc/fstab`, …).
+`SWAP_FILE`, `FSTAB_FILE`, `GIT_EXCLUDE_FILE`, `DB_ROLE`, `DB_NAME`,
+`DB_PASSWORD_FILE`, `API_UNIT_SOURCE`, `API_UNIT_TARGET`, and git's own
+`GIT_CONFIG_SYSTEM` for the `safe.directory` guard) is overridable by
+environment variable for exactly this reason, in production those variables
+keep their defaults (`contratos`, `/opt/contratos`, `/swapfile`,
+`/etc/fstab`, `/etc/contratos/db.password`,
+`/etc/systemd/system/contratos-api.service`, …). The Postgres and systemd
+guards ask the host (`sudo -u postgres psql`, `systemctl is-enabled`), so
+the spec puts fakes for `sudo`/`psql`/`systemctl` on that scratch `bin/`
+that answer the existence probes and exit 99 on anything that would
+mutate — a dry run that reaches DDL or `daemon-reload` fails the spec.
 The Node/pnpm guard reads `$PATH` rather than a path variable, so the spec
 runs the script under a scratch `bin/` — empty for the bare host, fake
 `node`/`pnpm` printing versions for the provisioned one — because the first
@@ -91,6 +102,48 @@ and `git status --porcelain` (untracked files included) makes the very first
 three as well, one guard per line, so a host provisioned before they were
 added still gains them on the next re-run — the table above shows the
 `.cache/` line; the other three print the same `[skip]`/`[plan]` shape.
+
+### Database
+
+Installing `postgresql-17` gives a running cluster with nothing in it. On the
+real host nothing created the role and database `DATABASE_URL` points at, so
+the first thing to ask for them was `deploy.sh`'s `prisma migrate deploy` —
+which failed. `provision.sh` now creates both, right after installing
+PostgreSQL, as two separate guards (the role and the database can each exist
+without the other, like the swapfile and its fstab entry):
+
+- role `contratos` (`LOGIN`), overridable as `DB_ROLE`;
+- database `contratos` owned by that role, overridable as `DB_NAME`.
+
+**The password contract.** The password is generated on the host
+(`openssl rand -hex 24`) only at the moment the role is created, and written
+to exactly one place: `/etc/contratos/db.password` (`root:root`, mode `600`,
+overridable as `DB_PASSWORD_FILE`). It is never printed, never passed on a
+command line (every statement reaches `psql` on stdin, so `ps` never shows
+it), and never stored anywhere else by this script. The operator composes
+`DATABASE_URL` from it — the value **must** name this role and database,
+otherwise the migration, the seed, `backup.sh` and the service all point at
+nothing:
+
+```sh
+# /etc/contratos/api.env — root:contratos 0640, see contratos-api.service
+DATABASE_URL=postgresql://contratos:<contents of /etc/contratos/db.password>@localhost:5432/contratos
+```
+
+**An existing role is never touched.** If `contratos` already exists —
+created by hand, or by an earlier run — the step reports
+`[skip] postgres role 'contratos' already exists (password left untouched)`
+and does not rotate anything: `provision.sh` does not know that role's
+password and must not change it out from under a working `DATABASE_URL`.
+Rotating is an operator action (`ALTER ROLE … PASSWORD`, then update both
+the file and `api.env`). The file is only (re)written together with a
+`CREATE ROLE`, so it always holds the password of a role this script made.
+
+Both existence probes run as `sudo -u postgres psql` and are part of
+`--dry-run` too: as root the dry run reports `[skip]`/`[plan]` accurately,
+as a non-root operator `sudo -n` refuses without prompting and the step
+simply plans. A dry run never generates or writes a password
+(`provision.spec.ts` asserts the file is absent afterward).
 
 ## Chromium and fonts (D1, D2)
 
@@ -1175,6 +1228,8 @@ gate** — see "Next step" below.
 
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
 - [ ] Re-running it exits 0 with every guard reporting `[skip]`
+- [ ] `sudo -u postgres psql -tAc "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'contratos'"` prints `t`, `sudo -u postgres psql -tAc "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = 'contratos'"` prints `contratos`, and `sudo stat -c '%U:%G %a' /etc/contratos/db.password` prints `root:root 600`
+- [ ] With `DATABASE_URL` in `/etc/contratos/api.env` composed from that file, `psql "$(sudo grep '^DATABASE_URL=' /etc/contratos/api.env | cut -d= -f2-)" -c 'SELECT 1'` connects as `contratos`
 - [ ] After cloning into `/opt/contratos` and re-running it, `systemctl is-enabled contratos-api` prints `enabled`, `systemctl is-active contratos-api` prints `inactive` (provision never starts it), and `cmp /opt/contratos/deploy/contratos-api.service /etc/systemd/system/contratos-api.service` is silent
 - [ ] `sudo git -C /opt/contratos status --porcelain` runs as root without a "dubious ownership" refusal and prints nothing (skeleton dotfiles excluded)
 - [ ] `node --version` ≥ 22 and `pnpm --version` = 11.11.0 as the `contratos` user after provision (`sudo -u contratos -- bash -lc 'node --version; pnpm --version'`)
