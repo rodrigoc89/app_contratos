@@ -124,22 +124,27 @@ export function PaginaDetalleContrato() {
       )}
 
       {!isLoading && !isError && data !== undefined && (
-        <>
-          <DetalleDeContrato
-            contrato={data}
-            onDescargar={(documento) => void manejarDescarga(documento)}
-            descargando={descargando}
-          />
-          <AccionesDeContrato
-            contrato={data}
-            enCurso={transicion.isPending}
-            onDarDeBaja={(datos) => transicion.mutate({ tipo: "baja", ...datos })}
-            onAnular={(datos) => transicion.mutate({ tipo: "anulacion", ...datos })}
-            onRegistrarRestitucion={(datos) =>
-              transicion.mutate({ tipo: "restitucion", ...datos })
-            }
-          />
-        </>
+        <DetalleDeContrato
+          contrato={data}
+          onDescargar={(documento) => void manejarDescarga(documento)}
+          descargando={descargando}
+          /*
+            PR21 — the transitions sit in the documents row, filled in
+            through a slot: the presentational half stays ignorant of the
+            mutation seam (`convencionDeCapas.spec.ts`).
+          */
+          acciones={
+            <AccionesDeContrato
+              contrato={data}
+              enCurso={transicion.isPending}
+              onDarDeBaja={(datos) => transicion.mutate({ tipo: "baja", ...datos })}
+              onAnular={(datos) => transicion.mutate({ tipo: "anulacion", ...datos })}
+              onRegistrarRestitucion={(datos) =>
+                transicion.mutate({ tipo: "restitucion", ...datos })
+              }
+            />
+          }
+        />
       )}
     </div>
   );

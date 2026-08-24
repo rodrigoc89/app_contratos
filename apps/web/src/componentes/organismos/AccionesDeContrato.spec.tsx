@@ -133,6 +133,31 @@ describe("AccionesDeContrato", () => {
   });
 
   /**
+   * PR21 — the component no longer brings its own section: the triggers are
+   * a cluster made to live inside DetalleDeContrato's documents row, so a
+   * heading of its own would be a second frame around the same row.
+   */
+  it("renders no Acciones heading of its own — the triggers live in the documents row now", () => {
+    render(<AccionesDeContrato {...props()} />);
+
+    expect(screen.queryByRole("heading", { name: "Acciones" })).not.toBeInTheDocument();
+  });
+
+  /**
+   * The honest no-actions copy survives, but as a full-width paragraph:
+   * inside the shared `flex flex-wrap` documents row, `w-full` is what
+   * makes it wrap onto its own line under the download buttons instead of
+   * sitting between them as one more flex item.
+   */
+  it("lets the no-actions message take its own line under the shared row", () => {
+    render(<AccionesDeContrato {...props({ contrato: contrato("anulado") })} />);
+
+    const mensaje = screen.getByText(/ya está cerrado/);
+    expect(mensaje.className).toMatch(/\bw-full\b/);
+    expect(screen.queryByRole("heading", { name: "Acciones" })).not.toBeInTheDocument();
+  });
+
+  /**
    * PR21 — the confirmation moved from an inline form into a modal
    * (`Dialogo`, native `<dialog>`): the actions are joining the documents
    * row, where an inline form has no room to unfold. Visibility is asserted

@@ -1,4 +1,5 @@
 import type { DatosContratoDetalle, DatosDocumentoDisponible } from "@contratos/esquemas";
+import type { ReactNode } from "react";
 
 import { Boton } from "../atomos/Boton";
 import { InsigniaDeEstado } from "./estadoDeContrato";
@@ -8,10 +9,11 @@ import { InsigniaDeEstado } from "./estadoDeContrato";
  * and a download callback; fetching the PDF lives in the container, because
  * `componentes/` may not import `datos/` (`convencionDeCapas.spec.ts`).
  *
- * This is also the screen `darDeBaja`, `anular` and `registrarRestitucion`
- * will land on: they are implemented and tested in the domain today and
- * reachable from nowhere. The layout leaves them a place rather than
- * pretending the screen is finished.
+ * `darDeBaja`, `anular` and `registrarRestitucion` land in the `acciones`
+ * slot (PR21): a ReactNode the container fills with `AccionesDeContrato`,
+ * seated in the documents row so everything the office can do with the
+ * sealed contract reads in one place — while this half stays ignorant of
+ * transitions.
  */
 
 const NOMBRE_DOCUMENTO: Record<DatosDocumentoDisponible["documento"], string> = {
@@ -39,6 +41,12 @@ export interface PropiedadesDetalleDeContrato {
   readonly onDescargar: (documento: DatosDocumentoDisponible) => void;
   /** The document currently being fetched, if any — one download at a time. */
   readonly descargando?: DatosDocumentoDisponible["documento"] | undefined;
+  /**
+   * The contract actions, rendered in the documents row right after the
+   * downloads (PR21). A slot rather than a child component: the transitions
+   * need the mutation seam, and this half may not import `datos/`.
+   */
+  readonly acciones?: ReactNode;
 }
 
 /**
@@ -58,6 +66,13 @@ const CLASE_DATOS = "m-0 grid gap-3 tableta:grid-cols-2 tableta:gap-x-5 escritor
 const CLASE_DATO_ETIQUETA = "text-[0.8125rem] font-semibold text-texto-suave";
 const CLASE_DATO_VALOR = "m-0 font-semibold";
 const CLASE_DOCUMENTOS = "m-0 flex list-none flex-wrap gap-3 p-0";
+/**
+ * One row for downloads and actions (PR21): `gap-x-8` keeps the two
+ * clusters readable as two intents, and gives the no-actions message —
+ * a `w-full` flex item the `acciones` slot may bring — a clean line of
+ * its own under the buttons when the row wraps.
+ */
+const CLASE_FILA_DOCUMENTOS = "flex flex-wrap items-center gap-x-8 gap-y-3";
 const CLASE_HISTORIAL = "m-0 list-none p-0";
 const CLASE_EVENTO = "border-t border-borde-suave py-3 first:border-t-0 first:pt-0";
 const CLASE_EVENTO_LINEA = "m-0 flex flex-wrap items-baseline gap-2";
@@ -78,6 +93,7 @@ export function DetalleDeContrato({
   contrato,
   onDescargar,
   descargando,
+  acciones,
 }: PropiedadesDetalleDeContrato) {
   const { comodatario, equipos, plazo } = contrato;
 
@@ -134,29 +150,37 @@ export function DetalleDeContrato({
 
       <section className={CLASE_SECCION}>
         <h2 className={CLASE_TITULO_SECCION}>Documentos</h2>
-        {contrato.documentos.length === 0 ? (
+        {contrato.documentos.length === 0 && (
           /*
             A draft has no sealed PDFs and the domain forbids it from having
             any, so this is the honest state rather than an empty list or a
-            download that would answer 409.
+            download that would answer 409. The `acciones` slot still renders
+            below — for a borrador it explains, in the same breath, why there
+            is no action to take either.
           */
           <p>Todavía no hay documentos firmados. Se generan cuando el contrato se firma.</p>
-        ) : (
-          <ul className={CLASE_DOCUMENTOS}>
-            {contrato.documentos.map((documento) => (
-              <li key={documento.documento}>
-                <Boton
-                  type="button"
-                  onClick={() => onDescargar(documento)}
-                  disabled={descargando !== undefined}
-                >
-                  {descargando === documento.documento
-                    ? `Descargando ${NOMBRE_DOCUMENTO[documento.documento]}…`
-                    : `Descargar ${NOMBRE_DOCUMENTO[documento.documento]}`}
-                </Boton>
-              </li>
-            ))}
-          </ul>
+        )}
+        {(contrato.documentos.length > 0 || acciones !== undefined) && (
+          <div className={CLASE_FILA_DOCUMENTOS}>
+            {contrato.documentos.length > 0 && (
+              <ul className={CLASE_DOCUMENTOS}>
+                {contrato.documentos.map((documento) => (
+                  <li key={documento.documento}>
+                    <Boton
+                      type="button"
+                      onClick={() => onDescargar(documento)}
+                      disabled={descargando !== undefined}
+                    >
+                      {descargando === documento.documento
+                        ? `Descargando ${NOMBRE_DOCUMENTO[documento.documento]}…`
+                        : `Descargar ${NOMBRE_DOCUMENTO[documento.documento]}`}
+                    </Boton>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {acciones}
+          </div>
         )}
       </section>
 

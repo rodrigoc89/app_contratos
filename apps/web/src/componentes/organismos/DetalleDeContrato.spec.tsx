@@ -188,6 +188,46 @@ describe("DetalleDeContrato", () => {
   });
 
   /**
+   * PR21 — the contract actions sit in the same row as the downloads: one
+   * `flex flex-wrap items-center` container, downloads first. The slot is a
+   * ReactNode so this half stays ignorant of transitions
+   * (container-presentational, `convencionDeCapas.spec.ts`).
+   */
+  it("seats the acciones slot in the same row as the download buttons, downloads first", () => {
+    render(
+      <DetalleDeContrato
+        contrato={contrato()}
+        onDescargar={vi.fn()}
+        acciones={<button type="button">Dar de baja</button>}
+      />,
+    );
+
+    const lista = screen.getByRole("button", { name: "Descargar Comodato" }).closest("ul");
+    const accion = screen.getByRole("button", { name: "Dar de baja" });
+    expect(lista).not.toBeNull();
+
+    const fila = accion.parentElement;
+    expect(lista?.parentElement).toBe(fila);
+    expect(fila?.className).toMatch(/\bflex\b/);
+    expect(fila?.className).toMatch(/\bflex-wrap\b/);
+    expect(fila?.className).toMatch(/\bitems-center\b/);
+    expect(fila?.firstElementChild).toBe(lista);
+  });
+
+  it("still renders the acciones slot when a draft has no documents to download", () => {
+    render(
+      <DetalleDeContrato
+        contrato={contrato({ numero: null, estado: "borrador", documentos: [] })}
+        onDescargar={vi.fn()}
+        acciones={<p>Este contrato todavía no se firmó.</p>}
+      />,
+    );
+
+    expect(screen.getByText(/Todavía no hay documentos firmados/)).toBeInTheDocument();
+    expect(screen.getByText("Este contrato todavía no se firmó.")).toBeInTheDocument();
+  });
+
+  /**
    * The domain forbids a draft from carrying sealed documents, so an empty
    * list is a real state rather than a loading artefact. Offering a download
    * here would answer 409 — saying so up front is the honest screen.
