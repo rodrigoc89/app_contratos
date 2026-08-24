@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -19,6 +19,8 @@ import { Paginador } from "../componentes/moleculas/Paginador";
 import { Toast } from "../componentes/moleculas/Toast";
 import { EscanerDeMac } from "../componentes/organismos/EscanerDeMac";
 import { etiquetaDeEstado, InsigniaDeEstado } from "../componentes/organismos/estadoDeContrato";
+import { FormularioComodatario, type ValoresComodatario } from "../componentes/organismos/FormularioComodatario";
+import { FormularioEquipos, type ValoresEquipos } from "../componentes/organismos/FormularioEquipos";
 import { LienzoDeFirma } from "../componentes/organismos/LienzoDeFirma";
 import { TablaDeContratos } from "../componentes/organismos/TablaDeContratos";
 import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
@@ -27,6 +29,7 @@ import {
   cumplePisoHorizontal,
   cumplePisoVertical,
   esControlInteractivo,
+  esControlNativoDeToque,
   esExento,
   EXENCIONES,
   exencionesSinCorrespondencia,
@@ -1745,5 +1748,164 @@ describe("guard endpoint (task 16.1, D2): componentes/plantillas/ carries no han
     }
 
     expect(ofensores, `hand-authored BEM className found under componentes/plantillas/ — ${ofensores.join(" | ")}`).toEqual([]);
+  });
+});
+
+/**
+ * PR17 (Phase 17, D2/D4/D5) — the técnico half of the four office organisms
+ * disclosed by PR11's inventory gap: `FormularioComodatario`/`FormularioEquipos`
+ * (arm's-length-in-sunlight) plus `PaginaLogin`, which shares their retired
+ * `.formulario` shape. `DetalleDeContrato`/`AccionesDeContrato` (office
+ * panel) are deferred to PR17b — a faithful conversion of all four plus the
+ * shared shape did not fit the 400-line review budget in one PR.
+ */
+const VALORES_COMODATARIO_VACIOS: ValoresComodatario = {
+  nombreCompleto: "",
+  dni: "",
+  domicilioCalle: "",
+  ciudad: "",
+  whatsapp: "",
+};
+const VALORES_EQUIPOS_VACIOS: ValoresEquipos = { antenaModelo: "", antenaMac: "", poe: undefined, canoMetros: "" };
+
+/**
+ * Every non-exempt interactive control inside `contenedor` meets guard 20's
+ * floor — native radio/checkbox controls resolved against base.css's
+ * `@layer base` rule (`esControlNativoDeToque`, D5) are skipped rather than
+ * flagged for carrying no Tailwind sizing class.
+ */
+function esperaControlesDelPanelEnElPiso(contenedor: HTMLElement, componente: string): void {
+  const controles = controlesInteractivosDe(contenedor);
+  let noExentosVistos = 0;
+  for (const elemento of controles) {
+    const tipoNativo = elemento instanceof HTMLInputElement ? elemento.type : undefined;
+    if (esControlNativoDeToque(elemento.tagName.toLowerCase(), tipoNativo, elemento.className)) continue;
+    noExentosVistos += 1;
+    const mensaje = `<${elemento.tagName.toLowerCase()}> inside ${componente} fails guard 20's touch floor: "${elemento.className}"`;
+    expect(cumplePisoVertical(elemento.className) && cumplePisoHorizontal(elemento.className), mensaje).toBe(true);
+  }
+  expect(noExentosVistos, `no non-exempt interactive control found in ${componente} — the scan went vacuous`).toBeGreaterThan(0);
+}
+
+describe("guard 20 (PR17, task 17.1a): the técnico organisms meet the touch floor on every non-exempt interactive control (D5)", () => {
+  it("clears FormularioComodatario's real rendered controls", () => {
+    const { container, unmount } = render(
+      createElement(FormularioComodatario, {
+        valores: VALORES_COMODATARIO_VACIOS,
+        onCambiar: () => {},
+        onContinuar: () => {},
+        error: null,
+        deshabilitado: false,
+      }),
+    );
+    esperaControlesDelPanelEnElPiso(container, "FormularioComodatario");
+    unmount();
+  });
+
+  it("clears FormularioEquipos' real rendered controls, its native radios resolved against base.css's @layer base rule", async () => {
+    const { container, unmount } = render(
+      createElement(FormularioEquipos, {
+        valores: VALORES_EQUIPOS_VACIOS,
+        onCambiar: () => {},
+        onCambiarPoe: () => {},
+        onVolver: () => {},
+        onEnviar: () => {},
+        etiquetaEnvio: "Crear borrador",
+        error: null,
+        deshabilitado: false,
+      }),
+    );
+    await act(async () => {});
+    esperaControlesDelPanelEnElPiso(container, "FormularioEquipos");
+    unmount();
+  });
+});
+
+/**
+ * Guard 8, técnico component-level confirmation (task 17.1b, D4) — the path
+ * axis (`PREFIJOS_RUTA_PANEL`, above) exempts `componentes/organismos/`
+ * wholesale, which blinds it to `FormularioComodatario`/`FormularioEquipos`:
+ * técnico screens are read at arm's length in direct sunlight, the opposite
+ * of the office-panel assumption the axis encodes. Real converted markup
+ * carries no sub-1rem attempt at all, so this is a regression floor proven
+ * genuinely RED by falsification (`text-sm` injected into the real files,
+ * both before and after the redesign) rather than by an inert pre-redesign
+ * pass — the same methodology PR16's guard 8 px-blindness probe used.
+ */
+describe("guard 8 (técnico organisms, task 17.1b, D4): FormularioComodatario/FormularioEquipos attempt no sub-1rem type despite the path axis exempting componentes/organismos/", () => {
+  it("finds zero sub-1rem attempts in FormularioComodatario's real rendered markup", () => {
+    const { container, unmount } = render(
+      createElement(FormularioComodatario, {
+        valores: VALORES_COMODATARIO_VACIOS,
+        onCambiar: () => {},
+        onContinuar: () => {},
+        error: null,
+        deshabilitado: false,
+      }),
+    );
+    for (const elemento of [...container.querySelectorAll<HTMLElement>("*")]) {
+      expect(
+        tamanosDeTextoBajoElPiso(elemento.className),
+        `<${elemento.tagName.toLowerCase()}> in FormularioComodatario attempts sub-1rem type (design.md D4) — read at arm's length in direct sunlight: "${elemento.className}"`,
+      ).toEqual([]);
+    }
+    unmount();
+  });
+
+  it("finds zero sub-1rem attempts in FormularioEquipos' real rendered markup", async () => {
+    const { container, unmount } = render(
+      createElement(FormularioEquipos, {
+        valores: VALORES_EQUIPOS_VACIOS,
+        onCambiar: () => {},
+        onCambiarPoe: () => {},
+        onVolver: () => {},
+        onEnviar: () => {},
+        etiquetaEnvio: "Crear borrador",
+        error: null,
+        deshabilitado: false,
+      }),
+    );
+    await act(async () => {});
+    for (const elemento of [...container.querySelectorAll<HTMLElement>("*")]) {
+      expect(
+        tamanosDeTextoBajoElPiso(elemento.className),
+        `<${elemento.tagName.toLowerCase()}> in FormularioEquipos attempts sub-1rem type (design.md D4) — read at arm's length in direct sunlight: "${elemento.className}"`,
+      ).toEqual([]);
+    }
+    unmount();
+  });
+});
+
+/**
+ * Guard endpoint (task 17.1c, D2) — the técnico organisms + `PaginaLogin`
+ * (which shares the retired `.formulario` shape) carry zero hand-authored
+ * BEM classNames, same mechanism as PR16's `componentes/plantillas/` block
+ * above, over an explicit file list instead of a directory prefix.
+ * `DetalleDeContrato`/`AccionesDeContrato` join this list in PR17b.
+ */
+describe("guard endpoint (task 17.1c, D2): the técnico organisms + PaginaLogin carry no hand-authored BEM className", () => {
+  const RUTAS_OBJETIVO = [
+    "componentes/organismos/FormularioComodatario.tsx",
+    "componentes/organismos/FormularioEquipos.tsx",
+    "funcionalidades/auth/contenedores/PaginaLogin.tsx",
+  ];
+
+  it("rejects every real .tsx file among the técnico organisms and PaginaLogin that carries a hand-authored BEM className", () => {
+    const clasesBem = clasesBemDeclaradas();
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter((archivo) =>
+      RUTAS_OBJETIVO.includes(relative(DIRECTORIO_SRC, archivo.ruta).replaceAll("\\", "/")),
+    );
+    expect(fuentes.length, "expected exactly 3 target files — the scan matched a different set").toBe(RUTAS_OBJETIVO.length);
+
+    const ofensores: string[] = [];
+    for (const { ruta, contenido } of fuentes) {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      const encontradas = clasesBemEnArchivo(contenido, clasesBem);
+      if (encontradas.length > 0) {
+        ofensores.push(`${rutaRelativa}: ${encontradas.join(", ")}`);
+      }
+    }
+
+    expect(ofensores, `hand-authored BEM className found — ${ofensores.join(" | ")}`).toEqual([]);
   });
 });

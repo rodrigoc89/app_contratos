@@ -7,6 +7,7 @@ import { CampoTexto } from "../../../componentes/atomos/CampoTexto";
 import { Etiqueta } from "../../../componentes/atomos/Etiqueta";
 import { MarcaProducto } from "../../../componentes/atomos/MarcaProducto";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
+import { CLASE_FORMULARIO, CLASE_TITULO_FORMULARIO } from "../../../estilos/formulario";
 import type { MotivoCierreDeSesion } from "../../../datos/sesion/estadoSesion";
 import { iniciarSesion } from "../../../datos/sesion/sesion";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
@@ -88,32 +89,24 @@ export function PaginaLogin() {
     /*
       `/login` renders with no layout shell around it (`rutas.tsx`), so the
       form sat against the top edge with the screen empty below it.
-      `.formulario` already centres horizontally (`max-width: 640px;
-      margin: 0 auto`), so this wrapper adds only the vertical axis;
-      `min-h-dvh` uses the dynamic viewport unit so a phone's collapsing
-      browser chrome does not leave the form drifting off-centre mid-scroll.
-
-      The wrapper centres and nothing else. `.formulario`'s own rules are
-      untouched — that class is shared with `FormularioComodatario` and
-      `FormularioEquipos`, and it is unlayered hand-authored CSS, which
-      outranks Tailwind's layered utilities at equal specificity, so fighting
-      it from here would lose silently rather than loudly.
+      `CLASE_FORMULARIO` (`estilos/formulario.ts`) already centres
+      horizontally, so this wrapper adds only the vertical axis; `min-h-dvh`
+      uses the dynamic viewport unit so a phone's collapsing browser chrome
+      does not leave the form drifting off-centre mid-scroll.
     */
     <div className="flex min-h-dvh items-center justify-center">
       <form
         onSubmit={(evento: FormEvent<HTMLFormElement>) => void manejarEnvio(evento)}
-        className="formulario"
+        className={CLASE_FORMULARIO}
+        data-formulario
       >
         <MarcaProducto />
-        <h1>Ingresar</h1>
+        <h1 className={CLASE_TITULO_FORMULARIO}>Ingresar</h1>
         {motivo !== null && <p role="status">{MENSAJE_POR_MOTIVO[motivo]}</p>}
         <Etiqueta htmlFor="nombreUsuario">Usuario</Etiqueta>
         <CampoTexto id="nombreUsuario" value={nombreUsuario} onCambiar={establecerNombreUsuario} />
-        {/*
-          Wrapped so the toggle is not a direct child of `.formulario`, whose
-          `> .boton` rule reserves 24px of air above the step's PRIMARY
-          action. `Boton` still carries the guarded 48px touch target.
-        */}
+        {/* No longer wrapped for `.formulario > .boton`'s sake (retired) —
+            kept as the toggle's own group, no behaviour change. */}
         <div>
           <Etiqueta htmlFor="contrasena">Contraseña</Etiqueta>
           {/*
@@ -158,7 +151,7 @@ export function PaginaLogin() {
           </div>
         </div>
         {error !== null && <p role="alert">{error}</p>}
-        <Boton type="submit" disabled={enviando}>
+        <Boton type="submit" className="mt-6" disabled={enviando}>
           Ingresar
         </Boton>
       </form>

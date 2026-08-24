@@ -216,12 +216,20 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // `html`. Falsified both ways: `text-sm` and `text-[12px]` on
     // `LayoutTecnico.tsx` fail naming the file; `LayoutPanel.tsx` needs no
     // axis entry because 16px is exactly 1rem, not because it is exempt.
+    // PR17 (task 17.1b) — `PREFIJOS_RUTA_PANEL` exempts componentes/organismos/
+    // wholesale, which blinds the tree-wide scan to the two técnico
+    // organisms that live there. A dedicated component-level render scan
+    // closes that hole, falsified genuinely (text-sm injected, both
+    // organisms, reverted) since real converted markup carries no sub-1rem
+    // attempt to catch naturally.
     numero: 8,
     protege: "No font-size<1rem outside the panel subtree",
     disposicion: "JSX",
     pruebas: [
       { archivo: UTILIDADES, titulo: "rejects every real .tsx file outside the panel subtree that attempts sub-1rem type" },
       { archivo: UTILIDADES, titulo: "keeps rem anchored to the browser default: no hand-authored sheet sets font-size on html" },
+      { archivo: UTILIDADES, titulo: "finds zero sub-1rem attempts in FormularioComodatario's real rendered markup" },
+      { archivo: UTILIDADES, titulo: "finds zero sub-1rem attempts in FormularioEquipos' real rendered markup" },
     ],
   },
   {
@@ -415,6 +423,9 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // PR15 (task 15.2) — primary-target confirmed: the row link meets the
     // floor, and both of `EXENCIONES`' real entries (`tbody tr`,
     // `desplazamiento`) now correspond to a real scanned candidate.
+    // PR17 (task 17.1a) — the técnico organisms confirmed; native
+    // radio/checkbox controls resolved against base.css's `@layer base`
+    // rule (`esControlNativoDeToque`, D5) rather than flagged.
     numero: 20,
     protege: "Universal touch-floor scan over every interactive control",
     disposicion: "JSX",
