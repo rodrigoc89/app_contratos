@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { CLASE_ACCIONES_FORMULARIO } from "../../estilos/formulario";
 import { FormularioComodatario, type ValoresComodatario } from "./FormularioComodatario";
 
 /**
@@ -123,5 +124,28 @@ describe("FormularioComodatario — encabezado y progreso", () => {
     expect(
       screen.getByRole("navigation", { name: "Progreso del contrato" }),
     ).toBeInTheDocument();
+  });
+
+  /**
+   * Measured at 390x844 (puppeteer, dev server) before this change: the last
+   * field wrapper's `mb-4` ended at 770.5px and the submit began at 810.5px
+   * — a 40px gap, not the 24px this step's own source comment claimed. The
+   * submit sat bare in the form, and `Boton` renders `inline-flex`: an
+   * atomic inline-level box does not margin-collapse with the block sibling
+   * before it, so the field's 16px and the button's 24px both applied in
+   * full. Step 2 measured exactly 24px there, because its submit already
+   * lived in the shared actions row, whose block-level box does collapse.
+   *
+   * Seating this submit in the same shared row is what makes the two steps
+   * agree, and it removes 16px from a document that was 62px taller than the
+   * viewport.
+   */
+  it("seats the submit in the shared actions row, so the last field's margin collapses into it", () => {
+    render(<FormularioComodatario {...propiedades} />);
+
+    const submit = screen.getByRole("button", { name: "Continuar" });
+
+    expect(submit.parentElement?.className).toBe(CLASE_ACCIONES_FORMULARIO);
+    expect(submit.className).not.toMatch(/(?:^|\s)mt-6(?:\s|$)/);
   });
 });
