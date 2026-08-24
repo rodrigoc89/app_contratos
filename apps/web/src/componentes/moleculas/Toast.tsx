@@ -10,10 +10,15 @@ const DURACION_MS = 5_000;
 /**
  * PR26 — the shared surface for exactly three transient confirmations
  * (design.md "Toast" category): "Borrador creado", "Documentos compartidos
- * correctamente." and the signing confirmation. Bottom-anchored, brand
- * colour, high contrast (design-system-migration PR11: redesigned onto
- * Tailwind, `bg-primario`/`text-white`, the same pairing PR7's `Boton`
- * already proved at 7.25:1).
+ * correctamente." and the signing confirmation. Top-anchored (PR20 review):
+ * bottom-anchored it sat exactly on the wizard's primary action — the
+ * "Continuar"/submit button at the bottom of a short handheld viewport, the
+ * PR13 finding where the harness had to dismiss it to tap the button.
+ * Briefly covering the header for 5s is the deliberate tradeoff: nothing up
+ * there is a primary action. Brand colour, high contrast
+ * (design-system-migration PR11: redesigned onto Tailwind,
+ * `bg-primario`/`text-white`, the same pairing PR7's `Boton` already proved
+ * at 7.25:1).
  * `role="status"` is what makes this announced at all — a toast without a
  * live region goes unnoticed by a screen reader, and it is `status` (polite),
  * never `alert`, because nothing breaks if one of these three is missed.
@@ -59,7 +64,7 @@ export function Toast({ mensaje, onDescartar }: PropiedadesToast) {
   return (
     <div
       role="status"
-      className="fixed inset-x-4 bottom-4 z-10 flex items-center justify-between gap-3 rounded-base bg-primario p-4 font-semibold text-white"
+      className="fixed inset-x-4 top-4 z-10 flex items-center justify-between gap-3 rounded-base bg-primario p-4 font-semibold text-white"
     >
       <p className="m-0">{mensaje}</p>
       <button

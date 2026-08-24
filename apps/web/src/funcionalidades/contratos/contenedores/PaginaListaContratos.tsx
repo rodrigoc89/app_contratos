@@ -57,13 +57,34 @@ export function PaginaListaContratos() {
   return (
     <div data-pagina-lista-contratos>
       <h1 className={CLASE_TITULO}>Contratos</h1>
-      <BarraDeBusqueda
-        termino={termino}
-        onCambiarTermino={establecerTermino}
-        onBuscarInmediato={aplicarBusquedaInmediata}
-        estados={estados}
-        onAlternarEstado={alternarEstado}
-      />
+      {/*
+        PR22 — the working chrome pins; the content scrolls. From `tableta:`
+        up this block is the second sticky tier, anchored exactly below the
+        session header by the SAME `--altura-cabecera-panel` token the
+        header sizes itself with (bracket `var()` spelling — the form guard
+        15's tree-wide inset regex recognises). The title above stays out on
+        purpose: a page title may scroll away; the search box and estado
+        chips may not. `pb-6` replaces the form's old `mb-6` because a
+        margin below a pinned block is a transparent window rows would
+        scroll through — as padding, `bg-fondo` paints it. `tableta:z-0`
+        keeps the block above the rows passing under it and below the
+        header's z-10 (the Toast, also z-10 but later in the DOM, still
+        paints over both). Below `tableta:` it is a plain block: at 360px
+        the chips stack to 209px, and 65px header + 233px search + ~73px
+        sticky paginator would pin more than half of a 640px viewport.
+      */}
+      <div
+        data-zona-de-busqueda
+        className="bg-fondo pb-6 tableta:sticky tableta:top-[var(--altura-cabecera-panel)] tableta:z-0"
+      >
+        <BarraDeBusqueda
+          termino={termino}
+          onCambiarTermino={establecerTermino}
+          onBuscarInmediato={aplicarBusquedaInmediata}
+          estados={estados}
+          onAlternarEstado={alternarEstado}
+        />
+      </div>
 
       {isLoading && (
         <div role="status" className={CLASE_PROGRESO} data-progreso>
