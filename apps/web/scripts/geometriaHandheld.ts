@@ -13,9 +13,11 @@
  *
  * The measured unit is application STATE, not a route: `rutas.tsx` declares
  * one técnico route, and `LienzoDeFirma`/`VisorDeDocumento` are reached only
- * through in-page transitions inside it. **This PR's committed
- * states-reached constant is 5** (S1, S2, S4, S5, S6) — S3 does not exist
- * until PR13 converts those organisms, which bumps this to 6.
+ * through in-page transitions inside it. **PR13's committed states-reached
+ * constant is 6** (S1, S2, S4, S5, S6, S3) — S3 is driven now that both
+ * organisms it reaches have converted off BEM. PR13 also adds guard 19's
+ * runtime half (`elementFromPoint`, real Chrome only) and makes a drifted
+ * visit-script selector report as unreached, not crash.
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
@@ -30,8 +32,8 @@ import type { Page } from "puppeteer";
 /** design.md D8 — 390 is where the two-row `CabeceraDeSesion` regression was measured. */
 export const ANCHOS_HANDHELD = [360, 390, 430] as const;
 
-/** Pre-slice-F states-reached constant (task 5.6). PR13 bumps this to 6 once S3 exists. */
-export const ESTADOS_ESPERADOS = 5;
+/** Slice-F states-reached constant (task 13.5) — S1, S2, S4, S5, S6, S3. */
+export const ESTADOS_ESPERADOS = 6;
 
 /** design.md D8 Assert 2 — the same floor `pisoDeToque.ts` (PR9) will enforce statically. */
 export const PISO_DE_TOQUE_PX = 48;
@@ -131,6 +133,22 @@ export function excedeAlturaDeCabecera(alturaPx: number, presupuesto: number = A
   return alturaPx > presupuesto;
 }
 
+/**
+ * Guard 19's runtime half (task 13.1/13.4/13.5). `Element` cannot cross
+ * `page.evaluate()`'s serialization boundary, so `medirCoberturaDeControles`
+ * resolves `document.elementFromPoint` INSIDE the page and returns these two
+ * plain booleans; this pure function decides pass/fail, unit-tested on fixtures.
+ */
+export interface ResultadoCoberturaControl {
+  readonly esElControl: boolean;
+  readonly esDescendienteDelControl: boolean;
+}
+
+/** True when the element under a control's centre is neither the control nor a descendant of it (the historical iframe-overlap bug). */
+export function controlTapadoPorOtroElemento(resultado: ResultadoCoberturaControl): boolean {
+  return !resultado.esElControl && !resultado.esDescendienteDelControl;
+}
+
 // ── Browser driver (CLI only — real Puppeteer, real `vite preview`) ─────
 
 type TipoDeSesion = "ninguna" | "tecnico" | "oficina";
@@ -141,10 +159,69 @@ interface EstadoTecnico {
   readonly sesion: TipoDeSesion;
   /** Present only once the screen's real content — not its loading state — has rendered. */
   readonly selectorListo: string;
+  /** S3 only (design.md D8) — drives the in-page transitions `ruta` alone cannot reach. Runs after `goto`, before `selectorListo` is awaited. */
+  readonly visitar?: (pagina: Page) => Promise<void>;
 }
 
 /** Committed fixture id, matched by `contratoDetalle.json` and S6's route. */
 const ID_CONTRATO_FIXTURE = "fixture-contrato-1";
+
+/** S3's own created-draft fixture id (`contratoCreado.json`) — distinct from S6's, since the two are unrelated contracts. */
+const ID_CONTRATO_CREADO_FIXTURE = "fixture-contrato-creado-1";
+
+/** design.md D8 — S3's committed visit-script field values, filled into the real `FormularioBorrador`. */
+const DATOS_VISITA_S3 = {
+  nombreCompleto: "Fixture Cliente Handheld", dni: "30111222", domicilioCalle: "Av. Fixture 123",
+  ciudad: "Córdoba", whatsapp: "+5493511234567", antenaModelo: "Ubiquiti LiteBeam",
+  antenaMac: "AA:BB:CC:DD:EE:FF", canoMetros: "12",
+} as const;
+
+/**
+ * S3's visit script (design.md D8, task 13.4/13.5) — the most brittle piece
+ * of this harness: fills the real `FormularioBorrador` across both steps,
+ * submits (`POST /contratos` intercepted below), then taps the
+ * post-creation "Continuar" to reach `EnvioDeFirma`/`PasoFirmaDual`. A
+ * drift in either the field `id`s or the submit label is exactly what
+ * `handheld-readiness`'s drift scenario requires this to report.
+ */
+async function completarVisitaTecnica(pagina: Page): Promise<void> {
+  await pagina.waitForSelector("#nombreCompleto", { timeout: 10_000 });
+  for (const campo of ["nombreCompleto", "dni", "domicilioCalle", "ciudad", "whatsapp"] as const) {
+    await pagina.type(`#${campo}`, DATOS_VISITA_S3[campo]);
+  }
+  await pagina.click('form.formulario button[type="submit"]');
+
+  await pagina.waitForSelector("#antenaModelo", { timeout: 10_000 });
+  await pagina.type("#antenaModelo", DATOS_VISITA_S3.antenaModelo);
+  await pagina.type("#antenaMac", DATOS_VISITA_S3.antenaMac);
+  await pagina.click('input[name="poe"]');
+  await pagina.type("#canoMetros", DATOS_VISITA_S3.canoMetros);
+  // "Crear borrador" — POST /contratos, intercepted below.
+  await pagina.click('form.formulario button[type="submit"]');
+
+  // The same submit button re-renders as "Continuar" once the draft exists
+  // (`FormularioBorrador`'s `etiquetaEnvio`) — waited for by content, not by
+  // a fixed delay, since the POST's own round trip is what changes it.
+  await pagina.waitForFunction(
+    () => {
+      const boton = document.querySelector('form.formulario button[type="submit"]');
+      return boton !== null && boton.textContent?.trim() === "Continuar";
+    },
+    { timeout: 10_000 },
+  );
+
+  // `Toast.tsx` is `fixed inset-x-4 bottom-4` — the "Borrador creado" banner
+  // can sit directly over the equipos step's own bottom submit button on a
+  // short viewport, so dismissing it ("Cerrar aviso") first is what makes
+  // the real "Continuar" tap land on the real button, not the toast.
+  const cerrarAviso = await pagina.$('button[aria-label="Cerrar aviso"]');
+  if (cerrarAviso !== null) {
+    await cerrarAviso.click();
+  }
+
+  await pagina.click('form.formulario button[type="submit"]');
+  await pagina.waitForSelector('iframe[title="Condiciones Generales de Uso"]', { timeout: 10_000 });
+}
 
 const ESTADOS: readonly EstadoTecnico[] = [
   { id: "S1", ruta: "/login", sesion: "ninguna", selectorListo: "form.formulario" },
@@ -156,6 +233,15 @@ const ESTADOS: readonly EstadoTecnico[] = [
     ruta: `/panel/contratos/${ID_CONTRATO_FIXTURE}`,
     sesion: "oficina",
     selectorListo: ".pagina-detalle-contrato",
+  },
+  {
+    // Appended last, matching design.md D8's committed ordering — not
+    // renumbered into route order. Drives LienzoDeFirma/VisorDeDocumento.
+    id: "S3",
+    ruta: "/",
+    sesion: "tecnico",
+    selectorListo: 'iframe[title="Condiciones Generales de Uso"]',
+    visitar: completarVisitaTecnica,
   },
 ];
 
@@ -183,6 +269,8 @@ interface FixturesCargados {
   readonly sesionOficina: unknown;
   readonly listaContratos: unknown;
   readonly contratoDetalle: unknown;
+  readonly contratoCreado: unknown; // S3 only — `POST /contratos`'s response.
+  readonly previsualizacion: unknown; // S3 only — `GET /contratos/:id/previsualizacion`'s response.
 }
 
 async function cargarFixture(nombre: string): Promise<unknown> {
@@ -191,13 +279,16 @@ async function cargarFixture(nombre: string): Promise<unknown> {
 }
 
 async function cargarTodosLosFixtures(): Promise<FixturesCargados> {
-  const [sesionTecnico, sesionOficina, listaContratos, contratoDetalle] = await Promise.all([
-    cargarFixture("sesionTecnico.json"),
-    cargarFixture("sesionOficina.json"),
-    cargarFixture("listaContratos.json"),
-    cargarFixture("contratoDetalle.json"),
-  ]);
-  return { sesionTecnico, sesionOficina, listaContratos, contratoDetalle };
+  const [sesionTecnico, sesionOficina, listaContratos, contratoDetalle, contratoCreado, previsualizacion] =
+    await Promise.all([
+      cargarFixture("sesionTecnico.json"),
+      cargarFixture("sesionOficina.json"),
+      cargarFixture("listaContratos.json"),
+      cargarFixture("contratoDetalle.json"),
+      cargarFixture("contratoCreado.json"),
+      cargarFixture("previsualizacion.json"),
+    ]);
+  return { sesionTecnico, sesionOficina, listaContratos, contratoDetalle, contratoCreado, previsualizacion };
 }
 
 /**
@@ -233,6 +324,14 @@ async function interceptar(pagina: Page, sesion: TipoDeSesion, fixtures: Fixture
     }
     if (peticion.method() === "GET" && url.pathname === `/contratos/${ID_CONTRATO_FIXTURE}`) {
       void peticion.respond({ status: 200, contentType: "application/json", body: JSON.stringify(fixtures.contratoDetalle) });
+      return;
+    }
+    if (peticion.method() === "POST" && url.pathname === "/contratos") {
+      void peticion.respond({ status: 200, contentType: "application/json", body: JSON.stringify(fixtures.contratoCreado) });
+      return;
+    }
+    if (peticion.method() === "GET" && url.pathname === `/contratos/${ID_CONTRATO_CREADO_FIXTURE}/previsualizacion`) {
+      void peticion.respond({ status: 200, contentType: "application/json", body: JSON.stringify(fixtures.previsualizacion) });
       return;
     }
     void peticion.continue();
@@ -283,6 +382,45 @@ async function medirEstado(
   );
 }
 
+interface CoberturaControlCruda extends ResultadoCoberturaControl {
+  readonly id: string;
+  readonly etiquetaDelElementoEncontrado: string;
+}
+
+/**
+ * S3 only — real `elementFromPoint` at each `Deshacer`/`Borrar` centre.
+ * `PasoFirmaDual` renders one pair per document, so every matching button
+ * is hit-tested. `scrollIntoView` first — the emulated viewport does not
+ * fit both `LienzoDeFirma` instances, and a point outside it hits nothing.
+ */
+async function medirCoberturaDeControles(pagina: Page): Promise<readonly CoberturaControlCruda[]> {
+  return await pagina.evaluate(() => {
+    function medir(boton: HTMLButtonElement) {
+      boton.scrollIntoView({ block: "center", inline: "center" });
+      const rect = boton.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const elementoEnPunto = document.elementFromPoint(cx, cy);
+      return {
+        esElControl: elementoEnPunto === boton,
+        esDescendienteDelControl: elementoEnPunto !== null && boton.contains(elementoEnPunto),
+        etiquetaDelElementoEncontrado:
+          elementoEnPunto === null
+            ? "(nothing — point outside the viewport)"
+            : elementoEnPunto.tagName.toLowerCase() +
+              (elementoEnPunto.className ? `.${elementoEnPunto.className.trim().replaceAll(/\s+/g, ".")}` : ""),
+      };
+    }
+
+    const botones = Array.from(document.querySelectorAll("button"));
+    return ["Deshacer", "Borrar"].flatMap((texto) =>
+      botones
+        .filter((boton) => boton.textContent?.trim() === texto)
+        .map((boton, indice) => ({ id: `${texto.toLowerCase()}-${indice}`, ...medir(boton) })),
+    );
+  });
+}
+
 function spawnServidorPreview(): ChildProcess {
   return spawn("pnpm", ["exec", "vite", "preview", "--port", String(PUERTO_PREVIEW), "--strictPort"], {
     cwd: join(import.meta.dirname, ".."),
@@ -318,6 +456,39 @@ function reportarFalla(errores: readonly string[]): void {
   process.exitCode = 1;
 }
 
+type ResultadoAlcance = { readonly exito: true } | { readonly exito: false; readonly motivo: string };
+
+/**
+ * Navigates to `estado` and drives S3's visit script if present, catching
+ * any failure instead of letting it crash `medirTodo` — a drifted selector
+ * (`handheld-readiness`'s drift scenario) is reported as unreached via
+ * `erroresDeCobertura` below, never an uncaught stack trace.
+ */
+async function intentarAlcanzarEstado(
+  pagina: Page,
+  estado: EstadoTecnico,
+  ancho: number,
+  fixtures: FixturesCargados,
+): Promise<ResultadoAlcance> {
+  try {
+    // Trap 1 (design.md D8) — a live service worker answers from the
+    // precache and races interception, measuring a stale build.
+    await pagina.setBypassServiceWorker(true);
+    await sembrarSesion(pagina, estado.sesion);
+    await interceptar(pagina, estado.sesion, fixtures);
+    await pagina.setViewport({ width: ancho, height: 800, isMobile: true, hasTouch: true });
+    await pagina.goto(`${URL_PREVIEW}${estado.ruta}`, { waitUntil: "networkidle0", timeout: 15_000 });
+    if (estado.visitar) {
+      await estado.visitar(pagina);
+    }
+    await pagina.waitForSelector(estado.selectorListo, { timeout: 10_000 });
+    await pagina.waitForFunction(() => document.querySelector(".progreso") === null, { timeout: 10_000 });
+    return { exito: true };
+  } catch (motivo) {
+    return { exito: false, motivo: motivo instanceof Error ? motivo.message : String(motivo) };
+  }
+}
+
 async function medirTodo(fixtures: FixturesCargados): Promise<{ mediciones: MedicionDeEstado[]; problemas: string[] }> {
   const { default: puppeteer } = await import("puppeteer");
   const navegador = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
@@ -329,15 +500,11 @@ async function medirTodo(fixtures: FixturesCargados): Promise<{ mediciones: Medi
       for (const ancho of ANCHOS_HANDHELD) {
         const pagina = await navegador.newPage();
         try {
-          // Trap 1 (design.md D8) — a live service worker answers from the
-          // precache and races interception, measuring a stale build.
-          await pagina.setBypassServiceWorker(true);
-          await sembrarSesion(pagina, estado.sesion);
-          await interceptar(pagina, estado.sesion, fixtures);
-          await pagina.setViewport({ width: ancho, height: 800, isMobile: true, hasTouch: true });
-          await pagina.goto(`${URL_PREVIEW}${estado.ruta}`, { waitUntil: "networkidle0", timeout: 15_000 });
-          await pagina.waitForSelector(estado.selectorListo, { timeout: 10_000 });
-          await pagina.waitForFunction(() => document.querySelector(".progreso") === null, { timeout: 10_000 });
+          const alcance = await intentarAlcanzarEstado(pagina, estado, ancho, fixtures);
+          if (!alcance.exito) {
+            problemas.push(`${estado.id}@${ancho}px: failed to reach this state (${alcance.motivo}) — treated as unreached, not a crash`);
+            continue;
+          }
 
           const medicion = await medirEstado(pagina, ETIQUETAS_INTERACTIVAS, SELECTORES_EXENTOS);
 
@@ -355,6 +522,20 @@ async function medirTodo(fixtures: FixturesCargados): Promise<{ mediciones: Medi
               `${estado.id}@390px: CabeceraDeSesion measured ${medicion.alturaCabecera}px, over the ${ALTURA_MAXIMA_CABECERA_PX}px single-row budget`,
             );
           }
+
+          // Guard 19's runtime half (task 13.1/13.4/13.5) — S3 only, the one
+          // state that actually renders Deshacer/Borrar.
+          if (estado.id === "S3") {
+            const coberturas = await medirCoberturaDeControles(pagina);
+            for (const cobertura of coberturas) {
+              if (controlTapadoPorOtroElemento(cobertura)) {
+                problemas.push(
+                  `${estado.id}@${ancho}px: ${cobertura.id} is covered by ${cobertura.etiquetaDelElementoEncontrado} instead of being the elementFromPoint hit itself (guard 19)`,
+                );
+              }
+            }
+          }
+
           if (ancho === ANCHOS_HANDHELD[0]) {
             mediciones.push({ id: estado.id, controlesMedidos: medicion.controles.length });
           }
