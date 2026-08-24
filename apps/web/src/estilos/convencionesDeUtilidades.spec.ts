@@ -1798,9 +1798,18 @@ export function clasesBemEnArchivo(contenidoTsx: string, clasesBem: ReadonlySet<
   return [...encontradas];
 }
 
-describe("guard endpoint (task 16.1, D2): componentes/plantillas/ carries no hand-authored BEM className", () => {
-  const PREFIJO_PLANTILLAS = "componentes/plantillas/";
-
+/**
+ * Guard endpoint (task 18B.1, D2) — every `.tsx` under `apps/web/src` carries
+ * zero hand-authored BEM classNames. Consolidates PR16's
+ * `componentes/plantillas/`-scoped block and PR17a/17b's explicit 5-file
+ * `RUTAS_OBJETIVO` list into ONE whole-tree scan, now that PR18 finishes the
+ * last first-party BEM containers (`PanelNoDisponible`, `FormularioBorrador`,
+ * `PaginaDetalleContrato`, `PaginaListaContratos`, `EnvioDeFirma`,
+ * `PasoFirmaDual`). Reuses `clasesBemDeclaradas`/`clasesBemEnArchivo`
+ * unchanged — the frozen hand-authored sheets under `estilos/*.css` stay
+ * untouched here and retire in PR19.
+ */
+describe("guard endpoint (task 18B.1, D2): every .tsx under apps/web/src carries no hand-authored BEM className", () => {
   it("finds a non-trivial set of banned BEM class tokens in the frozen hand-authored sheets", () => {
     // Anti-rot floor on the CSS side: if this ever goes to (near) zero
     // before the sheets are actually deleted (PR19), the scan below would
@@ -1808,13 +1817,10 @@ describe("guard endpoint (task 16.1, D2): componentes/plantillas/ carries no han
     expect(clasesBemDeclaradas().size).toBeGreaterThan(3);
   });
 
-  it("rejects every real .tsx file under componentes/plantillas/ that carries a hand-authored BEM className", () => {
+  it("rejects every real .tsx file under apps/web/src that carries a hand-authored BEM className", () => {
     const clasesBem = clasesBemDeclaradas();
-    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => {
-      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
-      return rutaRelativa.startsWith(PREFIJO_PLANTILLAS) && rutaRelativa.endsWith(".tsx");
-    });
-    expect(fuentes.length, "no .tsx files found under componentes/plantillas/ — the scan matched nothing").toBeGreaterThan(0);
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
+    expect(fuentes.length, "no .tsx files found under apps/web/src — the scan matched nothing").toBeGreaterThan(0);
 
     const ofensores: string[] = [];
     for (const { ruta, contenido } of fuentes) {
@@ -1825,7 +1831,7 @@ describe("guard endpoint (task 16.1, D2): componentes/plantillas/ carries no han
       }
     }
 
-    expect(ofensores, `hand-authored BEM className found under componentes/plantillas/ — ${ofensores.join(" | ")}`).toEqual([]);
+    expect(ofensores, `hand-authored BEM className found — ${ofensores.join(" | ")}`).toEqual([]);
   });
 });
 
@@ -2003,42 +2009,5 @@ describe("guard 8 (técnico organisms, task 17.1b, D4): FormularioComodatario/Fo
       ).toEqual([]);
     }
     unmount();
-  });
-});
-
-/**
- * Guard endpoint (task 17.1c/17b.1, D2) — the técnico organisms + `PaginaLogin`
- * (which shares the retired `.formulario` shape) carry zero hand-authored
- * BEM classNames, same mechanism as PR16's `componentes/plantillas/` block
- * above, over an explicit file list instead of a directory prefix.
- * PR17b widens the list to the office pair, `DetalleDeContrato`/
- * `AccionesDeContrato`, rather than writing a fourth scan.
- */
-describe("guard endpoint (task 17.1c/17b.1, D2): the técnico organisms + PaginaLogin + the office organisms carry no hand-authored BEM className", () => {
-  const RUTAS_OBJETIVO = [
-    "componentes/organismos/FormularioComodatario.tsx",
-    "componentes/organismos/FormularioEquipos.tsx",
-    "funcionalidades/auth/contenedores/PaginaLogin.tsx",
-    "componentes/organismos/DetalleDeContrato.tsx",
-    "componentes/organismos/AccionesDeContrato.tsx",
-  ];
-
-  it("rejects every real .tsx file among the técnico organisms, PaginaLogin and the office organisms that carries a hand-authored BEM className", () => {
-    const clasesBem = clasesBemDeclaradas();
-    const fuentes = archivosFuente(DIRECTORIO_SRC).filter((archivo) =>
-      RUTAS_OBJETIVO.includes(relative(DIRECTORIO_SRC, archivo.ruta).replaceAll("\\", "/")),
-    );
-    expect(fuentes.length, "expected exactly 5 target files — the scan matched a different set").toBe(RUTAS_OBJETIVO.length);
-
-    const ofensores: string[] = [];
-    for (const { ruta, contenido } of fuentes) {
-      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
-      const encontradas = clasesBemEnArchivo(contenido, clasesBem);
-      if (encontradas.length > 0) {
-        ofensores.push(`${rutaRelativa}: ${encontradas.join(", ")}`);
-      }
-    }
-
-    expect(ofensores, `hand-authored BEM className found — ${ofensores.join(" | ")}`).toEqual([]);
   });
 });

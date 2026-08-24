@@ -17,7 +17,7 @@ export function PanelNoDisponible() {
   const salir = usarCierreDeSesion();
 
   return (
-    <div className="panel-no-disponible">
+    <div className="p-6" data-panel-no-disponible>
       <p>Todavía no hay un panel disponible para su rol.</p>
       {/* `void` rather than passing `salir` straight through: `onClick`
           expects a void return, and handing React an async function makes it

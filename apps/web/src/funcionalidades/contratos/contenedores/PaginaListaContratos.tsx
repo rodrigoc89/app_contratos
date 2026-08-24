@@ -5,7 +5,16 @@ import { Paginador } from "../../../componentes/moleculas/Paginador";
 import { TablaDeContratos } from "../../../componentes/organismos/TablaDeContratos";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
+import { CLASE_PROGRESO } from "../../../estilos/progreso";
 import { usarBusquedaDeContratos } from "../usarBusquedaDeContratos";
+
+/**
+ * design-system-migration PR18 (task 18.4) — ported 1:1 from
+ * `.pagina-lista-contratos > h1`/`> p[role="status"]` (panel.css); the bare
+ * `.pagina-lista-contratos` block itself declares no rule of its own.
+ */
+const CLASE_TITULO = "m-0 mb-2 border-b-2 border-primario pb-3 text-[1.75rem] font-bold tracking-tight";
+const CLASE_ESTADO_RESULTADOS = "m-0 mb-3 text-[0.9375rem] font-semibold text-texto-suave";
 
 function textoDeEstadoVacio(total: number, hayFiltroActivo: boolean): string {
   if (total !== 0) {
@@ -46,8 +55,8 @@ export function PaginaListaContratos() {
   const hayFiltroActivo = termino.trim() !== "" || estados.length > 0;
 
   return (
-    <div className="pagina-lista-contratos">
-      <h1>Contratos</h1>
+    <div data-pagina-lista-contratos>
+      <h1 className={CLASE_TITULO}>Contratos</h1>
       <BarraDeBusqueda
         termino={termino}
         onCambiarTermino={establecerTermino}
@@ -57,7 +66,7 @@ export function PaginaListaContratos() {
       />
 
       {isLoading && (
-        <div role="status" className="progreso">
+        <div role="status" className={CLASE_PROGRESO} data-progreso>
           <span aria-hidden="true">
             <Spinner etiqueta="Cargando contratos" />
           </span>
@@ -80,7 +89,9 @@ export function PaginaListaContratos() {
 
       {!isLoading && !isError && data !== undefined && (
         <>
-          <p role="status">{textoDeEstadoVacio(data.total, hayFiltroActivo)}</p>
+          <p role="status" className={CLASE_ESTADO_RESULTADOS}>
+            {textoDeEstadoVacio(data.total, hayFiltroActivo)}
+          </p>
           {data.total > 0 && <TablaDeContratos contratos={data.elementos} />}
         </>
       )}

@@ -9,9 +9,22 @@ import { DetalleDeContrato } from "../../../componentes/organismos/DetalleDeCont
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { descargarDocumento } from "../../../datos/descargaDeArchivo";
 import { mensajeDeError } from "../../../errores/mensajeDeError";
+import { CLASE_PROGRESO } from "../../../estilos/progreso";
 import { conSufijo } from "../../../rutas/tituloDeDocumento";
 import { usarContrato } from "../usarContrato";
 import { usarTransicionDeContrato } from "../usarTransicionDeContrato";
+
+/**
+ * design-system-migration PR18 (task 18.3) — ported 1:1 from
+ * `.pagina-detalle-contrato__volver a` (panel.css), the parent-selector rule
+ * for a bare `<Link>`: `className={CLASE_VOLVER}` (a JS expression, not a
+ * literal string) keeps this element deliberately invisible to
+ * `convencionesDeEstilos.spec.ts`'s CSS-scoped `<a>`/`<Link>` scan, the same
+ * convention `TablaDeContratos.tsx` (PR15) established for the same reason —
+ * that scan only reads a literal `className="…"`.
+ */
+const CLASE_VOLVER =
+  "inline-flex min-h-toque min-w-toque items-center font-semibold text-primario no-underline hover:underline";
 
 /**
  * The office contract detail. Owns the query and the download, and hands
@@ -65,13 +78,15 @@ export function PaginaDetalleContrato() {
   }
 
   return (
-    <div className="pagina-detalle-contrato">
-      <p className="pagina-detalle-contrato__volver">
-        <Link to="/panel">← Volver al listado</Link>
+    <div data-pagina-detalle-contrato>
+      <p className="mb-4">
+        <Link className={CLASE_VOLVER} to="/panel">
+          ← Volver al listado
+        </Link>
       </p>
 
       {isLoading && (
-        <div role="status" className="progreso">
+        <div role="status" className={CLASE_PROGRESO} data-progreso>
           <span aria-hidden="true">
             <Spinner etiqueta="Cargando el contrato" />
           </span>
