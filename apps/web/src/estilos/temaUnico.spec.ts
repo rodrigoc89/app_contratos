@@ -9,9 +9,11 @@ import { describe, expect, it } from "vitest";
  * policy — no dark variant") — `shadcn init`'s own scaffold output (run
  * during this PR) injected a `.dark { … }` block and a
  * `@custom-variant dark (&:is(.dark *));` rule into `estilos/index.css`;
- * both were deleted before `tema.css` landed. Same convention as
- * `convencionesDeEstilos.spec.ts`: inline text-level scan, since jsdom
- * performs no layout and no real build runs in this suite.
+ * both were deleted before `tema.css` landed. Inline text-level scan, since
+ * jsdom performs no layout and no real build runs in this suite. `index.css`
+ * was `tema.css`'s sibling entry point until PR19 (task 19.2) deleted it and
+ * folded its `@import "tailwindcss"`/`@source not "./"` prelude into
+ * `tema.css` itself, which is now the sole shipped stylesheet.
  */
 const DIRECTORIO_ESTILOS = dirname(fileURLToPath(import.meta.url));
 const DIRECTORIO_WEB = join(DIRECTORIO_ESTILOS, "..", "..");
@@ -49,8 +51,8 @@ describe("single-theme policy — no dark variant (design-system-foundation)", (
     expect(tieneCustomVariantDark(limpio)).toBe(false);
   });
 
-  it("reports no dark-mode artifacts on the real shipped stylesheets", () => {
-    for (const archivo of ["tema.css", "index.css"]) {
+  it("reports no dark-mode artifacts on the real shipped stylesheet", () => {
+    for (const archivo of ["tema.css"]) {
       const contenido = leerEstilo(archivo);
       expect(tieneBloqueDark(contenido), archivo).toBe(false);
       expect(tieneCustomVariantDark(contenido), archivo).toBe(false);

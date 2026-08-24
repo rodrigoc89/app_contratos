@@ -458,7 +458,7 @@ describe("FormularioBorrador", () => {
    * técnico's contract would be reported to a callback that stopped being
    * the parent's current one somewhere during that await.
    *
-   * It is invisible today only because `manejarCreado` happens to close over
+   * It goes unnoticed today only because `manejarCreado` happens to close over
    * nothing but its own setters — an accident of its current body, not a
    * property anyone wrote down. This test refuses to depend on that accident:
    * the parent's callback closes over parent state that CHANGES between mount

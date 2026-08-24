@@ -1,16 +1,19 @@
 /**
- * Loads the contract template version and the comodante signatory.
+ * Loads the contract template version, the comodante signatory and — outside
+ * production — a set of demo contracts for the office list.
  *
  *   pnpm --filter @contratos/api prisma:seed
  *
  * Idempotent: running it again reports what was already there and writes
  * nothing. It refuses outright to install the provisional test signature in
- * production — see `seedDatabase`.
+ * production — see `seedDatabase` — and `seedContratosDemo` refuses to put
+ * its invented people there at all.
  */
 // Prisma 7 no longer loads .env files automatically, and neither does Node.
 // Same explicit load as prisma.config.ts, for the same reason.
 import "dotenv/config";
 
+import { PrismaContratoRepository } from "../src/contratos/infrastructure/PrismaContratoRepository";
 import { RelojDelSistema } from "../src/contratos/infrastructure/RelojDelSistema";
 import { PrismaFirmanteRepository } from "../src/firmantes/infrastructure/PrismaFirmanteRepository";
 import { HashDeContrasenaArgon2 } from "../src/identidad/infrastructure/HashDeContrasenaArgon2";
@@ -20,6 +23,10 @@ import {
   buildSeedContent,
   PROVISIONAL_SIGNATORY_VERSION,
 } from "../src/seed/seedContent";
+import {
+  describeContratosDemoReport,
+  seedContratosDemo,
+} from "../src/seed/seedContratosDemo";
 import { describeSeedReport, seedDatabase } from "../src/seed/seedDatabase";
 import { crearPrismaClient } from "../src/shared/infrastructure/persistence/prismaClient";
 
@@ -36,11 +43,13 @@ const prisma = crearPrismaClient();
 
 try {
   const content = await buildSeedContent();
+  const plantillas = new PrismaPlantillaRepository(prisma, new RelojDelSistema());
+  const firmantes = new PrismaFirmanteRepository(prisma);
 
   const reporte = await seedDatabase({
     content,
-    templates: new PrismaPlantillaRepository(prisma, new RelojDelSistema()),
-    signatories: new PrismaFirmanteRepository(prisma),
+    templates: plantillas,
+    signatories: firmantes,
     nodeEnv: process.env.NODE_ENV,
     administrador: {
       id: ADMIN_ID,
@@ -64,6 +73,27 @@ try {
   });
 
   console.log(describeSeedReport(reporte));
+
+  // The demo contracts sign against the rows the seed just ensured exist, so
+  // their ids are looked up from the database rather than assumed — a dev
+  // database seeded under older constants keeps working.
+  const [plantillaInstalada, firmanteInstalado] = await Promise.all([
+    plantillas.buscarPorVersion(reporte.plantilla.version),
+    firmantes.buscarPorVersion(reporte.firmante.version),
+  ]);
+  if (plantillaInstalada === null || firmanteInstalado === null) {
+    throw new Error(
+      "No se encontraron la plantilla y el firmante recién sembrados; no se pueden crear los contratos de demostración.",
+    );
+  }
+
+  const reporteDemo = await seedContratosDemo({
+    contratos: new PrismaContratoRepository(prisma, new RelojDelSistema()),
+    plantillaVersionId: plantillaInstalada.id,
+    firmanteId: firmanteInstalado.id,
+    nodeEnv: process.env.NODE_ENV,
+  });
+  console.log(describeContratosDemoReport(reporteDemo));
 
   if (reporte.firmante.version === PROVISIONAL_SIGNATORY_VERSION) {
     console.log(
