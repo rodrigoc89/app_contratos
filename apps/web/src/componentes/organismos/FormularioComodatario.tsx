@@ -5,6 +5,7 @@ import { CampoTexto } from "../atomos/CampoTexto";
 import { Etiqueta } from "../atomos/Etiqueta";
 import { IndicadorDePaso, PASOS_DEL_BORRADOR } from "../moleculas/IndicadorDePaso";
 import {
+  CLASE_ACCIONES_FORMULARIO,
   CLASE_CAMPO_FORMULARIO,
   CLASE_ETIQUETA_FORMULARIO,
   CLASE_FORMULARIO,
@@ -73,11 +74,23 @@ export function FormularioComodatario({
         </div>
       ))}
       {error !== null && <p role="alert">{error}</p>}
-      {/* `.formulario > .boton`'s 24px breathing room, ported directly since
-          this is the step's only bare action (no `.formulario__acciones` row). */}
-      <Boton type="submit" className="mt-6" disabled={deshabilitado}>
-        Continuar
-      </Boton>
+      {/*
+        The 24px above the primary action, in the same shared row step 2 uses
+        — not `mt-6` on a bare button, which is what this was and which did
+        not measure 24px. `Boton` renders `inline-flex`, and an atomic
+        inline-level box does not margin-collapse with the block sibling
+        before it: at 390x844 (puppeteer, dev server) the last field wrapper's
+        `mb-4` ended at 770.5px and the button began at 810.5px, both margins
+        applying in full for a 40px gap. Step 2's identical relationship
+        measured exactly 24px, because a block-level row is what lets the
+        field's own margin collapse into the row's. One action still reads as
+        one action inside it — the row only wraps when there are two.
+      */}
+      <div className={CLASE_ACCIONES_FORMULARIO}>
+        <Boton type="submit" disabled={deshabilitado}>
+          Continuar
+        </Boton>
+      </div>
     </form>
   );
 }

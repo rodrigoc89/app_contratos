@@ -278,4 +278,24 @@ describe("PaginaLogin — encabezado", () => {
       (marca?.compareDocumentPosition(encabezado) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  /**
+   * `CLASE_FORMULARIO` stopped carrying a gutter of its own: measured on the
+   * técnico steps, the one it declared stacked on top of `LayoutTecnico`'s
+   * `main` padding and put 40.5px of document below the last painted pixel.
+   * `/login` has no layout above it (`rutas.tsx`), so it is the page that has
+   * to supply the gutter here — and this asserts that it does, rather than
+   * leaving the form pressed against the screen edge on a phone.
+   */
+  it("supplies its own gutter, since no layout shell wraps this screen", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <PaginaLogin />
+      </MemoryRouter>,
+    );
+
+    const envoltorio = container.querySelector("[data-formulario]")?.parentElement;
+
+    expect(envoltorio?.className).toMatch(/(?:^|\s)p-6(?:\s|$)/);
+  });
 });

@@ -90,11 +90,18 @@ export function PaginaLogin() {
       `/login` renders with no layout shell around it (`rutas.tsx`), so the
       form sat against the top edge with the screen empty below it.
       `CLASE_FORMULARIO` (`estilos/formulario.ts`) already centres
-      horizontally, so this wrapper adds only the vertical axis; `min-h-dvh`
+      horizontally, so this wrapper adds the vertical centring; `min-h-dvh`
       uses the dynamic viewport unit so a phone's collapsing browser chrome
       does not leave the form drifting off-centre mid-scroll.
+
+      `p-6` moved here from `CLASE_FORMULARIO`, which no longer carries a
+      gutter of its own: inside `LayoutTecnico`'s `main` that gutter stacked
+      on top of the layout's and put 40.5px of document below the last
+      painted pixel on both draft steps (measured at 390x844 — see the
+      constant's note). This screen is the one place that shape renders with
+      no layout above it, so the gutter it needs is the page's to give.
     */
-    <div className="flex min-h-dvh items-center justify-center">
+    <div className="flex min-h-dvh items-center justify-center p-6">
       <form
         onSubmit={(evento: FormEvent<HTMLFormElement>) => void manejarEnvio(evento)}
         className={CLASE_FORMULARIO}
