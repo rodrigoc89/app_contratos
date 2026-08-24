@@ -18,7 +18,7 @@ import { usarTransicionDeContrato } from "../usarTransicionDeContrato";
  * design-system-migration PR18 (task 18.3) — ported 1:1 from
  * `.pagina-detalle-contrato__volver a` (panel.css), the parent-selector rule
  * for a bare `<Link>`: `className={CLASE_VOLVER}` (a JS expression, not a
- * literal string) keeps this element deliberately invisible to
+ * literal string) deliberately keeps this element unseen by
  * `convencionesDeEstilos.spec.ts`'s CSS-scoped `<a>`/`<Link>` scan, the same
  * convention `TablaDeContratos.tsx` (PR15) established for the same reason —
  * that scan only reads a literal `className="…"`.

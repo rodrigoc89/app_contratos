@@ -1799,17 +1799,22 @@ export function clasesBemEnArchivo(contenidoTsx: string, clasesBem: ReadonlySet<
 }
 
 /**
- * Guard endpoint (task 18B.1, D2) — every `.tsx` under `apps/web/src` carries
- * zero hand-authored BEM classNames. Consolidates PR16's
+ * Guard endpoint (task 18B.1, D2) — every `.ts`/`.tsx` under `apps/web/src`
+ * carries zero hand-authored BEM classNames. Consolidates PR16's
  * `componentes/plantillas/`-scoped block and PR17a/17b's explicit 5-file
  * `RUTAS_OBJETIVO` list into ONE whole-tree scan, now that PR18 finishes the
  * last first-party BEM containers (`PanelNoDisponible`, `FormularioBorrador`,
  * `PaginaDetalleContrato`, `PaginaListaContratos`, `EnvioDeFirma`,
- * `PasoFirmaDual`). Reuses `clasesBemDeclaradas`/`clasesBemEnArchivo`
- * unchanged — the frozen hand-authored sheets under `estilos/*.css` stay
- * untouched here and retire in PR19.
+ * `PasoFirmaDual`). Plain `.ts` is in scope because shared class-list modules
+ * (`estilos/formulario.ts`, `estilos/progreso.ts`) are an established
+ * convention — a BEM token smuggled through one renders in the DOM just the
+ * same. Excluded: `*.spec.ts` (BEM tokens as fixtures/probes) and
+ * `estilos/guardias/` (frozen-sheet selectors as guard data). Reuses
+ * `clasesBemDeclaradas`/`clasesBemEnArchivo` unchanged — the frozen
+ * hand-authored sheets under `estilos/*.css` stay untouched here and retire
+ * in PR19.
  */
-describe("guard endpoint (task 18B.1, D2): every .tsx under apps/web/src carries no hand-authored BEM className", () => {
+describe("guard endpoint (task 18B.1, D2): every .ts/.tsx under apps/web/src carries no hand-authored BEM className", () => {
   it("finds a non-trivial set of banned BEM class tokens in the frozen hand-authored sheets", () => {
     // Anti-rot floor on the CSS side: if this ever goes to (near) zero
     // before the sheets are actually deleted (PR19), the scan below would
@@ -1817,15 +1822,32 @@ describe("guard endpoint (task 18B.1, D2): every .tsx under apps/web/src carries
     expect(clasesBemDeclaradas().size).toBeGreaterThan(3);
   });
 
-  it("rejects every real .tsx file under apps/web/src that carries a hand-authored BEM className", () => {
+  // String literals where a banned token is prose, not a class — scoped to
+  // one file + one token each, so any other token in the same file (or the
+  // same token anywhere else) still trips the scan.
+  const PROSA_EXENTA: ReadonlyArray<{ readonly ruta: string; readonly token: string }> = [
+    // UI copy "Corregir el primer campo con error" — "campo" is the Spanish
+    // word for a form field there, not panel.css's `.campo`.
+    { ruta: "errores/mensajeDeError.ts", token: "campo" },
+  ];
+
+  it("rejects every real .ts/.tsx file under apps/web/src that carries a hand-authored BEM className", () => {
     const clasesBem = clasesBemDeclaradas();
-    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => ruta.endsWith(".tsx"));
-    expect(fuentes.length, "no .tsx files found under apps/web/src — the scan matched nothing").toBeGreaterThan(0);
+    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => {
+      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
+      if (rutaRelativa.endsWith(".spec.ts") || rutaRelativa.startsWith("estilos/guardias/")) {
+        return false;
+      }
+      return rutaRelativa.endsWith(".tsx") || rutaRelativa.endsWith(".ts");
+    });
+    expect(fuentes.length, "no .ts/.tsx files found under apps/web/src — the scan matched nothing").toBeGreaterThan(0);
 
     const ofensores: string[] = [];
     for (const { ruta, contenido } of fuentes) {
       const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
-      const encontradas = clasesBemEnArchivo(contenido, clasesBem);
+      const encontradas = clasesBemEnArchivo(contenido, clasesBem).filter(
+        (token) => !PROSA_EXENTA.some((exenta) => exenta.ruta === rutaRelativa && exenta.token === token),
+      );
       if (encontradas.length > 0) {
         ofensores.push(`${rutaRelativa}: ${encontradas.join(", ")}`);
       }
