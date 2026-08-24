@@ -104,6 +104,12 @@ describe("provision.sh --dry-run", () => {
       `[plan] would append '${swapFile} none swap sw 0 0' to '${fstabFile}'`,
     );
     expect(stdout).toContain(`[plan] would append '.cache/' to '${excludeFile}'`);
+    // `useradd --create-home` copies /etc/skel into $APP_DIR, which is also
+    // the checkout: three untracked dotfiles that trip deploy.sh's
+    // dirty-worktree guard on the very first deploy. Seen on the real host.
+    for (const skeletonFile of [".bash_logout", ".bashrc", ".profile"]) {
+      expect(stdout).toContain(`[plan] would append '${skeletonFile}' to '${excludeFile}'`);
+    }
   });
 
   it("skips every idempotent-guarded resource that is already provisioned", async () => {
@@ -118,7 +124,7 @@ describe("provision.sh --dry-run", () => {
     await writeFile(swapFile, "", "utf-8");
     await writeFile(fstabFile, `${swapFile} none swap sw 0 0\n`, "utf-8");
     await mkdir(join(appDir, ".git", "info"), { recursive: true });
-    await writeFile(excludeFile, ".cache/\n", "utf-8");
+    await writeFile(excludeFile, ".cache/\n.bash_logout\n.bashrc\n.profile\n", "utf-8");
     const binDir = await makeToolchainBin(scratch, { node: "v24.1.0", pnpm: "11.11.0" });
 
     const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
@@ -142,7 +148,11 @@ describe("provision.sh --dry-run", () => {
     expect(stdout).toContain(
       `[skip] fstab entry for '${swapFile}' already present in '${fstabFile}'`,
     );
-    expect(stdout).toContain(`[skip] '.cache/' already present in '${excludeFile}'`);
+    // Guarded per line, not per file: a host provisioned before the skeleton
+    // entries existed has `.cache/` only and must still gain the other three.
+    for (const entry of [".cache/", ".bash_logout", ".bashrc", ".profile"]) {
+      expect(stdout).toContain(`[skip] '${entry}' already present in '${excludeFile}'`);
+    }
   });
 
   it("reinstalls the toolchain when the Node on PATH is older than the pinned major", async () => {

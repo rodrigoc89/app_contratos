@@ -49,7 +49,7 @@ requirement:
 | `contratos` system user | `[skip] user '…' already exists` | `[plan] would create system user '…'` |
 | `$APP_DIR`, `$DOCUMENT_STORE_DIR` | `[skip] directory '…' already exists` | `[plan] would create directory '…'` |
 | Swapfile + its `/etc/fstab` entry | `[skip] swapfile '…' already exists` / `[skip] fstab entry for '…' already present` | `[plan] would create a 2048MB swapfile at '…'` / `[plan] would append '… none swap sw 0 0' to '…'` |
-| `.cache/` in the git exclude file | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
+| `.cache/`, `.bash_logout`, `.bashrc`, `.profile` in the git exclude file (one guard per entry) | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
 | Node.js ≥ `NODE_MAJOR` and pnpm = `PNPM_VERSION` on `$PATH` | `[skip] node v… (>= 24) and pnpm 11.11.0 already installed` | `[plan] would install Node.js 24 (NodeSource) and pnpm 11.11.0` |
 
 All five are asserted by `deploy/provision.spec.ts` against a scratch temp
@@ -76,6 +76,15 @@ on every single deploy, so `provision.sh` appends `.cache/` to the
 unshared `.git/info/exclude` instead. That step only needs the directory
 chain to exist, not a real clone yet, so it is safe to run before or after
 the first `git clone` into `/opt/contratos`.
+
+The same overlap bites a second time, and it did on the real host:
+`useradd --create-home` copies `/etc/skel` into the new home, so
+`.bash_logout`, `.bashrc` and `.profile` land untracked inside the checkout,
+and `git status --porcelain` (untracked files included) makes the very first
+`deploy.sh` refuse over a "dirty" worktree. `provision.sh` excludes those
+three as well, one guard per line, so a host provisioned before they were
+added still gains them on the next re-run — the table above shows the
+`.cache/` line; the other three print the same `[skip]`/`[plan]` shape.
 
 ## Chromium and fonts (D1, D2)
 

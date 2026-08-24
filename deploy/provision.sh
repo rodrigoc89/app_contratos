@@ -348,25 +348,41 @@ provision_dir() {
 # own .gitignore (verified: `git check-ignore .cache` reports no match), so
 # this has to live in the local, unshared `info/exclude` instead.
 #
+# The same home/checkout overlap has a second consequence, seen on the real
+# host: `useradd --create-home` copies /etc/skel into $APP_DIR, so
+# `.bash_logout`, `.bashrc` and `.profile` sit untracked inside the checkout
+# and the very first `deploy.sh` refuses over a "dirty" worktree. They are
+# excluded here too, each entry guarded on its own line so a host provisioned
+# before they were added still gains them.
+#
 # This step is safe to run before the repository is ever cloned into
 # $APP_DIR: it only creates the directory chain that would hold that
 # exclude file. Clone the repository into $APP_DIR before or after running
 # this script — either order works, since re-running provision.sh is
 # exactly what this guard is for.
+GIT_EXCLUDE_ENTRIES=('.cache/' '.bash_logout' '.bashrc' '.profile')
+
+git_exclude_entry_present() {
+  [ -f "$GIT_EXCLUDE_FILE" ] && grep -qxF "$1" "$GIT_EXCLUDE_FILE"
+}
+
 provision_git_exclude() {
-  if [ -f "$GIT_EXCLUDE_FILE" ] && grep -qxF '.cache/' "$GIT_EXCLUDE_FILE"; then
-    skip "'.cache/' already present in '$GIT_EXCLUDE_FILE'"
-    return
-  fi
+  local entry
+  for entry in "${GIT_EXCLUDE_ENTRIES[@]}"; do
+    if git_exclude_entry_present "$entry"; then
+      skip "'$entry' already present in '$GIT_EXCLUDE_FILE'"
+      continue
+    fi
 
-  if [ "$DRY_RUN" = true ]; then
-    plan "would append '.cache/' to '$GIT_EXCLUDE_FILE'"
-    return
-  fi
+    if [ "$DRY_RUN" = true ]; then
+      plan "would append '$entry' to '$GIT_EXCLUDE_FILE'"
+      continue
+    fi
 
-  mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
-  printf '.cache/\n' >> "$GIT_EXCLUDE_FILE"
-  log "added '.cache/' to '$GIT_EXCLUDE_FILE'"
+    mkdir -p "$(dirname "$GIT_EXCLUDE_FILE")"
+    printf '%s\n' "$entry" >> "$GIT_EXCLUDE_FILE"
+    log "added '$entry' to '$GIT_EXCLUDE_FILE'"
+  done
 }
 
 main() {
