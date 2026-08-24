@@ -59,7 +59,11 @@ export function BarraDeBusqueda({
   }
 
   return (
-    <form role="search" onSubmit={manejarEnvio} className="mb-6 flex flex-wrap items-end gap-3">
+    // No bottom margin of its own (PR22): the list page pins this form in a
+    // sticky wrapper, and the 24px that used to be `mb-6` here must be the
+    // WRAPPER's opaque padding — a margin below a pinned block is a
+    // transparent window rows scroll through. The wrapper owns the gap.
+    <form role="search" onSubmit={manejarEnvio} className="flex flex-wrap items-end gap-3">
       {/*
         The label and its field share one flex item. `Etiqueta` is `block`,
         which does nothing when it is itself a flex child — it became a

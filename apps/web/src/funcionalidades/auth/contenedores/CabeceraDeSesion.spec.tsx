@@ -151,4 +151,26 @@ describe("CabeceraDeSesion", () => {
 
     expect(salir.getAttribute("aria-label")).toBe("Cerrar sesión");
   });
+
+  /**
+   * PR22 — the header pins (guard 15's tree-wide scan already holds the
+   * sticky+inset+background triple), and now at an EXPLICIT height: the
+   * list page's search block anchors its own sticky offset at
+   * `--altura-cabecera-panel`, so the header must render exactly that tall
+   * (65px, the measured natural height — 48px control + 2x8px padding +
+   * 1px border) or the second tier would pin over a gap or under a lip.
+   * jsdom performs no layout, so the class list is the observable contract.
+   */
+  it("pins at the token height the panel's second sticky tier anchors below", () => {
+    const { container } = render(<CabeceraDeSesion nombreUsuario="oficina" />);
+
+    const cabecera = container.querySelector("[data-cabecera-de-sesion]");
+    expect(cabecera, "the [data-cabecera-de-sesion] hook is gone").not.toBeNull();
+    const clases = cabecera?.className ?? "";
+
+    expect(clases).toMatch(/\bsticky\b/);
+    expect(clases).toMatch(/\btop-0\b/);
+    expect(clases).toMatch(/\bbg-fondo\b/);
+    expect(clases).toMatch(/\bh-\[var\(--altura-cabecera-panel\)\]/);
+  });
 });

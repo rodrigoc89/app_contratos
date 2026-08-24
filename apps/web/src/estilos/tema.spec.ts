@@ -100,6 +100,20 @@ describe("estilos/tema.css — @theme token layer (D3)", () => {
     ).toBe(true);
   });
 
+  /**
+   * PR22 — the sticky office chrome's anchor. 65px is the session header's
+   * real rendered height, measured with a puppeteer probe against the live
+   * render at BOTH 1280x800 and 360x640 (48px logout control + 2x8px
+   * padding + 1px bottom border). The list page's sticky search block
+   * offsets itself by this token (`top-[var(--altura-cabecera-panel)]`),
+   * and the header sizes itself with it, so the two tiers can never drift
+   * apart — which is why the value lives in @theme, not in any component.
+   */
+  it("declares --altura-cabecera-panel at the header's measured 65px height", () => {
+    const tema = bloqueTheme(leerEstilo("tema.css"));
+    expect(/--altura-cabecera-panel\s*:\s*65px\s*;/.test(tema)).toBe(true);
+  });
+
   it("resets the default breakpoint tiers, then names only 640px/1024px", () => {
     const tema = bloqueTheme(leerEstilo("tema.css"));
 

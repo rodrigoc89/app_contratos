@@ -659,10 +659,10 @@ function contratoOficinaFixture(sobrescrituras: Partial<DatosContratoDetalle> = 
  * Guard 4 (task 17b.3), office confirmation — `AccionesDeContrato`'s real
  * composition, the same PR13 (`LienzoDeFirma`) template applied to the
  * office's own destructive pair (Anular, marked destructive by name per the
- * component's own docstring). The confirmation form that follows never
- * co-exists with the actions row in the DOM (the `abierto` state ternary is
- * either/or), so unlike `LienzoDeFirma`'s `mb-8` there is no simultaneous
- * next control to clear — only the gap between the pair is asserted.
+ * component's own docstring). The confirmation form lives in a modal
+ * (`Dialogo`, PR21) — out of the row's flow entirely, behind `showModal()`'s
+ * backdrop — so unlike `LienzoDeFirma`'s `mb-8` there is no simultaneous
+ * next control in flow to clear — only the gap between the pair is asserted.
  */
 describe("guard 4 (office composition, PR17b): AccionesDeContrato colours Anular destructive by its own variant, at >=32px gap from Dar de baja", () => {
   const SEPARACION_MINIMA_PX = 32;
@@ -1844,8 +1844,8 @@ describe("guard 20 (PR17, task 17.1a): the técnico organisms meet the touch flo
 /**
  * Guard 20 (PR17b, task 17b.1): the office half of the panel D5 confirms —
  * `DetalleDeContrato`'s document downloads and `AccionesDeContrato`'s both
- * states (the actions row AND the confirmation form it opens into, since
- * they never render simultaneously).
+ * states (the actions row AND the confirmation form — a modal since PR21,
+ * so the second scan sees the row's controls again plus the form's).
  */
 describe("guard 20 (PR17b, task 17b.1): the office organisms meet the touch floor on every non-exempt interactive control (D5)", () => {
   it("clears DetalleDeContrato's real rendered controls", () => {
