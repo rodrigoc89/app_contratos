@@ -479,14 +479,14 @@ half, which was built and verified green before being reverted for budget.*
 
 ## Phase 18 — PR18: the six remaining containers (inventory gap)
 
-- [ ] 18.1 RED: the whole-tree BEM scan (16.1's, widened to `funcionalidades/**`) must fail against `PanelNoDisponible`, `FormularioBorrador`, `PaginaDetalleContrato`, `PaginaListaContratos`, `EnvioDeFirma`, `PasoFirmaDual`.
-- [ ] 18.2 GREEN: redesign all six. `PanelNoDisponible`'s copy stays role-agnostic per DESIGN.md D10 — it must not name a home that does not exist for that role.
-- [ ] 18.3 `EnvioDeFirma` and `PasoFirmaDual` sit in the signature flow: confirm no redesign covers a control the técnico needs, and that `PasoFirmaDual`'s step transitions still reach S3 for `geometriaHandheld.ts`'s visit script (PR13).
-- [ ] 18.4 RED then GREEN: extend the whole-tree BEM scan to assert **zero** first-party BEM classNames remain anywhere under `apps/web/src`, `.formulario` included. This is what makes PR19's deletion safe rather than hopeful.
+- [x] 18.1 RED: the whole-tree BEM scan (16.1's, widened to `funcionalidades/**`) must fail against `PanelNoDisponible`, `FormularioBorrador`, `PaginaDetalleContrato`, `PaginaListaContratos`, `EnvioDeFirma`, `PasoFirmaDual`.
+- [x] 18.2 GREEN: redesign all six. `PanelNoDisponible`'s copy stays role-agnostic per DESIGN.md D10 — it must not name a home that does not exist for that role.
+- [x] 18.3 `EnvioDeFirma` and `PasoFirmaDual` sit in the signature flow: confirm no redesign covers a control the técnico needs, and that `PasoFirmaDual`'s step transitions still reach S3 for `geometriaHandheld.ts`'s visit script (PR13).
+- [x] 18.4 RED then GREEN: extend the whole-tree BEM scan to assert **zero** first-party BEM classNames remain anywhere under `apps/web/src`, `.formulario` included. This is what makes PR19's deletion safe rather than hopeful.
 
 ## Phase 18B — PR18 close-out
 
-- [ ] 18B.1 Run the full suite plus `pnpm size && pnpm handheld`; record results.
+- [x] 18B.1 Run the full suite plus `pnpm size && pnpm handheld`; record results. (#117: 789/789 web specs, compilado 6/6, typecheck/lint 0, dist 575,588 B, handheld 6/6; gate widened the whole-tree scan to `.ts` modules — `formulario.ts`/`progreso.ts` convention — with the file+token `PROSA_EXENTA` prose exemption)
 - [ ] 18B.2 User visual review of the técnico flow end to end.
 - [ ] 18B.3 Open PR #18 targeting PR #17's branch.
 
@@ -510,4 +510,5 @@ half, which was built and verified green before being reverted for budget.*
 
 - **Proposal Q3 (client demo date).** Not applied to this chain order: PR3–PR5's infra must front-load per D7/D8's "measured from its first commit" requirement. If a demo needs earlier visual proof, PR7 (position 7 of 16) is the earliest redesigned, visually-demonstrable slice — reordering ahead of PR3–PR5 would mean shipping component redesigns before the ceiling/handheld harnesses exist to catch their regressions, which this plan does not recommend.
 - **Guard 8's panel replacement type-scale values.** A per-screen redesign decision made organically inside PR10/PR11/PR15 wherever office-panel components land, not a blocking pre-decision.
-- **`Toast` covers the equipos step's submit button on short viewports (found by PR13's S3 driver).** `Toast.tsx` is `fixed inset-x-4 bottom-4`; right after "Crear borrador" the "Borrador creado" banner sits over the same button that re-renders as "Continuar", so a thumb tap lands on the toast. The harness dismisses the toast first (`button[aria-label="Cerrar aviso"]`) rather than hide the finding; the product fix (toast placement, or bottom padding on the form while a toast is visible) belongs with the container redesigns in PR18, and needs the user's call on placement.
+- **`Toast` covers the equipos step's submit button on short viewports (found by PR13's S3 driver).** `Toast.tsx` is `fixed inset-x-4 bottom-4`; right after "Crear borrador" the "Borrador creado" banner sits over the same button that re-renders as "Continuar", so a thumb tap lands on the toast. The harness dismisses the toast first (`button[aria-label="Cerrar aviso"]`) rather than hide the finding; the product fix (toast placement, or bottom padding on the form while a toast is visible) still needs the user's call on placement — PR18 shipped the container redesigns without it, deliberately, so the decision stays open rather than guessed.
+- **Dead `.invisible{visibility:hidden}` rule in the compiled CSS.** Tailwind's candidate scanner lexes comments (the PR6 finding); six English prose comments across already-shipped files (`TablaDeContratos`, `MarcaProducto`, `vaciarTrabajoPendiente`, `superficieDeCanvas`, two specs) contain the standalone word "invisible", compiling a rule no component uses (~30 B). PR18's gate reworded its own new occurrence and left the pre-existing six for PR19's final pass: either reword them or extend the compiled-output guard's ban list.
