@@ -79,13 +79,48 @@ export interface ExencionDeToque {
 }
 
 /**
- * Kept empty until a real component matching one of the CSS engine's two
- * `EXENCIONES` entries converts (`.tabla-de-contratos tbody tr`/
- * `__desplazamiento` land with `TablaDeContratos`, PR15). Declaring either
- * now would name a target this scan cannot yet find — exactly what the
- * anti-rot check below exists to catch. Proven on fixtures first (D5).
+ * PR15 — `TablaDeContratos` converts, carrying forward both of the CSS
+ * engine's `EXENCIONES` entries. The scroll region's `focus-visible:ring-*`
+ * replacement (D6) triggers the same `focus-visible:` variant heuristic
+ * that flags a row's `hover:` tint, for the identical reason the CSS
+ * engine's `PSEUDOCLASES_INTERACTIVAS` scan matched its `:focus-visible`
+ * rule — it is focusable so a keyboard can scroll it, not a pointer target.
  */
-export const EXENCIONES: readonly ExencionDeToque[] = [];
+export const EXENCIONES: readonly ExencionDeToque[] = [
+  {
+    componente: "TablaDeContratos",
+    elemento: "tbody tr",
+    porque:
+      "R-3.5/R-3.8: a row is not a target. It has no click handler and carries no cursor-pointer; the hover tint at tableta registers it as interactive under D5's hover: heuristic but is a mouse-only affordance separating a name from its estado, not a promise of an action. The one link inside it carries the target instead.",
+  },
+  {
+    componente: "TablaDeContratos",
+    elemento: "desplazamiento",
+    porque:
+      "the table's horizontal scroll region (D12). It is focusable so a keyboard can scroll it, which is why it declares a focus-visible ring, but scrolling is not a pointer target: WCAG 2.5.5 sizes things you activate. It is already full-width and far taller than the floor.",
+  },
+];
+
+/**
+ * PR17 (D5) — `tema.css`'s `@layer base` rule sizes native
+ * `input[type=radio]`/`input[type=checkbox]` to `--spacing-toque` with no
+ * class at all (`FormularioEquipos.tsx:87,97`). D5 records this as
+ * "resolved against that rule, not reported as violations": a structural
+ * exemption for the tag+type pair, not a per-component `EXENCIONES` entry,
+ * since any native radio/checkbox anywhere hits the identical gap. Once the
+ * element attempts its own sizing class, that attempt is judged normally —
+ * this only covers the case the base rule alone is doing the sizing.
+ * PR19 (task 19.2) moved this rule's former home, `base.css`, out from
+ * under it entirely — `tema.css`'s rule was always the real target, it was
+ * simply misattributed to the sheet it was ported from.
+ */
+const TIPOS_TOQUE_NATIVOS: ReadonlySet<string> = new Set(["radio", "checkbox"]);
+const PATRON_INTENTO_DE_TOQUE = /\b(?:min-)?(?:h|w|size)-(?:toque|\d+)\b/;
+
+export function esControlNativoDeToque(tag: string, type: string | undefined, clases: string): boolean {
+  if (tag !== "input" || type === undefined || !TIPOS_TOQUE_NATIVOS.has(type)) return false;
+  return !PATRON_INTENTO_DE_TOQUE.test(clases);
+}
 
 /** Ported `EXENCIONES.some((e) => e.base === regla.base)`. */
 export function esExento(

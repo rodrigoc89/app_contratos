@@ -79,7 +79,18 @@ export function CabeceraDeSesion({ nombreUsuario }: { readonly nombreUsuario?: s
   return (
     <header
       data-cabecera-de-sesion
-      className="flex items-center gap-1 border-b border-borde-suave px-2 py-2"
+      /*
+        PR22 — `h-[var(--altura-cabecera-panel)]` states the header's
+        measured natural height (65px: the 48px logout control + py-2's
+        2x8px + the 1px bottom border, border-box) as an explicit contract
+        instead of an emergent sum: the office list pins its search block
+        directly below this header by offsetting the SAME token, so the two
+        sticky tiers cannot drift apart. 65 - 16 - 1 = 48px of content box —
+        exactly the control's `min-h-toque` floor, so nothing is squeezed.
+        The bracket `var()` spelling (not v4's paren shorthand) is what
+        guard 15's tree-wide inset/background regex recognises.
+      */
+      className="sticky top-0 z-10 flex h-[var(--altura-cabecera-panel)] items-center gap-1 border-b border-borde-suave bg-fondo px-2 py-2"
     >
       <div className="shrink-0">
         <MarcaProducto />

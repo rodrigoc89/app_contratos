@@ -119,7 +119,7 @@ export function crearSuperficieDeCanvas(
         const [primero, ...resto] = trazo;
         // A one-point stroke draws nothing, exactly as on screen: the visible
         // surface only ever strokes *between* two samples, so a stray tap
-        // must not appear on the PDF having been invisible on the tablet.
+        // must not appear on the PDF having gone unseen on the tablet.
         if (primero === undefined || resto.length === 0) {
           continue;
         }

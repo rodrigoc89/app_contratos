@@ -5,6 +5,7 @@ import {
   cumplePisoVertical,
   ELEMENTOS_INTERACTIVOS,
   esControlInteractivo,
+  esControlNativoDeToque,
   esExento,
   esInlineSinCaja,
   exencionesSinCorrespondencia,
@@ -56,6 +57,32 @@ describe("cumplePisoVertical/Horizontal port declaraAlMenosElPiso + the inline v
     ["w-8", "h", false],
   ])("cumplePiso('%s', %s) === %s", (clases, eje, esperado) => {
     expect(eje === "v" ? cumplePisoVertical(clases) : cumplePisoHorizontal(clases)).toBe(esperado);
+  });
+});
+
+/**
+ * PR17 (task 17.1c/17.2, D5) — `base.css`'s `@layer base` rule sizes native
+ * `input[type=radio]`/`input[type=checkbox]` to `--spacing-toque` without
+ * any class (`FormularioEquipos.tsx:87,97`). D5's table records this as
+ * "resolved against that rule, not reported as violations" — a structural
+ * exemption for the tag+type pair, never a per-component `EXENCIONES` entry,
+ * since the same native-control shape would hit the identical gap anywhere
+ * else in the tree.
+ */
+describe("esControlNativoDeToque — native radio/checkbox sized by base.css's @layer base rule (D5)", () => {
+  it("recognises an unclassed native radio/checkbox as resolved against the base rule", () => {
+    expect(esControlNativoDeToque("input", "radio", "")).toBe(true);
+    expect(esControlNativoDeToque("input", "checkbox", "")).toBe(true);
+  });
+
+  it("does not exempt a text/date input, nor a non-input tag", () => {
+    expect(esControlNativoDeToque("input", "text", "")).toBe(false);
+    expect(esControlNativoDeToque("input", "date", "")).toBe(false);
+    expect(esControlNativoDeToque("button", "radio", "")).toBe(false);
+  });
+
+  it("defers to the ordinary class-based check once a radio/checkbox attempts its own sizing class", () => {
+    expect(esControlNativoDeToque("input", "radio", "h-8")).toBe(false);
   });
 });
 
