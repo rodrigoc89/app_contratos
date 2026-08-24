@@ -230,6 +230,13 @@ describe("provision.sh --dry-run", () => {
     for (const skeletonFile of [".bash_logout", ".bashrc", ".profile"]) {
       expect(stdout).toContain(`[plan] would append '${skeletonFile}' to '${excludeFile}'`);
     }
+    // The checkout is also the service user's HOME, so the first deploy's
+    // `pnpm install` (as contratos) left `.config/` and `.local/` behind and
+    // the second `deploy.sh` was refused over a "dirty" worktree. Seen on
+    // the real host. Every XDG/config dir a HOME accumulates is excluded.
+    for (const xdgDir of [".config/", ".local/", ".npm/", ".pnpm-store/"]) {
+      expect(stdout).toContain(`[plan] would append '${xdgDir}' to '${excludeFile}'`);
+    }
     // deploy.sh runs as root against a checkout owned by `contratos`; git
     // refuses that ("dubious ownership") and the repository guard reports
     // "not a git checkout". Seen on the real host.
@@ -256,7 +263,11 @@ describe("provision.sh --dry-run", () => {
     await writeFile(swapFile, "", "utf-8");
     await writeFile(fstabFile, `${swapFile} none swap sw 0 0\n`, "utf-8");
     await mkdir(join(appDir, ".git", "info"), { recursive: true });
-    await writeFile(excludeFile, ".cache/\n.bash_logout\n.bashrc\n.profile\n", "utf-8");
+    await writeFile(
+      excludeFile,
+      ".cache/\n.bash_logout\n.bashrc\n.profile\n.config/\n.local/\n.npm/\n.pnpm-store/\n",
+      "utf-8",
+    );
     const gitSystemConfig = join(scratch, "gitconfig");
     await writeFile(gitSystemConfig, `[safe]\n\tdirectory = ${appDir}\n`, "utf-8");
     const unitSource = join(appDir, "deploy", "contratos-api.service");
@@ -308,8 +319,17 @@ describe("provision.sh --dry-run", () => {
       `[skip] fstab entry for '${swapFile}' already present in '${fstabFile}'`,
     );
     // Guarded per line, not per file: a host provisioned before the skeleton
-    // entries existed has `.cache/` only and must still gain the other three.
-    for (const entry of [".cache/", ".bash_logout", ".bashrc", ".profile"]) {
+    // or XDG entries existed has `.cache/` only and must still gain the rest.
+    for (const entry of [
+      ".cache/",
+      ".bash_logout",
+      ".bashrc",
+      ".profile",
+      ".config/",
+      ".local/",
+      ".npm/",
+      ".pnpm-store/",
+    ]) {
       expect(stdout).toContain(`[skip] '${entry}' already present in '${excludeFile}'`);
     }
     expect(stdout).toContain(

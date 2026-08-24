@@ -476,12 +476,25 @@ provision_dir() {
 # excluded here too, each entry guarded on its own line so a host provisioned
 # before they were added still gains them.
 #
+# And a third time, after the first successful deploy: the checkout doubles
+# as $SERVICE_USER's HOME (`useradd --home-dir "$APP_DIR"` above), so every
+# tool deploy.sh runs as that user that writes XDG/config dirs into $HOME
+# writes them into the checkout. `pnpm install` left `.config/` and `.local/`
+# behind, and the next `deploy.sh` was refused by the dirty-worktree guard
+# before it ever stopped the service — correct guard, wrong hygiene. The
+# dot-directories a HOME accumulates are excluded here for the same reason,
+# in this single list, so the guard and the README describe the same set.
+#
 # This step is safe to run before the repository is ever cloned into
 # $APP_DIR: it only creates the directory chain that would hold that
 # exclude file. Clone the repository into $APP_DIR before or after running
 # this script — either order works, since re-running provision.sh is
 # exactly what this guard is for.
-GIT_EXCLUDE_ENTRIES=('.cache/' '.bash_logout' '.bashrc' '.profile')
+GIT_EXCLUDE_ENTRIES=(
+  '.cache/'
+  '.bash_logout' '.bashrc' '.profile'
+  '.config/' '.local/' '.npm/' '.pnpm-store/'
+)
 
 git_exclude_entry_present() {
   [ -f "$GIT_EXCLUDE_FILE" ] && grep -qxF "$1" "$GIT_EXCLUDE_FILE"
