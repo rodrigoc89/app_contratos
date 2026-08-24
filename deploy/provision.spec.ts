@@ -32,12 +32,18 @@ const ROOT_PACKAGE_JSON = join(import.meta.dirname, "..", "package.json");
  * Only the binaries a dry run touches are linked in (`bash` for the shebang,
  * `id` for the user guard, `grep` for the git-exclude guard, `git` for the
  * safe.directory guard — pointed at a scratch system config through
- * `GIT_CONFIG_SYSTEM`, never at this machine's /etc/gitconfig);
- * `node`/`pnpm` fakes that print the given version are added on request.
+ * `GIT_CONFIG_SYSTEM`, never at this machine's /etc/gitconfig; `cmp` for
+ * the unit-file guard); `node`/`pnpm` fakes that print the given version
+ * are added on request.
+ *
+ * `systemctl` is a fake when `host.apiUnitEnabled` is given: it answers
+ * `is-enabled` and exits 99 for anything else, so a dry run that reaches
+ * `daemon-reload`/`enable` fails the spec instead of passing silently.
  */
 async function makeToolchainBin(
   scratch: string,
   present: { node?: string; pnpm?: string } = {},
+  host: { apiUnitEnabled?: boolean } = {},
 ): Promise<string> {
   const binDir = join(scratch, "bin");
   await mkdir(binDir);
@@ -45,13 +51,31 @@ async function makeToolchainBin(
   await symlink("/usr/bin/id", join(binDir, "id"));
   await symlink("/usr/bin/grep", join(binDir, "grep"));
   await symlink("/usr/bin/git", join(binDir, "git"));
+  await symlink("/usr/bin/cmp", join(binDir, "cmp"));
   for (const [name, version] of Object.entries(present)) {
     await writeFile(join(binDir, name), `#!/bin/bash\nprintf '%s\\n' '${version}'\n`, {
       mode: 0o755,
     });
   }
+  if (host.apiUnitEnabled !== undefined) {
+    // Builtins only: this PATH has no coreutils.
+    await writeFile(
+      join(binDir, "systemctl"),
+      [
+        "#!/bin/bash",
+        'case "$1" in',
+        `  is-enabled) exit ${host.apiUnitEnabled ? 0 : 1} ;;`,
+        `  *) printf 'systemctl %s: a dry run must never reach this\\n' "$*" >&2; exit 99 ;;`,
+        "esac",
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+  }
   return binDir;
 }
+
+const API_UNIT_FIXTURE = "[Unit]\nDescription=fake contratos-api\n[Service]\nExecStart=/bin/true\n";
 
 describe("provision.sh --dry-run", () => {
   let scratch: string;
@@ -120,6 +144,12 @@ describe("provision.sh --dry-run", () => {
     expect(stdout).toContain(
       `[plan] would run: git config --system --add safe.directory '${appDir}'`,
     );
+    // No checkout yet, so no unit file to install: say so, and say what to
+    // do about it — provision.sh is idempotent precisely so it can be re-run
+    // after the clone.
+    expect(stdout).toContain(
+      `[skip] '${appDir}/deploy/contratos-api.service' not found — clone the repository into '${appDir}' and re-run provision.sh to install contratos-api.service`,
+    );
   });
 
   it("skips every idempotent-guarded resource that is already provisioned", async () => {
@@ -137,7 +167,17 @@ describe("provision.sh --dry-run", () => {
     await writeFile(excludeFile, ".cache/\n.bash_logout\n.bashrc\n.profile\n", "utf-8");
     const gitSystemConfig = join(scratch, "gitconfig");
     await writeFile(gitSystemConfig, `[safe]\n\tdirectory = ${appDir}\n`, "utf-8");
-    const binDir = await makeToolchainBin(scratch, { node: "v24.1.0", pnpm: "11.11.0" });
+    const unitSource = join(appDir, "deploy", "contratos-api.service");
+    const unitTarget = join(scratch, "etc-systemd-system", "contratos-api.service");
+    await mkdir(join(appDir, "deploy"), { recursive: true });
+    await mkdir(join(scratch, "etc-systemd-system"), { recursive: true });
+    await writeFile(unitSource, API_UNIT_FIXTURE, "utf-8");
+    await writeFile(unitTarget, API_UNIT_FIXTURE, "utf-8");
+    const binDir = await makeToolchainBin(
+      scratch,
+      { node: "v24.1.0", pnpm: "11.11.0" },
+      { apiUnitEnabled: true },
+    );
 
     const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
       env: {
@@ -150,6 +190,7 @@ describe("provision.sh --dry-run", () => {
         FSTAB_FILE: fstabFile,
         GIT_EXCLUDE_FILE: excludeFile,
         GIT_CONFIG_SYSTEM: gitSystemConfig,
+        API_UNIT_TARGET: unitTarget,
       },
     });
 
@@ -169,6 +210,68 @@ describe("provision.sh --dry-run", () => {
     expect(stdout).toContain(
       `[skip] '${appDir}' already listed in git's system-wide safe.directory`,
     );
+    expect(stdout).toContain(
+      `[skip] contratos-api.service already installed at '${unitTarget}' (identical) and enabled`,
+    );
+  });
+
+  it("installs and enables contratos-api.service from the checkout, as the last step", async () => {
+    // Nothing installed the unit before this: deploy.sh's start step assumed
+    // it existed and the README only ever documented copying the backup
+    // units. It goes last because it needs the checkout, which every other
+    // step is indifferent to.
+    const appDir = join(scratch, "opt-contratos");
+    const unitSource = join(appDir, "deploy", "contratos-api.service");
+    const unitTarget = join(scratch, "etc-systemd-system", "contratos-api.service");
+    await mkdir(join(appDir, "deploy"), { recursive: true });
+    await writeFile(unitSource, API_UNIT_FIXTURE, "utf-8");
+    const binDir = await makeToolchainBin(scratch, {}, { apiUnitEnabled: false });
+
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: {
+        ...process.env,
+        PATH: binDir,
+        APP_DIR: appDir,
+        GIT_CONFIG_SYSTEM: join(scratch, "gitconfig-that-does-not-exist"),
+        API_UNIT_TARGET: unitTarget,
+      },
+    });
+
+    const unitPlan = `[plan] would install '${unitSource}' as '${unitTarget}' (mode 644), run systemctl daemon-reload, and enable contratos-api.service — never start it`;
+    expect(stdout).toContain(unitPlan);
+    const safeDirectoryPlan = `[plan] would run: git config --system --add safe.directory '${appDir}'`;
+    expect(stdout.indexOf(safeDirectoryPlan)).toBeLessThan(stdout.indexOf(unitPlan));
+    expect(stdout.indexOf(unitPlan)).toBeLessThan(stdout.indexOf("== done =="));
+  });
+
+  it("reinstalls a drifted unit file and re-enables an identical one that is disabled", async () => {
+    // Two half-provisioned states the byte-identical + enabled guard must
+    // not read as "done": the checkout's unit changed since it was copied,
+    // and an identical copy that somebody disabled.
+    const appDir = join(scratch, "opt-contratos");
+    const unitSource = join(appDir, "deploy", "contratos-api.service");
+    const unitTarget = join(scratch, "etc-systemd-system", "contratos-api.service");
+    await mkdir(join(appDir, "deploy"), { recursive: true });
+    await mkdir(join(scratch, "etc-systemd-system"), { recursive: true });
+    await writeFile(unitSource, API_UNIT_FIXTURE, "utf-8");
+    const unitPlan = `[plan] would install '${unitSource}' as '${unitTarget}' (mode 644), run systemctl daemon-reload, and enable contratos-api.service — never start it`;
+    const env = {
+      ...process.env,
+      APP_DIR: appDir,
+      GIT_CONFIG_SYSTEM: join(scratch, "gitconfig-that-does-not-exist"),
+      API_UNIT_TARGET: unitTarget,
+    };
+
+    await writeFile(unitTarget, `${API_UNIT_FIXTURE}# stale\n`, "utf-8");
+    const enabledBin = await makeToolchainBin(scratch, {}, { apiUnitEnabled: true });
+    const drifted = await execFileAsync(SCRIPT, ["--dry-run"], { env: { ...env, PATH: enabledBin } });
+    expect(drifted.stdout).toContain(unitPlan);
+
+    await writeFile(unitTarget, API_UNIT_FIXTURE, "utf-8");
+    await rm(enabledBin, { recursive: true, force: true });
+    const disabledBin = await makeToolchainBin(scratch, {}, { apiUnitEnabled: false });
+    const disabled = await execFileAsync(SCRIPT, ["--dry-run"], { env: { ...env, PATH: disabledBin } });
+    expect(disabled.stdout).toContain(unitPlan);
   });
 
   it("reinstalls the toolchain when the Node on PATH is older than the pinned major", async () => {

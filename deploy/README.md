@@ -10,11 +10,15 @@ and where the one remaining question this chain cannot answer gets resolved.
 ## Quick path
 
 1. Provision the host once, as root: `sudo deploy/provision.sh`
-2. Deploy the application: `TAG=v1.2.3 deploy/deploy.sh`
-3. Bootstrap TLS: `sudo CONTRATOS_HOST=contratos.example.com deploy/tls-bootstrap.sh`
-4. Schedule daily backups: `sudo systemctl enable --now contratos-backup.timer`
+2. Clone the repository into `/opt/contratos` (as `contratos`), then run
+   `sudo deploy/provision.sh` again: the last step installs and enables
+   `contratos-api.service` from the checkout and skips with a reminder
+   while there is none — every other step reports `[skip]` on that re-run
+3. Deploy the application: `TAG=v1.2.3 deploy/deploy.sh`
+4. Bootstrap TLS: `sudo CONTRATOS_HOST=contratos.example.com deploy/tls-bootstrap.sh`
+5. Schedule daily backups: `sudo systemctl enable --now contratos-backup.timer`
    (offsite, encrypted — see "Backup" below)
-5. **Before the first real customer *comodato* is signed**, run one real
+6. **Before the first real customer *comodato* is signed**, run one real
    restore drill (see "Restore drill" below) — this is the go-live gate
    (task 10.4).
 
@@ -25,7 +29,7 @@ spec `execFile`s it against a scratch temp directory (design.md D8).
 
 | Order | Script | What it does | Status |
 |---|---|---|---|
-| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Node.js 24 (NodeSource) + pnpm 11.11.0 at `/usr/local/bin/pnpm` (the path `contratos-api.service` executes), Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, and the `contratos` service user + directories | Done |
+| 1 | `provision.sh` | Root-only, idempotent host setup: apt packages, PostgreSQL 17, Node.js 24 (NodeSource) + pnpm 11.11.0 at `/usr/local/bin/pnpm` (the path `contratos-api.service` executes), Chromium's runtime libraries (D1), Spanish-capable fonts, a 2 GB swapfile, the `contratos` service user + directories, git's `safe.directory` for root, and — last, from the checkout — `contratos-api.service` installed and enabled (never started) | Done |
 | 2 | `deploy.sh` | Stop → dump → checkout → install → migrate → seed → publish → start (D5); the `publish` step calls `publicar-assets.sh` (D4, row 2a) | Done |
 | 2a | `publicar-assets.sh` | Additive asset copy, then an atomic `index.html`/`sw.js` swap, then a 2-release retention prune (D4) — see "Asset publish" below | Done |
 | 3 | `tls-bootstrap.sh` | HTTP-only bootstrap conf first, so nginx can start before a certificate exists, then issues one via certbot (D6) — see "TLS bootstrap" below | Done |
@@ -52,8 +56,9 @@ requirement:
 | `.cache/`, `.bash_logout`, `.bashrc`, `.profile` in the git exclude file (one guard per entry) | `[skip] '.cache/' already present in '…'` | `[plan] would append '.cache/' to '…'` |
 | Node.js ≥ `NODE_MAJOR` and pnpm = `PNPM_VERSION` on `$PATH` | `[skip] node v… (>= 24) and pnpm 11.11.0 already installed` | `[plan] would install Node.js 24 (NodeSource) and pnpm 11.11.0` |
 | `$APP_DIR` in git's system-wide `safe.directory` (`/etc/gitconfig`) | `[skip] '…' already listed in git's system-wide safe.directory` | `[plan] would run: git config --system --add safe.directory '…'` |
+| `contratos-api.service` installed from `$APP_DIR/deploy/` (byte-identical) and enabled | `[skip] contratos-api.service already installed at '…' (identical) and enabled` | `[plan] would install '…' as '/etc/systemd/system/contratos-api.service' (mode 644), run systemctl daemon-reload, and enable contratos-api.service — never start it` — or `[skip] '…' not found — clone the repository into '…' and re-run provision.sh …` while there is no checkout yet |
 
-All six are asserted by `deploy/provision.spec.ts` against a scratch temp
+All seven are asserted by `deploy/provision.spec.ts` against a scratch temp
 directory — every path (`SERVICE_USER`, `APP_DIR`, `DOCUMENT_STORE_DIR`,
 `SWAP_FILE`, `FSTAB_FILE`, `GIT_EXCLUDE_FILE`) is overridable by environment
 variable for exactly this reason, in production those variables keep their
@@ -1170,6 +1175,8 @@ gate** — see "Next step" below.
 
 - [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
 - [ ] Re-running it exits 0 with every guard reporting `[skip]`
+- [ ] After cloning into `/opt/contratos` and re-running it, `systemctl is-enabled contratos-api` prints `enabled`, `systemctl is-active contratos-api` prints `inactive` (provision never starts it), and `cmp /opt/contratos/deploy/contratos-api.service /etc/systemd/system/contratos-api.service` is silent
+- [ ] `sudo git -C /opt/contratos status --porcelain` runs as root without a "dubious ownership" refusal and prints nothing (skeleton dotfiles excluded)
 - [ ] `node --version` ≥ 22 and `pnpm --version` = 11.11.0 as the `contratos` user after provision (`sudo -u contratos -- bash -lc 'node --version; pnpm --version'`)
 - [ ] Headless Chromium launches with `--no-sandbox --disable-setuid-sandbox` and no missing-library error
 - [ ] `pnpm --filter @contratos/api verify:render` prints `Veredicto final: APROBADO` (all three layers, see "Render verdict" above)

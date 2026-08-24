@@ -37,6 +37,8 @@ SWAP_FILE="${SWAP_FILE:-/swapfile}"
 SWAP_SIZE_MB="${SWAP_SIZE_MB:-2048}"
 FSTAB_FILE="${FSTAB_FILE:-/etc/fstab}"
 GIT_EXCLUDE_FILE="${GIT_EXCLUDE_FILE:-$APP_DIR/.git/info/exclude}"
+API_UNIT_SOURCE="${API_UNIT_SOURCE:-$APP_DIR/deploy/contratos-api.service}"
+API_UNIT_TARGET="${API_UNIT_TARGET:-/etc/systemd/system/contratos-api.service}"
 PUPPETEER_VERSION="${PUPPETEER_VERSION:-25.4.0}"
 # Root package.json: `engines.node >=22`, `packageManager: pnpm@11.11.0`.
 # 24 is the Active LTS line and what .github/workflows/ci.yml pins (the
@@ -422,6 +424,48 @@ provision_git_safe_directory() {
   log "added '$APP_DIR' to git's system-wide safe.directory"
 }
 
+# --------------------------------------------------------------- api unit
+
+# deploy.sh's start step assumes contratos-api.service exists, and nothing
+# installed it: the README only ever documented copying the backup units.
+# The unit is taken from the checkout itself, so this step needs the clone
+# to exist and therefore runs last — on a first run before the clone it
+# skips and says to re-run, which is what idempotent provisioning is for.
+# The guard is "byte-identical AND enabled", so an edited unit in the
+# checkout is reinstalled and a disabled one is re-enabled. It is never
+# started here: deploy.sh starts it, after migrate/seed/publish.
+api_unit_installed() {
+  [ -f "$API_UNIT_TARGET" ] && cmp -s "$API_UNIT_SOURCE" "$API_UNIT_TARGET"
+}
+
+api_unit_enabled() {
+  systemctl is-enabled --quiet "${API_UNIT_TARGET##*/}" 2>/dev/null
+}
+
+provision_api_unit() {
+  local unit="${API_UNIT_TARGET##*/}"
+
+  if [ ! -f "$API_UNIT_SOURCE" ]; then
+    skip "'$API_UNIT_SOURCE' not found — clone the repository into '$APP_DIR' and re-run provision.sh to install $unit"
+    return
+  fi
+
+  if api_unit_installed && api_unit_enabled; then
+    skip "$unit already installed at '$API_UNIT_TARGET' (identical) and enabled"
+    return
+  fi
+
+  if [ "$DRY_RUN" = true ]; then
+    plan "would install '$API_UNIT_SOURCE' as '$API_UNIT_TARGET' (mode 644), run systemctl daemon-reload, and enable $unit — never start it"
+    return
+  fi
+
+  install -m 644 "$API_UNIT_SOURCE" "$API_UNIT_TARGET"
+  systemctl daemon-reload
+  systemctl enable "$unit"
+  log "installed and enabled $unit from '$API_UNIT_SOURCE' (not started — deploy.sh starts it)"
+}
+
 main() {
   if [ "$DRY_RUN" != true ] && [ "$(id -u)" -ne 0 ]; then
     echo "provision.sh: must run as root (use --dry-run to preview without root)" >&2
@@ -441,6 +485,7 @@ main() {
   provision_dir "$DOCUMENT_STORE_DIR"
   provision_git_exclude
   provision_git_safe_directory
+  provision_api_unit
 
   log "== done =="
 }
