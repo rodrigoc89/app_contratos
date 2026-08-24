@@ -12,6 +12,7 @@ import { limpiarBorradorLocal } from "../../../almacenamiento/borradorLocal";
 import type { ColaDeGuardado } from "../../../datos/borrador/colaDeGuardado";
 import { ErrorDeApi } from "../../../datos/clienteHttp";
 import { mensajeDeError, type MensajeDeError } from "../../../errores/mensajeDeError";
+import { CLASE_PROGRESO } from "../../../estilos/progreso";
 import { marcarTrabajoEnCurso } from "../../../pwa/trabajoEnCurso";
 import type { ObservadorDeDocumento } from "../../revision/logica/observadorDeDocumento";
 import type { SuperficieDeFirma } from "../logica/superficieDeFirma";
@@ -68,6 +69,15 @@ export interface PropiedadesEnvioDeFirma {
  *   resubmits it unchanged. The customer already signed correctly; a
  *   network failure after that is never a reason to make them sign again.
  */
+/**
+ * design-system-migration PR18 (task 18.3) — ported 1:1 from
+ * `.envio-firma__resultado, .envio-firma__error` / `.envio-firma__titulo` /
+ * `.envio-firma__proximo-paso` (organismos.css).
+ */
+const CLASE_PADDING_RESULTADO = "p-4";
+const CLASE_TITULO_RESULTADO = "m-0 mb-4 border-b-2 border-primario pb-2 text-grande font-bold";
+const CLASE_PROXIMO_PASO = "m-0 mb-4";
+
 export function EnvioDeFirma({
   contratoId,
   crearCola,
@@ -113,7 +123,7 @@ export function EnvioDeFirma({
 
   if (estado.tipo === "firmando") {
     return (
-      <div role="status" className="progreso">
+      <div role="status" className={CLASE_PROGRESO} data-progreso>
         <span aria-hidden="true">
           <Spinner etiqueta="Enviando la firma" />
         </span>
@@ -126,7 +136,7 @@ export function EnvioDeFirma({
     const { numero } = estado.contrato;
     const mensaje = `${numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"} correctamente.`;
     return (
-      <div className="envio-firma__resultado">
+      <div className={CLASE_PADDING_RESULTADO}>
         {/*
           The toast dismisses itself after five seconds, and for a while that
           was the ONLY statement that the contract had been signed. Past that
@@ -138,7 +148,7 @@ export function EnvioDeFirma({
           stays behind it, and it is also this screen's `h1`, which it never
           had.
         */}
-        <h1 className="envio-firma__titulo">
+        <h1 className={CLASE_TITULO_RESULTADO}>
           {numero !== null ? `Contrato Nº ${numero} firmado` : "Contrato firmado"}
         </h1>
         {avisoFirmaVisible && (
@@ -152,7 +162,7 @@ export function EnvioDeFirma({
           front of the customer who is about to ask where their copy is, and
           "no lo sé" is not an answer this screen may force them into.
         */}
-        <p className="envio-firma__proximo-paso">
+        <p className={CLASE_PROXIMO_PASO}>
           Los documentos firmados los envía la oficina. No tenés que hacer nada más.
         </p>
         {/*
@@ -180,7 +190,7 @@ export function EnvioDeFirma({
 
   if (estado.tipo === "error") {
     return (
-      <div role="alert" className="envio-firma__error">
+      <div role="alert" className={CLASE_PADDING_RESULTADO}>
         <p>{estado.mensaje.titulo}</p>
         <p>{estado.mensaje.mensaje}</p>
         <Boton type="button" onClick={() => void manejarListo(estado.firmas)}>

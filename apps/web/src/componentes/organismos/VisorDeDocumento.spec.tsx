@@ -203,10 +203,11 @@ describe("VisorDeDocumento", () => {
     expect(rendersDelPadre).toBeLessThanOrEqual(PRESUPUESTO_DE_RENDERS);
   });
 
-  it("carries the bounded document-viewer class (PR24b) — CSS sizing lives in convencionesDeEstilos.spec.ts's guard, not here", () => {
+  it("carries the bounded document-viewer classes (design-system-migration PR12) — vh-boundedness itself is policed by guard 17 in convencionesDeUtilidades.spec.ts, not here", () => {
     render(<VisorDeDocumento html="<p>hola</p>" titulo="Comodato" />);
     const iframe = screen.getByTitle("Comodato");
-    expect(iframe).toHaveClass("visor-documento__iframe");
-    expect(iframe.parentElement).toHaveClass("visor-documento");
+    expect(iframe.className).toMatch(/\bh-\[45vh\]/);
+    expect(iframe.className).not.toMatch(/\bh-auto\b/);
+    expect(iframe.className).not.toMatch(/\bmin-h-/);
   });
 });

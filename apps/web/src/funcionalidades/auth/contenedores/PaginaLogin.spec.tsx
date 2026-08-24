@@ -267,7 +267,9 @@ describe("PaginaLogin — encabezado", () => {
       </MemoryRouter>,
     );
 
-    const marca = container.querySelector(".marca-producto");
+    // `[data-marca-producto]` replaces `.marca-producto` (PR8 — the BEM
+    // class is retired along with the rest of this atom's CSS styling).
+    const marca = container.querySelector("[data-marca-producto]");
     const encabezado = screen.getByRole("heading", { level: 1 });
 
     expect(marca?.textContent).toBe("IES.NET Contratos");

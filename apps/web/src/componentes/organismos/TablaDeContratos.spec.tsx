@@ -130,7 +130,7 @@ describe("TablaDeContratos", () => {
    * and reaching a contract's PDFs from the list is the office's actual job.
    *
    * What survives is the part that was never about navigation: **the row
-   * itself is not a click target.** A whole-row handler is invisible to the
+   * itself is not a click target.** A whole-row handler is unseen by the
    * keyboard, announces nothing, and swallows text selection. Instead each
    * row exposes exactly ONE link — the customer's name, which is what the
    * office is scanning for and is present even on a draft with no numero.
