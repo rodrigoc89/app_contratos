@@ -226,13 +226,13 @@ async function completarVisitaTecnica(pagina: Page): Promise<void> {
 const ESTADOS: readonly EstadoTecnico[] = [
   { id: "S1", ruta: "/login", sesion: "ninguna", selectorListo: "form[data-formulario]" },
   { id: "S2", ruta: "/", sesion: "tecnico", selectorListo: "form[data-formulario]" },
-  { id: "S4", ruta: "/panel-no-disponible", sesion: "tecnico", selectorListo: ".panel-no-disponible" },
-  { id: "S5", ruta: "/panel", sesion: "oficina", selectorListo: ".pagina-lista-contratos" },
+  { id: "S4", ruta: "/panel-no-disponible", sesion: "tecnico", selectorListo: "[data-panel-no-disponible]" },
+  { id: "S5", ruta: "/panel", sesion: "oficina", selectorListo: "[data-pagina-lista-contratos]" },
   {
     id: "S6",
     ruta: `/panel/contratos/${ID_CONTRATO_FIXTURE}`,
     sesion: "oficina",
-    selectorListo: ".pagina-detalle-contrato",
+    selectorListo: "[data-pagina-detalle-contrato]",
   },
   {
     // Appended last, matching design.md D8's committed ordering — not
@@ -482,7 +482,7 @@ async function intentarAlcanzarEstado(
       await estado.visitar(pagina);
     }
     await pagina.waitForSelector(estado.selectorListo, { timeout: 10_000 });
-    await pagina.waitForFunction(() => document.querySelector(".progreso") === null, { timeout: 10_000 });
+    await pagina.waitForFunction(() => document.querySelector("[data-progreso]") === null, { timeout: 10_000 });
     return { exito: true };
   } catch (motivo) {
     return { exito: false, motivo: motivo instanceof Error ? motivo.message : String(motivo) };
