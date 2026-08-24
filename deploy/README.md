@@ -530,6 +530,16 @@ A TLS script that fails halfway and leaves nginx dead has turned a
 certificate problem into a total outage. This rollback path is the reason
 the bootstrap conf stays on disk permanently, not just during first-issue.
 
+The gate has already fired once for real. On the production VPS (Ubuntu
+22.04.5, which ships **nginx 1.18.0**) certbot issued the certificate and
+`nginx -t` then rejected the rendered conf with `unknown directive "http2"`:
+the standalone `http2 on;` directive only exists from nginx 1.25.1, and
+1.18 enables HTTP/2 through the `listen` parameter instead. That is why the
+443 block reads `listen 443 ssl http2;` — the parameter form is what the
+LTS we deploy on understands, and 1.25+ still accepts it (with a
+deprecation warning, not an error). `tls-bootstrap.spec.ts` renders the
+template and asserts that spelling so the directive cannot drift back.
+
 ### certbot is installed by this script, and only by this script
 
 `provision.sh` does not install certbot and no other script in `deploy/`

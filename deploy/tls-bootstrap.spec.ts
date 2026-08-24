@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -175,6 +175,37 @@ describe("tls-bootstrap.sh", () => {
     });
 
     expect(stdout).toContain("[plan:render-check]");
+  });
+
+  it("renders a 443 block nginx 1.18 (Ubuntu 22.04 LTS) can parse: http2 as a listen parameter, never as a standalone directive", async () => {
+    // Observed on the production VPS (Ubuntu 22.04.5, nginx 1.18.0): the
+    // hard-gate `nginx -t` rejected the rendered conf with
+    //   nginx: [emerg] unknown directive "http2" in .../sites-enabled/contratos
+    // and the script rolled back to the HTTP-only bootstrap conf (503). The
+    // standalone `http2 on;` directive only exists from nginx 1.25.1; the
+    // LTS we deploy on enables HTTP/2 through the `listen` parameter, which
+    // 1.25+ still accepts (with a deprecation warning, not an error).
+    const renderedConf = join(scratch, "contratos.rendered.conf");
+    await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: {
+        ...process.env,
+        CONTRATOS_HOST: "contratos.example.com",
+        WEB_ROOT: "/var/www/contratos",
+        NGINX_CONF_TEMPLATE: REAL_NGINX_CONF_TEMPLATE,
+        RENDERED_CONF_FILE: renderedConf,
+      },
+    });
+
+    const lines = (await readFile(renderedConf, "utf-8")).split("\n");
+
+    const standaloneHttp2Directives = lines.filter((line) => /^\s*http2\s+on\s*;/.test(line));
+    expect(standaloneHttp2Directives, "standalone `http2 on;` is unknown to nginx 1.18").toEqual([]);
+
+    const tlsListenLines = lines.filter((line) => /^\s*listen\s.*\b443\b.*\bssl\b/.test(line));
+    expect(tlsListenLines.length, "expected an IPv4 and an IPv6 `listen 443 ssl` line").toBe(2);
+    for (const line of tlsListenLines) {
+      expect(line, "every TLS listen line must enable HTTP/2 itself").toMatch(/\bhttp2\b/);
+    }
   });
 
   // --------------------------------------------------------- housekeeping
