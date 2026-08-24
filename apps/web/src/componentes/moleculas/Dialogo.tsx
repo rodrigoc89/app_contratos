@@ -8,11 +8,13 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
  * no hand-rolled focus management to get wrong.
  *
  * The element is the source of truth for "open": React mirrors `abierto`
- * onto it (`showModal()`/`close()`), and the native `close`/`cancel` events
- * report back through `onCerrar` so state follows the browser when the user
- * closes it with Esc rather than a button. Both events fire on a real Esc
- * (cancel, then close after the default action); `onCerrar` must therefore
- * be idempotent — every caller's reset already is.
+ * onto it (`showModal()`/`close()`), and the native `cancel` event (Esc)
+ * reports back through `onCerrar` so state follows the browser when the
+ * user closes it without a button. `close` is deliberately NOT listened to:
+ * the browser fires it for every `close()` call, including this component's
+ * own mirror and unmount closes — under StrictMode's mount-unmount-mount the
+ * unmount cleanup closed the just-opened dialog and the queued `close` event
+ * then reset the caller's state, so the modal flashed and vanished (PR23).
  */
 export interface PropiedadesDialogo {
   readonly abierto: boolean;
@@ -26,9 +28,14 @@ export interface PropiedadesDialogo {
  * (guards 17/19 reserve those for the legal-reading iframe/canvas): a modal
  * taller than the screen scrolls the page behind it, which the native
  * `showModal()` already prevents.
+ *
+ * `m-auto` restores the user-agent `margin: auto` that centres a modal
+ * dialog in the top layer — Tailwind v4's Preflight resets `margin: 0` on
+ * `*`, and without this the modal sat in the viewport's top-left corner
+ * (PR23).
  */
 const CLASE_DIALOGO =
-  "w-[calc(100%-2rem)] max-w-[32rem] rounded-base border-2 border-borde bg-fondo p-6 backdrop:bg-texto/40";
+  "m-auto w-[calc(100%-2rem)] max-w-[32rem] rounded-base border-2 border-borde bg-fondo p-6 backdrop:bg-texto/40";
 const CLASE_TITULO = "m-0 mb-3 text-[1.125rem] font-bold";
 
 /**
@@ -87,16 +94,15 @@ export function Dialogo({ abierto, titulo, onCerrar, children }: PropiedadesDial
     if (dialogo === null) {
       return;
     }
-    const notificarCierre = () => {
+    const notificarCancelacion = () => {
       onCerrar();
     };
     // No preventDefault on cancel: the default action (closing) is exactly
-    // what Esc means here, and `close` reports it a second time harmlessly.
-    dialogo.addEventListener("close", notificarCierre);
-    dialogo.addEventListener("cancel", notificarCierre);
+    // what Esc means here. By the time React re-renders with `abierto`
+    // false the element is already closed, so the mirror effect is a no-op.
+    dialogo.addEventListener("cancel", notificarCancelacion);
     return () => {
-      dialogo.removeEventListener("close", notificarCierre);
-      dialogo.removeEventListener("cancel", notificarCierre);
+      dialogo.removeEventListener("cancel", notificarCancelacion);
     };
   }, [onCerrar]);
 
