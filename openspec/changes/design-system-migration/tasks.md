@@ -350,17 +350,17 @@ finding; that window is three draft PRs, none of which gate anything.*
 
 *Confirm the component inventory against `fd -e tsx . apps/web/src/componentes apps/web/src/funcionalidades` before starting — see the Guard landing map's inventory caveat.*
 
-- [ ] 11.1 RED: guard 14 case — `InsigniaDeEstado`'s 4 estado colours each resolve to distinct values and the Spanish label stays present in every variant (never colour-only). Must fail against pre-redesign markup.
-- [ ] 11.2 GREEN: redesign `InsigniaDeEstado`/`estadoDeContrato.tsx`, keeping its existing `[data-estado=...]` attribute strategy (already compatible per exploration row 14 — "SURVIVES best of all").
-- [ ] 11.3 GREEN: redesign the remaining named self-contained molecules (`Toast`, `IndicadorDePaso`, `AvisoDeActualizacion`), plus any additional component surfaced by 11.0's inventory confirmation not already covered by PR7/PR8/PR10/PR12–15. **`CabeceraDeSesion` and `PaginaLogin` are no longer here — both moved to PR8**, so 11.0's inventory must not re-list it.
-- [ ] 11.4 RED then GREEN: real-coverage confirmation for guards 9–11 (colour resolvers) against every component converted through this PR.
-- [ ] 11.5 Update `registro.ts` entry 14 to `JSX`; confirm 9–11 coverage note.
+- [x] 11.1 RED: guard 14 case — `InsigniaDeEstado`'s 4 estado colours each resolve to distinct values and the Spanish label stays present in every variant (never colour-only). Must fail against pre-redesign markup.
+- [x] 11.2 GREEN: redesign `InsigniaDeEstado`/`estadoDeContrato.tsx`, keeping its existing `[data-estado=...]` attribute strategy (already compatible per exploration row 14 — "SURVIVES best of all").
+- [x] 11.3 GREEN: redesign the remaining named self-contained molecules (`Toast`, `IndicadorDePaso`, `AvisoDeActualizacion`), plus any additional component surfaced by 11.0's inventory confirmation not already covered by PR7/PR8/PR10/PR12–15. **`CabeceraDeSesion` and `PaginaLogin` are no longer here — both moved to PR8**, so 11.0's inventory must not re-list it.
+- [x] 11.4 RED then GREEN: real-coverage confirmation for guards 9–11 (colour resolvers) against every component converted through this PR.
+- [x] 11.5 Update `registro.ts` entry 14 to `JSX`; confirm 9–11 coverage note.
 
 ## Phase 11B — PR11 close-out
 
-- [ ] 11B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
+- [x] 11B.1 Run `pnpm --filter @contratos/web test`, `pnpm typecheck`, `pnpm lint`, plus `pnpm size && pnpm handheld`; record results.
 - [ ] 11B.2 User visual review.
-- [ ] 11B.3 Open PR #11 targeting PR #10's branch.
+- [x] 11B.3 Open PR #11 targeting PR #10's branch.
 
 ## Phase 12 — PR12: `VisorDeDocumento` redesign (slice F1, guard 17)
 
