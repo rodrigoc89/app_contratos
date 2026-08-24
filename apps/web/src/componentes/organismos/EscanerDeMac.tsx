@@ -159,12 +159,23 @@ export function EscanerDeMac({
           Escanear código de la antena
         </Boton>
       )}
+      {/*
+        Guard 2 final confirmation (task 14.1/14.2): visibility is governed by
+        the [hidden] ATTRIBUTE alone — this className carries no display
+        utility and no class token matching that attribute, so there is
+        nothing here that could fight Preflight's !important [hidden] rule
+        (PR6's compiled scan, guard 2). Sizing/border/radius are a 1:1 port of
+        the retired `.escaner-de-mac__video` rule (`estilos/organismos.css`):
+        full-width, capped at 40vh, 12px bottom margin, 2px bordered,
+        rounded, black background while the feed loads, cropped to fill via
+        object-cover.
+      */}
       <video
         ref={videoRef}
         muted
         playsInline
         aria-label="Vista de la cámara"
-        className="escaner-de-mac__video"
+        className="w-full max-h-[40vh] mb-3 rounded-base border-2 border-borde bg-black object-cover"
         hidden={estado !== "escaneando" && estado !== "abriendo"}
       />
       {estado === "abriendo" && <p>Abriendo cámara…</p>}

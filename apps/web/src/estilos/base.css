@@ -14,12 +14,12 @@
  * ordering among other important declarations, and this compiled output has
  * none competing (guard 2's compiled scan, `convencionesDeCompilado.compilado.spec.ts`,
  * asserts exactly one `!important display` rule survives). `EscanerDeMac.tsx`'s
- * `<video hidden={...}>` is still governed by `organismos.css`'s
- * `.escaner-de-mac__video { display: block; ... }` — a plain, non-important
- * declaration (see that rule's own comment) — so Preflight's `!important`
- * rule wins the camera preview exactly as this project's own rule used to.
- * `EscanerDeMac.spec.tsx`'s hidden-attribute assertions and PR14's dedicated
- * guard-2-final task re-confirm this on the converted component.
+ * `<video hidden={...}>` (PR14) no longer carries the retired
+ * `.escaner-de-mac__video` class at all — the rule survives unused in
+ * `organismos.css` until PR19 deletes the sheet — so nothing on that element
+ * competes with Preflight's rule even in principle; visibility is governed
+ * by the attribute alone. `convencionesDeUtilidades.spec.ts`'s dedicated
+ * guard-2-final test (PR14) confirms this on the converted component.
  */
 
 *,

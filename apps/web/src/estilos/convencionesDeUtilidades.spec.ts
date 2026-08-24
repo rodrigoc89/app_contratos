@@ -17,6 +17,7 @@ import { Spinner } from "../componentes/atomos/Spinner";
 import { BarraDeBusqueda } from "../componentes/moleculas/BarraDeBusqueda";
 import { Paginador } from "../componentes/moleculas/Paginador";
 import { Toast } from "../componentes/moleculas/Toast";
+import { EscanerDeMac } from "../componentes/organismos/EscanerDeMac";
 import { etiquetaDeEstado, InsigniaDeEstado } from "../componentes/organismos/estadoDeContrato";
 import { LienzoDeFirma } from "../componentes/organismos/LienzoDeFirma";
 import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
@@ -1384,5 +1385,69 @@ describe("guard 19: the signature canvas stays bounded to an explicit vh fractio
       canvasesEncontrados,
       "no <canvas> found under apps/web/src — the signature canvas this guard protects has disappeared or moved",
     ).toBeGreaterThanOrEqual(1);
+  });
+});
+
+const TOKENS_DISPLAY_O_HIDDEN = new Set([
+  "hidden",
+  "block",
+  "inline-block",
+  "inline",
+  "flex",
+  "inline-flex",
+  "grid",
+  "inline-grid",
+  "contents",
+  "table",
+  "flow-root",
+  "list-item",
+]);
+
+/**
+ * Guard 2, final confirmation (task 14.1). Guard 6/PR6's compiled scan
+ * established that Preflight's `[hidden]` rule is the ONE `!important
+ * display` rule in compiled output — that fact is only load-bearing while a
+ * hidden element's markup relies on the ATTRIBUTE alone, never on the
+ * cascade winning a fight. A redesign can silently defeat that coherence two
+ * ways: dropping the `hidden` ATTRIBUTE for Tailwind's `hidden` CLASS (a
+ * plain, non-important `display:none` any later `block`/`flex` utility or a
+ * `cn()` merge can reorder away), or keeping the attribute but adding a
+ * display utility to the same element, so visibility now depends on
+ * Preflight's `!important` rule winning rather than the markup being
+ * coherent on its own. Checked at author time here — the compiled half
+ * above already confirms Preflight's rule is the sole survivor.
+ */
+function tieneUtilidadDeDisplayOHidden(clases: string): boolean {
+  return clases.split(/\s+/).some((token) => TOKENS_DISPLAY_O_HIDDEN.has(token));
+}
+
+describe("guard 2 (final confirmation, PR14): EscanerDeMac's camera-preview <video> stays governed by the hidden ATTRIBUTE alone", () => {
+  it("flags a className carrying the hidden utility class instead of the attribute", () => {
+    expect(tieneUtilidadDeDisplayOHidden("hidden w-full")).toBe(true);
+  });
+
+  it("flags a className carrying a display utility alongside the attribute", () => {
+    expect(tieneUtilidadDeDisplayOHidden("block w-full")).toBe(true);
+  });
+
+  it("does not flag a className with no display-related utility", () => {
+    expect(tieneUtilidadDeDisplayOHidden("w-full max-h-[40vh] rounded-base")).toBe(false);
+  });
+
+  it("EscanerDeMac's real camera-preview <video> carries the hidden ATTRIBUTE, not a class, and no display utility fights it", () => {
+    const { getByLabelText, unmount } = render(
+      createElement(EscanerDeMac, { valor: "", onCambiar: () => {}, comprobarDisponibilidad: () => Promise.resolve(false) }),
+    );
+
+    const video = getByLabelText("Vista de la cámara");
+    expect(
+      video.hasAttribute("hidden"),
+      "EscanerDeMac's <video> is not hidden by the ATTRIBUTE while the preview is inactive",
+    ).toBe(true);
+    expect(
+      tieneUtilidadDeDisplayOHidden(video.className),
+      `EscanerDeMac's <video> className ("${video.className}") carries a display/hidden utility — visibility must depend on the hidden attribute alone, not on Preflight's !important rule winning a fight`,
+    ).toBe(false);
+    unmount();
   });
 });

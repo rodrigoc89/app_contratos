@@ -72,6 +72,12 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // is now the sole `!important display` rule, visible only in compiled
     // output. The CSS-scoped test now proves the negative (no rule was
     // reintroduced); the compiled test proves Preflight's rule is alone.
+    // PR14 (final confirmation) — `EscanerDeMac.tsx`'s camera-preview
+    // `<video>` redesigns off the retired `.escaner-de-mac__video` BEM
+    // class; a rendered component test now confirms the converted element
+    // still relies on the `[hidden]` attribute alone, never a display
+    // utility or the `hidden` class, so it cannot be silently broken by a
+    // later `cn()` merge or utility addition.
     numero: 2,
     protege: "Exactly one !important display declaration ([hidden])",
     disposicion: "AMBOS",
@@ -84,6 +90,11 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
       {
         archivo: COMPILADO,
         titulo: "finds exactly one !important display rule in the real compiled dist/ output — Preflight's own [hidden] rule",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "EscanerDeMac's real camera-preview <video> carries the hidden ATTRIBUTE, not a class, and no display utility fights it",
       },
     ],
   },
