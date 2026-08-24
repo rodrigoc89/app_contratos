@@ -84,6 +84,13 @@ provision_packages() {
     ca-certificates
     gnupg
     lsb-release
+    # puppeteer / @puppeteer/browsers extract Chrome-for-Testing zips with
+    # `unzip`, falling back to the optional `yauzl` package. npm (the npx in
+    # the Chromium step below) does not install that optional peer, and a
+    # fresh Ubuntu host ships no `unzip`, so puppeteer's postinstall failed
+    # at extraction — silently. pnpm's lockfile does pin yauzl for
+    # deploy.sh's install; the system package simply covers both paths.
+    unzip
     fontconfig
     fonts-dejavu-core
     fonts-liberation
@@ -201,15 +208,23 @@ provision_node() {
 # binary itself is installed later, at deploy time, by the unprivileged
 # `contratos` user (deploy.sh), whose own $HOME/.cache/puppeteer is where
 # the running service actually looks.
+#
+# `npx --yes puppeteer@…` first installs the package, whose postinstall
+# downloads Chrome on its own before the CLI command ever runs.
+# PUPPETEER_SKIP_DOWNLOAD=1 turns that postinstall download off; it does not
+# affect the explicit `browsers install chrome` that follows, which still
+# performs a real download into the scratch cache — and that download is
+# the one `--install-deps` resolves the system libraries against.
 provision_chromium_deps() {
   if [ "$DRY_RUN" = true ]; then
-    plan "would run: npx --yes puppeteer@${PUPPETEER_VERSION} browsers install chrome --install-deps (scratch PUPPETEER_CACHE_DIR, deleted afterward)"
+    plan "would run: npx --yes puppeteer@${PUPPETEER_VERSION} browsers install chrome --install-deps (PUPPETEER_SKIP_DOWNLOAD=1 for the postinstall; scratch PUPPETEER_CACHE_DIR, deleted afterward)"
     return
   fi
 
   local scratch_cache
   scratch_cache="$(mktemp -d)"
   PUPPETEER_CACHE_DIR="$scratch_cache" \
+    PUPPETEER_SKIP_DOWNLOAD=1 \
     npx --yes "puppeteer@${PUPPETEER_VERSION}" browsers install chrome --install-deps
   rm -rf "$scratch_cache"
 }

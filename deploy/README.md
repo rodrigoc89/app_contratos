@@ -89,6 +89,20 @@ actually looks (the same command `.github/workflows/ci.yml:167` already
 runs, for the same reason: a warm pnpm store skips Puppeteer's postinstall
 download).
 
+Two things about that step only surfaced on the first real host. Puppeteer's
+postinstall runs *before* the CLI command and extracts the Chrome zip with
+`unzip`, falling back to the optional `yauzl` package; `npx`'s npm does not
+install that optional peer, and a fresh Ubuntu ships no `unzip`, so the
+postinstall died at extraction with no output — `provision.sh` now installs
+`unzip` as a system package. (`deploy.sh`'s `pnpm install --frozen-lockfile`
+was never at risk: `pnpm-lock.yaml` pins `yauzl` as `@puppeteer/browsers`'
+optional dependency, so that path extracts without `unzip`; the system
+package simply covers both.) The root step also sets
+`PUPPETEER_SKIP_DOWNLOAD=1`, so that postinstall does not download Chrome
+once before `browsers install chrome` downloads it again into the scratch
+cache — `--install-deps` still resolves libraries against that second,
+explicit download.
+
 ### Render verdict (`pnpm --filter @contratos/api verify:render`)
 
 **Answer first:** `fc-match` returning a font is not proof of anything —

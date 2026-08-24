@@ -213,6 +213,39 @@ describe("provision.sh --dry-run", () => {
     expect(planDeApt).toContain("fontconfig");
   });
 
+  it("installs unzip so Puppeteer's postinstall can extract Chrome for Testing", async () => {
+    // On the first real host, `npx puppeteer browsers install chrome
+    // --install-deps` exited 1 with no output: puppeteer's postinstall runs
+    // before the CLI command and, on a fresh Ubuntu, fails at extraction
+    // ("no zip archiver is available. Install `unzip`"). npm does not install
+    // @puppeteer/browsers' optional `yauzl` fallback under npx, so only a
+    // system `unzip` can make that step work — pnpm's lockfile pins yauzl,
+    // which is why deploy.sh and CI never showed this.
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: join(scratch, "opt-contratos") },
+    });
+
+    const aptPlan = stdout.split("\n").find((line) => line.includes("apt-get install -y"));
+
+    expect(aptPlan).toContain("unzip");
+  });
+
+  it("skips Puppeteer's postinstall download in the root Chromium step", async () => {
+    // The explicit `browsers install chrome` is the download `--install-deps`
+    // resolves libraries against; letting the postinstall fetch the same
+    // ~150 MB first, into the same scratch cache, is pure waste on every
+    // (re-)provision.
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: join(scratch, "opt-contratos") },
+    });
+
+    const chromiumPlan = stdout
+      .split("\n")
+      .find((line) => line.includes("browsers install chrome --install-deps"));
+
+    expect(chromiumPlan).toContain("PUPPETEER_SKIP_DOWNLOAD=1");
+  });
+
   it("does not accept a commented-out fstab line as an existing swap entry", async () => {
     // A half-finished provisioning run leaves exactly this behind. Read as
     // "already present", the swapfile never survives a reboot — and nothing
