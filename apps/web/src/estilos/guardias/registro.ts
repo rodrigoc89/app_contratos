@@ -141,14 +141,19 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     ],
   },
   {
+    // PR15 (task 15.1) — TablaDeContratos redesigned; ownership moves fully
+    // to the JSX scan, ported as a token ban over every real <tr>/<td>/<th>:
+    // no >=48px sizing token, no cursor-pointer. The CSS-scoped test
+    // (`convencionesDeEstilos.spec.ts`) now reads only the frozen BEM sheet
+    // (`panel.css`, deleted PR16) and stays live but unowned here.
     numero: 5,
     protege: "48px floor explicitly absent on table rows",
-    disposicion: "CSS",
-    archivoCss: "estilos/panel.css",
+    disposicion: "JSX",
     pruebas: [
       {
-        archivo: ESTILOS,
-        titulo: "does NOT impose the 48px floor on table rows or cells, across every declaration of each selector",
+        archivo: UTILIDADES,
+        titulo:
+          "rejects every real <tr>/<td>/<th> in TablaDeContratos whose className carries a sizing token or cursor-pointer",
       },
     ],
   },
@@ -319,6 +324,11 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // unchanged: `left: -10000px`, never `overflow:hidden`/`clip-path`.
     // The compiled scan (shared with guard 1) confirms it survives the
     // Tailwind swap without a `.sr-only`/clip-path regression reappearing.
+    // PR15 (task 15.3, final confirmation) — TablaDeContratos redesigned;
+    // the recipe is ported to utilities (`-left-[10000px] h-px w-px`,
+    // restored `table-header-group` at tableta) and a dedicated rendered
+    // test confirms no sr-only/overflow-hidden|clip token appears on the
+    // converted component.
     numero: 16,
     protege: "Narrow-layout thead displaced, not clipped",
     disposicion: "AMBOS",
@@ -326,6 +336,11 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     pruebas: [
       { archivo: ESTILOS, titulo: "moves the narrow-layout thead off-screen instead of only clipping its pixels" },
       { archivo: COMPILADO, titulo: "finds no overflow:hidden|clip or clip-path rule in the real compiled dist/ output" },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "displaces the header off-screen with a 1px box below tableta, and restores it as a static table-header-group at tableta",
+      },
     ],
   },
   {
@@ -371,11 +386,18 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // PR9 (task 9.1-9.4/9.7, D5) — `pisoDeToque.ts` lands, proven on
     // fixtures first; TablaDeContratos (primary target) converts in PR15,
     // site-wide confirm PR16.
+    // PR15 (task 15.2) — primary-target confirmed: the row link meets the
+    // floor, and both of `EXENCIONES`' real entries (`tbody tr`,
+    // `desplazamiento`) now correspond to a real scanned candidate.
     numero: 20,
     protege: "Universal touch-floor scan over every interactive control",
     disposicion: "JSX",
     pruebas: [
       { archivo: UTILIDADES, titulo: "finds and clears CampoTexto's and Boton's (every variante x tamano) rendered controls" },
+      {
+        archivo: UTILIDADES,
+        titulo: "clears every non-exempt interactive control, and every EXENCIONES entry corresponds to a real scanned candidate",
+      },
     ],
   },
   {

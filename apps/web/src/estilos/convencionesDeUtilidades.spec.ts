@@ -7,7 +7,7 @@ import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import type { EstadoContrato } from "@contratos/esquemas";
+import type { DatosContratoResumen, EstadoContrato } from "@contratos/esquemas";
 
 import { Boton, TAMANOS_BOTON, VARIANTES_BOTON } from "../componentes/atomos/Boton";
 import { CampoTexto } from "../componentes/atomos/CampoTexto";
@@ -20,8 +20,17 @@ import { Toast } from "../componentes/moleculas/Toast";
 import { EscanerDeMac } from "../componentes/organismos/EscanerDeMac";
 import { etiquetaDeEstado, InsigniaDeEstado } from "../componentes/organismos/estadoDeContrato";
 import { LienzoDeFirma } from "../componentes/organismos/LienzoDeFirma";
+import { TablaDeContratos } from "../componentes/organismos/TablaDeContratos";
 import { CabeceraDeSesion } from "../funcionalidades/auth/contenedores/CabeceraDeSesion";
-import { cumplePisoHorizontal, cumplePisoVertical, esControlInteractivo } from "./guardias/pisoDeToque";
+import {
+  type CandidatoDeExencion,
+  cumplePisoHorizontal,
+  cumplePisoVertical,
+  esControlInteractivo,
+  esExento,
+  EXENCIONES,
+  exencionesSinCorrespondencia,
+} from "./guardias/pisoDeToque";
 
 // This file is `.spec.ts`, not `.spec.tsx` — `createElement` renders guard
 // 3/4's fixtures below without JSX syntax this loader does not parse.
@@ -1428,5 +1437,181 @@ describe("guard 2 (final confirmation, PR14): EscanerDeMac's camera-preview <vid
       `EscanerDeMac's <video> className ("${video.className}") carries the hidden class — a plain display:none any later utility or cn() merge reorders away; the attribute is the mechanism`,
     ).toBe(false);
     unmount();
+  });
+});
+
+/**
+ * PR15 (slice F4) — `TablaDeContratos`, guard 20's primary target: the
+ * component the enumerated-list defect originally slipped through (two real
+ * 24px office links). One row fixture shared by guards 5/16/20's final
+ * confirmation below.
+ */
+function filaDeContratoDeTabla(sobrescrituras: Partial<DatosContratoResumen> = {}): DatosContratoResumen {
+  return {
+    id: "c1",
+    numero: 42,
+    estado: "vigente",
+    comodatario: { nombreCompleto: "Ana López", dni: "30.123.456" },
+    fechaFirma: "2026-01-05",
+    ...sobrescrituras,
+  };
+}
+
+/**
+ * Guard 5, final confirmation (task 15.1) — the CSS-scoped version required
+ * NO ≥48px floor on table rows/cells at all: a row is not a target, and no
+ * office contract-detail click destination exists for a whole-row handler
+ * (R-3.5/R-3.8). Ported as a token ban rather than a positive assertion,
+ * because the reflowed layout legitimately carries `block`/`w-full`/
+ * `table-row` display tokens that must NOT be mistaken for a sizing attempt.
+ */
+const PATRON_TOKEN_DE_PISO_EN_TABLA = /\b(?:min-)?(?:h|w|size)-(?:toque|\d+)\b/;
+const PATRON_CURSOR_POINTER_EN_TABLA = /\bcursor-pointer\b/;
+
+describe("guard 5 (final, PR15): TablaDeContratos' rows/cells carry no touch-floor token and no cursor-pointer — a row is never a target (R-3.5/R-3.8)", () => {
+  it("flags a fixture sizing token, in every shape the real scan must catch", () => {
+    expect(PATRON_TOKEN_DE_PISO_EN_TABLA.test("min-h-toque")).toBe(true);
+    expect(PATRON_TOKEN_DE_PISO_EN_TABLA.test("h-12")).toBe(true);
+    expect(PATRON_TOKEN_DE_PISO_EN_TABLA.test("min-h-12")).toBe(true);
+  });
+
+  it("does not flag the layout-only tokens a reflowed row legitimately carries", () => {
+    expect(PATRON_TOKEN_DE_PISO_EN_TABLA.test("block w-full tableta:table-row")).toBe(false);
+  });
+
+  it("rejects every real <tr>/<td>/<th> in TablaDeContratos whose className carries a sizing token or cursor-pointer", () => {
+    const { container, unmount } = render(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(TablaDeContratos, {
+          contratos: [filaDeContratoDeTabla({ id: "c1" }), filaDeContratoDeTabla({ id: "c2" })],
+        }),
+      ),
+    );
+
+    const filasYCeldas = [...container.querySelectorAll<HTMLElement>("tr, td, th")];
+    expect(filasYCeldas.length, "no <tr>/<td>/<th> found in TablaDeContratos — the scan went vacuous").toBeGreaterThan(0);
+
+    for (const elemento of filasYCeldas) {
+      const clases = elemento.className;
+      expect(
+        PATRON_TOKEN_DE_PISO_EN_TABLA.test(clases),
+        `<${elemento.tagName.toLowerCase()}> carries a >=48px sizing token — a row/cell is never a target (guard 5): "${clases}"`,
+      ).toBe(false);
+      expect(
+        PATRON_CURSOR_POINTER_EN_TABLA.test(clases),
+        `<${elemento.tagName.toLowerCase()}> carries cursor-pointer — a row/cell must never look clickable (guard 5): "${clases}"`,
+      ).toBe(false);
+    }
+
+    unmount();
+  });
+});
+
+/**
+ * Guard 16, final confirmation (task 15.3) — the narrow-layout `thead`
+ * displacement recipe (`panel.css:254-263`) ported as utilities: an
+ * absolutely-positioned 1px box at a large negative `left`, restored to a
+ * static `table-header-group` at `tableta`. Never the `sr-only` token, never
+ * an `overflow-hidden`/`overflow-clip` token — that recipe once widened the
+ * document to a measured 492px at 360px, because it clips PIXELS while
+ * leaving LAYOUT untouched (design.md D3).
+ */
+describe("guard 16 (final, PR15): TablaDeContratos' thead stays in the accessibility tree, displaced off-screen below tableta, restored as a real header at tableta (D3/D12)", () => {
+  it("displaces the header off-screen with a 1px box below tableta, and restores it as a static table-header-group at tableta", () => {
+    const { container, unmount } = render(
+      createElement(MemoryRouter, null, createElement(TablaDeContratos, { contratos: [filaDeContratoDeTabla()] })),
+    );
+
+    const thead = container.querySelector("thead");
+    expect(thead, "no <thead> found in TablaDeContratos").not.toBeNull();
+    const clases = thead?.className ?? "";
+
+    expect(clases, `thead className: "${clases}"`).toMatch(/\babsolute\b/);
+    expect(clases, `thead className: "${clases}"`).toMatch(/-left-\[10000px\]/);
+    expect(clases, `thead className: "${clases}"`).toMatch(/\bh-px\b/);
+    expect(clases, `thead className: "${clases}"`).toMatch(/\bw-px\b/);
+    expect(clases, `thead className: "${clases}"`).toMatch(/\bwhitespace-nowrap\b/);
+    expect(clases, `thead className: "${clases}"`).toMatch(/\btableta:static\b/);
+    expect(clases, `thead className: "${clases}"`).toMatch(/\btableta:table-header-group\b/);
+
+    unmount();
+  });
+
+  it("carries no sr-only token and no overflow-hidden/overflow-clip token anywhere in its rendered classNames", () => {
+    const { container, unmount } = render(
+      createElement(MemoryRouter, null, createElement(TablaDeContratos, { contratos: [filaDeContratoDeTabla()] })),
+    );
+
+    const clasesCompletas = [...container.querySelectorAll<HTMLElement>("*")].map((elemento) => elemento.className).join(" ");
+    expect(clasesCompletas).not.toMatch(/\bsr-only\b/);
+    expect(clasesCompletas).not.toMatch(/\boverflow-hidden\b/);
+    expect(clasesCompletas).not.toMatch(/\boverflow-clip\b/);
+
+    unmount();
+  });
+});
+
+/**
+ * Guard 20, primary-target confirmation (task 15.2) — the component the
+ * original enumerated-list engine let two real 24px office links through.
+ * The row link is the one real target per row; the `<tr>` itself carries a
+ * hover tint at `tableta` (mouse-only affordance separating a name from its
+ * estado on a wide row) which makes it register as interactive under D5's
+ * `hover:`-variant heuristic without being a target — the same shape the
+ * retired CSS engine recorded in its own `EXENCIONES` for
+ * `.tabla-de-contratos tbody tr`, carried forward here by name.
+ */
+function elementoDeExencionDeTabla(elemento: HTMLElement): string {
+  const etiqueta = elemento.tagName.toLowerCase();
+  if (etiqueta === "tr" && elemento.closest("tbody") !== null) return "tbody tr";
+  if (etiqueta === "div" && elemento.getAttribute("role") === "region") return "desplazamiento";
+  return etiqueta;
+}
+
+describe("guard 20 (final, PR15): TablaDeContratos' primary target — every genuinely interactive control meets the floor, the recorded row exemption holds (D5)", () => {
+  it("clears every non-exempt interactive control, and every EXENCIONES entry corresponds to a real scanned candidate", () => {
+    const { container, unmount } = render(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(TablaDeContratos, {
+          contratos: [filaDeContratoDeTabla({ id: "c1" }), filaDeContratoDeTabla({ id: "c2" })],
+        }),
+      ),
+    );
+
+    const controles = controlesInteractivosDe(container);
+    const corpus: CandidatoDeExencion[] = controles.map((elemento) => ({
+      componente: "TablaDeContratos",
+      elemento: elementoDeExencionDeTabla(elemento),
+    }));
+
+    expect(
+      exencionesSinCorrespondencia(EXENCIONES, corpus),
+      "EXENCIONES names a component+element pair this scan never found in TablaDeContratos — a stale exemption",
+    ).toEqual([]);
+
+    let noExentosVistos = 0;
+    for (const elemento of controles) {
+      const clave = elementoDeExencionDeTabla(elemento);
+      if (esExento("TablaDeContratos", clave)) continue;
+      noExentosVistos += 1;
+      const mensaje = `<${elemento.tagName.toLowerCase()}> inside TablaDeContratos fails guard 20's touch floor: "${elemento.className}"`;
+      expect(cumplePisoVertical(elemento.className) && cumplePisoHorizontal(elemento.className), mensaje).toBe(true);
+    }
+
+    expect(noExentosVistos, "no non-exempt interactive control found in TablaDeContratos — the scan went vacuous").toBeGreaterThan(0);
+    unmount();
+  });
+
+  it("records both of TablaDeContratos' exemptions by name, matching the two fixtures the CSS engine's EXENCIONES entries were ported from", () => {
+    const elementosExentos = EXENCIONES.filter((exencion) => exencion.componente === "TablaDeContratos").map(
+      (exencion) => exencion.elemento,
+    );
+    expect(elementosExentos, "expected the row and scroll-region exemptions ported from the CSS engine").toEqual(
+      expect.arrayContaining(["tbody tr", "desplazamiento"]),
+    );
   });
 });
