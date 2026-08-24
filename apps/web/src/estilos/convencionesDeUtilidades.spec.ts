@@ -659,10 +659,10 @@ function contratoOficinaFixture(sobrescrituras: Partial<DatosContratoDetalle> = 
  * Guard 4 (task 17b.3), office confirmation — `AccionesDeContrato`'s real
  * composition, the same PR13 (`LienzoDeFirma`) template applied to the
  * office's own destructive pair (Anular, marked destructive by name per the
- * component's own docstring). The confirmation form that follows never
- * co-exists with the actions row in the DOM (the `abierto` state ternary is
- * either/or), so unlike `LienzoDeFirma`'s `mb-8` there is no simultaneous
- * next control to clear — only the gap between the pair is asserted.
+ * component's own docstring). The confirmation form lives in a modal
+ * (`Dialogo`, PR21) — out of the row's flow entirely, behind `showModal()`'s
+ * backdrop — so unlike `LienzoDeFirma`'s `mb-8` there is no simultaneous
+ * next control in flow to clear — only the gap between the pair is asserted.
  */
 describe("guard 4 (office composition, PR17b): AccionesDeContrato colours Anular destructive by its own variant, at >=32px gap from Dar de baja", () => {
   const SEPARACION_MINIMA_PX = 32;
@@ -1022,10 +1022,11 @@ export function esRutaDelSubarbolDelPanel(rutaRelativa: string): boolean {
 
 const MINIMO_REM_JSX = 1;
 /**
- * `base.css` puts `--fuente-base` (18px) on `body`, never on `html`, so
- * `rem` stays the browser's 16px default and a px value converts by this
- * constant. Asserted by "keeps rem anchored…" below rather than assumed —
- * an `html { font-size }` added later would silently move the floor.
+ * `tema.css`'s `@layer base` rule puts `--text-base` (18px) on `body`,
+ * never on `html`, so `rem` stays the browser's 16px default and a px
+ * value converts by this constant. Asserted by "keeps rem anchored…" below
+ * rather than assumed — an `html { font-size }` added later would silently
+ * move the floor.
  */
 const PX_POR_REM = 16;
 const TAMANOS_TEXTO_TAILWIND_BAJO_PISO: ReadonlyMap<string, number> = new Map([
@@ -1722,140 +1723,28 @@ describe("guard 20 (final, PR15): TablaDeContratos' primary target — every gen
 });
 
 /**
- * Guard endpoint for PR16 task 16.1 (design.md's Phase 16 preamble, D2) —
- * `componentes/plantillas/` must carry zero hand-authored BEM classNames.
- * "Hand-authored BEM class" is defined structurally, never lexically: a
- * naive shape-based regex would flag `block`, `flex-1`, `min-h-full` as BEM
- * just as readily as `layout-panel__contenido`. Instead, the banned set is
- * every class token that STILL appears as a real CSS selector in the frozen
- * hand-authored sheets under `estilos/*.css` — every sheet except the
- * Tailwind entry point, identified by its own `@import "tailwindcss"`
- * rather than by filename, so the set stays correct as sheets are deleted
- * through the rest of this migration (PR19). PR18's whole-tree assertion
- * reuses `clasesBemDeclaradas`/`clasesBemEnArchivo` unchanged, only
- * widening the scanned directory prefix.
+ * Zero-BEM scan retired (task 19.2/PR19, design.md D2). PR16-18 built this
+ * up into a whole-tree scan (task 18B.1) of every class token still
+ * declared as a real CSS selector under `estilos/*.css`, banning any of
+ * them from appearing in first-party `.ts`/`.tsx` source. Its own anti-rot
+ * floor — `expect(clasesBemDeclaradas().size).toBeGreaterThan(3)` — existed
+ * so the scan could never pass vacuously against real BEM markup by finding
+ * nothing to ban; PR19 (task 19.2) deletes every hand-authored `estilos/*.css`
+ * sheet, which drives that floor to exactly zero. That failure is DESIGNED
+ * to force this decision, not a regression to work around: a hand-authored
+ * BEM className with no sheet behind it compiles to nothing and matches no
+ * selector, so it is inert — the cascade-ordering hazard this scan guarded
+ * against (a BEM modifier or base rule winning unexpectedly) is now
+ * structurally impossible, not merely unobserved. `esPuntoDeEntradaTailwind`,
+ * `clasesDeclaradasComoSelector`, `clasesBemDeclaradas`, `clasesBemEnArchivo`
+ * and their `PROSA_EXENTA` exemption list retire with it. `quitarComentariosCss`
+ * survives below — guard 8's rem-anchor test and guard 20's native-control
+ * anchor test still read real `.css` text from the one surviving sheet,
+ * `tema.css`.
  */
 function quitarComentariosCss(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, "");
 }
-
-function esPuntoDeEntradaTailwind(contenidoCss: string): boolean {
-  return /@import\s+["']tailwindcss["']/.test(contenidoCss);
-}
-
-/** Every class token declared as a real selector (never inside a rule's body) in one stylesheet. */
-export function clasesDeclaradasComoSelector(cssSinComentarios: string): ReadonlySet<string> {
-  const clases = new Set<string>();
-  const textosDeSelector = cssSinComentarios.match(/[^{}]+(?=\{)/g) ?? [];
-  for (const selector of textosDeSelector) {
-    for (const coincidencia of selector.matchAll(/\.([a-zA-Z_][\w-]*)/g)) {
-      const clase = coincidencia[1];
-      if (clase !== undefined) clases.add(clase);
-    }
-  }
-  return clases;
-}
-
-/** Every class token declared in every hand-authored `estilos/*.css` sheet, Tailwind entry excluded. */
-export function clasesBemDeclaradas(): ReadonlySet<string> {
-  const clases = new Set<string>();
-  for (const nombre of readdirSync(DIRECTORIO_ESTILOS)) {
-    if (!nombre.endsWith(".css")) continue;
-    // Comments first: `base.css` names the Tailwind import in prose (PR17's gate).
-    const contenido = quitarComentariosCss(readFileSync(join(DIRECTORIO_ESTILOS, nombre), "utf8"));
-    if (esPuntoDeEntradaTailwind(contenido)) continue;
-    for (const clase of clasesDeclaradasComoSelector(contenido)) {
-      clases.add(clase);
-    }
-  }
-  return clases;
-}
-
-/** Block, line and JSX comments go first, so prose naming a retired class never counts as a usage. */
-function quitarComentariosTsx(contenidoTsx: string): string {
-  return contenidoTsx.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\\])\/\/.*$/gm, "$1");
-}
-
-const PATRON_LITERAL_DE_CADENA = /"([^"\n]*)"|'([^'\n]*)'|`([^`]*)`/g;
-
-/**
- * Every hand-authored BEM class token ANY string literal in a `.tsx` file
- * carries — not only `className="…"`. `TablaDeContratos` (PR15) keeps its
- * class lists in `const CLASE_* = "…"` and passes them as `className={…}`,
- * and `cn("…")` arguments are strings too; a scan of the attribute alone
- * was proven blind to `const CLASE_LEGADA = "layout-tecnico"` at PR16's
- * gate. Splitting on whitespace keeps `[data-layout-panel]` and
- * `.layout-panel` selectors in specs from matching the bare token.
- */
-export function clasesBemEnArchivo(contenidoTsx: string, clasesBem: ReadonlySet<string>): readonly string[] {
-  const encontradas = new Set<string>();
-  for (const coincidencia of quitarComentariosTsx(contenidoTsx).matchAll(PATRON_LITERAL_DE_CADENA)) {
-    const valor = coincidencia[1] ?? coincidencia[2] ?? coincidencia[3] ?? "";
-    for (const token of valor.split(/\s+/).filter(Boolean)) {
-      if (clasesBem.has(token)) encontradas.add(token);
-    }
-  }
-  return [...encontradas];
-}
-
-/**
- * Guard endpoint (task 18B.1, D2) — every `.ts`/`.tsx` under `apps/web/src`
- * carries zero hand-authored BEM classNames. Consolidates PR16's
- * `componentes/plantillas/`-scoped block and PR17a/17b's explicit 5-file
- * `RUTAS_OBJETIVO` list into ONE whole-tree scan, now that PR18 finishes the
- * last first-party BEM containers (`PanelNoDisponible`, `FormularioBorrador`,
- * `PaginaDetalleContrato`, `PaginaListaContratos`, `EnvioDeFirma`,
- * `PasoFirmaDual`). Plain `.ts` is in scope because shared class-list modules
- * (`estilos/formulario.ts`, `estilos/progreso.ts`) are an established
- * convention — a BEM token smuggled through one renders in the DOM just the
- * same. Excluded: `*.spec.ts` (BEM tokens as fixtures/probes) and
- * `estilos/guardias/` (frozen-sheet selectors as guard data). Reuses
- * `clasesBemDeclaradas`/`clasesBemEnArchivo` unchanged — the frozen
- * hand-authored sheets under `estilos/*.css` stay untouched here and retire
- * in PR19.
- */
-describe("guard endpoint (task 18B.1, D2): every .ts/.tsx under apps/web/src carries no hand-authored BEM className", () => {
-  it("finds a non-trivial set of banned BEM class tokens in the frozen hand-authored sheets", () => {
-    // Anti-rot floor on the CSS side: if this ever goes to (near) zero
-    // before the sheets are actually deleted (PR19), the scan below would
-    // pass vacuously against real BEM markup.
-    expect(clasesBemDeclaradas().size).toBeGreaterThan(3);
-  });
-
-  // String literals where a banned token is prose, not a class — scoped to
-  // one file + one token each, so any other token in the same file (or the
-  // same token anywhere else) still trips the scan.
-  const PROSA_EXENTA: ReadonlyArray<{ readonly ruta: string; readonly token: string }> = [
-    // UI copy "Corregir el primer campo con error" — "campo" is the Spanish
-    // word for a form field there, not panel.css's `.campo`.
-    { ruta: "errores/mensajeDeError.ts", token: "campo" },
-  ];
-
-  it("rejects every real .ts/.tsx file under apps/web/src that carries a hand-authored BEM className", () => {
-    const clasesBem = clasesBemDeclaradas();
-    const fuentes = archivosFuente(DIRECTORIO_SRC).filter(({ ruta }) => {
-      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
-      if (rutaRelativa.endsWith(".spec.ts") || rutaRelativa.startsWith("estilos/guardias/")) {
-        return false;
-      }
-      return rutaRelativa.endsWith(".tsx") || rutaRelativa.endsWith(".ts");
-    });
-    expect(fuentes.length, "no .ts/.tsx files found under apps/web/src — the scan matched nothing").toBeGreaterThan(0);
-
-    const ofensores: string[] = [];
-    for (const { ruta, contenido } of fuentes) {
-      const rutaRelativa = relative(DIRECTORIO_SRC, ruta).replaceAll("\\", "/");
-      const encontradas = clasesBemEnArchivo(contenido, clasesBem).filter(
-        (token) => !PROSA_EXENTA.some((exenta) => exenta.ruta === rutaRelativa && exenta.token === token),
-      );
-      if (encontradas.length > 0) {
-        ofensores.push(`${rutaRelativa}: ${encontradas.join(", ")}`);
-      }
-    }
-
-    expect(ofensores, `hand-authored BEM className found — ${ofensores.join(" | ")}`).toEqual([]);
-  });
-});
 
 /**
  * PR17 (Phase 17, D2/D4/D5) — the técnico half of the four office organisms
@@ -1896,6 +1785,11 @@ function esperaControlesDelPanelEnElPiso(contenedor: HTMLElement, componente: st
 describe("guard 20 (PR17, task 17.1a): the técnico organisms meet the touch floor on every non-exempt interactive control (D5)", () => {
   // `esControlNativoDeToque` trusts one stylesheet rule; a guard that trusts
   // a rule must watch it — deleted, every radio would still "pass" here.
+  // PR19 (task 19.2) deleted `base.css`, the rule's original home; the same
+  // rule survives, ported verbatim into `tema.css`'s `@layer base`, sizing
+  // to `--spacing-toque` (the renamed `@theme` token, not the retired
+  // `--tamano-toque-minimo` custom property `base.css` used) — re-anchored
+  // here to its new home and new token name.
   it("anchors esControlNativoDeToque: a hand-authored sheet still sizes native radio/checkbox controls to the touch token", () => {
     const hojas = readdirSync(DIRECTORIO_ESTILOS)
       .filter((nombre) => nombre.endsWith(".css"))
@@ -1905,12 +1799,12 @@ describe("guard 20 (PR17, task 17.1a): the técnico organisms meet the touch flo
       (regla) =>
         /input\[type="radio"\]/.test(regla) &&
         /input\[type="checkbox"\]/.test(regla) &&
-        /\bwidth\s*:\s*var\(--tamano-toque-minimo\)/.test(regla) &&
-        /\bheight\s*:\s*var\(--tamano-toque-minimo\)/.test(regla),
+        /\bwidth\s*:\s*var\(--spacing-toque\)/.test(regla) &&
+        /\bheight\s*:\s*var\(--spacing-toque\)/.test(regla),
     );
     expect(
       reglaNativa,
-      "no sheet sizes input[type=radio]/input[type=checkbox] to var(--tamano-toque-minimo) any more — esControlNativoDeToque now exempts controls nothing sizes",
+      "no sheet sizes input[type=radio]/input[type=checkbox] to var(--spacing-toque) any more — esControlNativoDeToque now exempts controls nothing sizes",
     ).toBeDefined();
   });
 
@@ -1950,8 +1844,8 @@ describe("guard 20 (PR17, task 17.1a): the técnico organisms meet the touch flo
 /**
  * Guard 20 (PR17b, task 17b.1): the office half of the panel D5 confirms —
  * `DetalleDeContrato`'s document downloads and `AccionesDeContrato`'s both
- * states (the actions row AND the confirmation form it opens into, since
- * they never render simultaneously).
+ * states (the actions row AND the confirmation form — a modal since PR21,
+ * so the second scan sees the row's controls again plus the form's).
  */
 describe("guard 20 (PR17b, task 17b.1): the office organisms meet the touch floor on every non-exempt interactive control (D5)", () => {
   it("clears DetalleDeContrato's real rendered controls", () => {
