@@ -60,7 +60,16 @@ const CLASE_CABECERA = "mb-4 flex flex-wrap items-center gap-3 border-b-2 border
 const CLASE_TITULO = "m-0 text-[1.75rem] font-bold tracking-tight";
 const CLASE_PENDIENTE =
   "mb-4 rounded-base border border-estado-baja-texto bg-estado-baja-fondo p-3 font-semibold text-estado-baja-texto";
-const CLASE_SECCION = "mb-5";
+/**
+ * `last:mb-0` — PR21 change 3, measured at 1280x800: the page's last
+ * section's own `mb-5` (20px) cannot collapse through `main`'s bottom
+ * padding (`LayoutPanel`, `p-4 escritorio:p-6`), so it added 20px of dead
+ * scroll past the padding the container already provides (article bottom
+ * 924.5px, main bottom 968.5px = 924.5 + 20 + 24). The margin exists to
+ * separate a section from the NEXT one; the last child has none to
+ * separate from.
+ */
+const CLASE_SECCION = "mb-5 last:mb-0";
 const CLASE_TITULO_SECCION = "mb-3 text-xs font-bold uppercase tracking-wide text-texto-suave";
 const CLASE_DATOS = "m-0 grid gap-3 tableta:grid-cols-2 tableta:gap-x-5 escritorio:grid-cols-3";
 const CLASE_DATO_ETIQUETA = "text-[0.8125rem] font-semibold text-texto-suave";

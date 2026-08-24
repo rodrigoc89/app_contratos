@@ -128,6 +128,20 @@ describe("DetalleDeContrato — historial", () => {
     expect(within(seccionDeHistorial()).getByText(/Anulado/)).toBeInTheDocument();
   });
 
+  /**
+   * PR21 change 3 — measured at 1280x800 (puppeteer, dev server): the last
+   * section's `mb-5` (20px) does not collapse through `main`'s bottom
+   * padding (`p-4 escritorio:p-6`), so it pushed the article's 924.5px
+   * bottom edge to a 968.5px main bottom — 20px of dead scroll past the
+   * 24px of padding the container already provides. `last:mb-0` drops the
+   * margin exactly on the section that is the article's last child.
+   */
+  it("drops the trailing margin on the last section, so the scroll ends at the container's own padding", () => {
+    render(<DetalleDeContrato contrato={historia()} onDescargar={vi.fn()} />);
+
+    expect(seccionDeHistorial().className).toMatch(/\blast:mb-0\b/);
+  });
+
   /** A draft that has only just been created still has one event. */
   it("is absent entirely when there is nothing to tell", () => {
     render(<DetalleDeContrato contrato={contrato({ eventos: [] })} onDescargar={vi.fn()} />);
