@@ -205,21 +205,18 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
   }
 
   return (
-    <div className="lienzo-de-firma">
+    <div className="mb-2" data-lienzo-de-firma>
       <canvas
         ref={canvasRef}
         role="img"
         aria-label={etiqueta}
-        className="lienzo-de-firma__lienzo"
+        className="block h-[40vh] w-full cursor-crosshair rounded-base border-2 border-borde bg-fondo"
         /*
           `touch-action` stays inline because it must win unconditionally —
-          without it the browser scrolls the page instead of drawing.
-
-          The SIZE deliberately does not: it used to be `height: 100%` here,
-          which no stylesheet could override, and which made the canvas
-          consume its wrapper whole so Deshacer/Borrar fell outside the box
-          and the next document's iframe covered them. The bound belongs in
-          `organismos.css`, where the sheet can state it.
+          without it the browser scrolls the page instead of drawing. SIZE
+          deliberately does not: an inline `height: 100%` here used to
+          consume the wrapper whole and push Deshacer/Borrar under the next
+          document's iframe. `h-[40vh]` only — no `min-h-*` (guard 19).
         */
         style={{ touchAction: "none" }}
         onPointerDown={manejarPointerDown}
@@ -227,14 +224,17 @@ export function LienzoDeFirma({ etiqueta, onCambia, crearSuperficie }: Propiedad
         onPointerUp={manejarFinDeTrazo}
         onPointerCancel={manejarFinDeTrazo}
       />
-      <div className="lienzo-de-firma__acciones">
+      {/* design-system-migration PR13 (guard 4, final confirmation) — gap-8
+          between the pair, mb-8 (32px) before Firmar below: a técnico taps
+          standing up, and Borrar destroys an already-captured signature. */}
+      <div className="flex gap-8 mb-8">
         <Boton type="button" onClick={manejarDeshacer}>
           Deshacer
         </Boton>
         {/* design-system-migration PR7 — Boton's destructive marker moved
-            from a BEM modifier class to the cva `variante` prop; the
-            surrounding organism's own layout/composition is unchanged
-            (redesign lands in PR13, guard 4's final confirmation). */}
+            from a BEM modifier class to the cva `variante` prop, colouring
+            by its own prop rather than a class a caller could paste onto
+            the wrong button. */}
         <Boton type="button" variante="destructivo" onClick={manejarBorrar}>
           Borrar
         </Boton>

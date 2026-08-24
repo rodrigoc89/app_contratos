@@ -227,9 +227,12 @@ describe("EscanerDeMac", () => {
     expect(onCambiar).toHaveBeenCalledWith("AC:8B:A9:12:34:56");
   });
 
-  it("carries the camera-preview class on the video element (PR24b) — styling never touches the [hidden] protection", () => {
+  it("bounds the camera-preview video's height (PR14) — styling never touches the [hidden] protection", () => {
     render(<EscanerDeMac valor="" onCambiar={vi.fn()} comprobarDisponibilidad={NO_DISPONIBLE} />);
 
-    expect(screen.getByLabelText("Vista de la cámara")).toHaveClass("escaner-de-mac__video");
+    const video = screen.getByLabelText("Vista de la cámara");
+    expect(video).toHaveClass("max-h-[40vh]");
+    expect(video).not.toHaveClass("h-auto");
+    expect(video.hasAttribute("hidden")).toBe(true);
   });
 });
