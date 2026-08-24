@@ -101,10 +101,8 @@ describe("AccionesDeContrato", () => {
   it("marks the annulment destructive by name, never by position", () => {
     render(<AccionesDeContrato {...props()} />);
 
-    expect(screen.getByRole("button", { name: "Anular" })).toHaveClass("boton--destructivo");
-    expect(screen.getByRole("button", { name: "Dar de baja" })).not.toHaveClass(
-      "boton--destructivo",
-    );
+    expect(screen.getByRole("button", { name: "Anular" })).toHaveClass("bg-error");
+    expect(screen.getByRole("button", { name: "Dar de baja" })).not.toHaveClass("bg-error");
   });
 
   it("warns what annulment means before confirming it", () => {

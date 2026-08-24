@@ -41,11 +41,35 @@ export interface PropiedadesDetalleDeContrato {
   readonly descargando?: DatosDocumentoDisponible["documento"] | undefined;
 }
 
+/**
+ * design-system-migration PR17b (D4) — office-panel section shape, ported
+ * from the retired `.detalle-contrato__*` rules (panel.css) and redesigned
+ * in TablaDeContratos' (PR15) language: quiet uppercase section labels with
+ * a rule under them, muted metadata, rounded-base cards. Local `CLASE_*`
+ * constants, same shape PR15/PR17 used for their own JSX call sites.
+ */
+const CLASE_CABECERA = "mb-4 flex flex-wrap items-center gap-3 border-b-2 border-primario pb-3";
+const CLASE_TITULO = "m-0 text-[1.75rem] font-bold tracking-tight";
+const CLASE_PENDIENTE =
+  "mb-4 rounded-base border border-estado-baja-texto bg-estado-baja-fondo p-3 font-semibold text-estado-baja-texto";
+const CLASE_SECCION = "mb-5";
+const CLASE_TITULO_SECCION = "mb-3 text-xs font-bold uppercase tracking-wide text-texto-suave";
+const CLASE_DATOS = "m-0 grid gap-3 tableta:grid-cols-2 tableta:gap-x-5 escritorio:grid-cols-3";
+const CLASE_DATO_ETIQUETA = "text-[0.8125rem] font-semibold text-texto-suave";
+const CLASE_DATO_VALOR = "m-0 font-semibold";
+const CLASE_DOCUMENTOS = "m-0 flex list-none flex-wrap gap-3 p-0";
+const CLASE_HISTORIAL = "m-0 list-none p-0";
+const CLASE_EVENTO = "border-t border-borde-suave py-3 first:border-t-0 first:pt-0";
+const CLASE_EVENTO_LINEA = "m-0 flex flex-wrap items-baseline gap-2";
+const CLASE_EVENTO_HECHO = "font-bold";
+const CLASE_EVENTO_META = "text-[0.8125rem] text-texto-suave";
+const CLASE_EVENTO_DETALLE = "mt-1 border-l-2 border-borde-suave pl-3 text-texto-suave";
+
 function Dato({ etiqueta, valor }: { readonly etiqueta: string; readonly valor: string }) {
   return (
-    <div className="detalle-contrato__dato">
-      <dt>{etiqueta}</dt>
-      <dd>{valor}</dd>
+    <div>
+      <dt className={CLASE_DATO_ETIQUETA}>{etiqueta}</dt>
+      <dd className={CLASE_DATO_VALOR}>{valor}</dd>
     </div>
   );
 }
@@ -58,9 +82,9 @@ export function DetalleDeContrato({
   const { comodatario, equipos, plazo } = contrato;
 
   return (
-    <article className="detalle-contrato">
-      <header className="detalle-contrato__cabecera">
-        <h1>
+    <article>
+      <header className={CLASE_CABECERA}>
+        <h1 className={CLASE_TITULO}>
           {contrato.numero === null ? "Contrato sin número" : `Contrato N° ${contrato.numero}`}
         </h1>
         <InsigniaDeEstado estado={contrato.estado} />
@@ -73,14 +97,14 @@ export function DetalleDeContrato({
         here that asks anyone to do something.
       */}
       {contrato.equiposPendientesDeRestitucion && (
-        <p role="alert" className="detalle-contrato__pendiente">
+        <p role="alert" className={CLASE_PENDIENTE}>
           El equipo todavía no fue restituido.
         </p>
       )}
 
-      <section className="detalle-contrato__seccion">
-        <h2>Comodatario</h2>
-        <dl className="detalle-contrato__datos">
+      <section className={CLASE_SECCION}>
+        <h2 className={CLASE_TITULO_SECCION}>Comodatario</h2>
+        <dl className={CLASE_DATOS}>
           <Dato etiqueta="Nombre completo" valor={comodatario.nombreCompleto} />
           <Dato etiqueta="DNI" valor={comodatario.dni} />
           <Dato etiqueta="Domicilio" valor={`${comodatario.domicilioCalle}, ${comodatario.ciudad}`} />
@@ -89,9 +113,9 @@ export function DetalleDeContrato({
         </dl>
       </section>
 
-      <section className="detalle-contrato__seccion">
-        <h2>Equipos</h2>
-        <dl className="detalle-contrato__datos">
+      <section className={CLASE_SECCION}>
+        <h2 className={CLASE_TITULO_SECCION}>Equipos</h2>
+        <dl className={CLASE_DATOS}>
           <Dato etiqueta="Antena" valor={equipos.antenaModelo} />
           <Dato etiqueta="MAC" valor={equipos.antenaMac} />
           <Dato etiqueta="PoE" valor={equipos.poe ? "Sí" : "No"} />
@@ -99,17 +123,17 @@ export function DetalleDeContrato({
         </dl>
       </section>
 
-      <section className="detalle-contrato__seccion">
-        <h2>Plazo</h2>
-        <dl className="detalle-contrato__datos">
+      <section className={CLASE_SECCION}>
+        <h2 className={CLASE_TITULO_SECCION}>Plazo</h2>
+        <dl className={CLASE_DATOS}>
           <Dato etiqueta="Fecha de firma" valor={contrato.fechaFirma ?? SIN_VALOR} />
           <Dato etiqueta="Duración" valor={plazo === null ? SIN_VALOR : `${plazo.meses} meses`} />
           <Dato etiqueta="Vencimiento" valor={plazo?.fechaVencimiento ?? SIN_VALOR} />
         </dl>
       </section>
 
-      <section className="detalle-contrato__seccion">
-        <h2>Documentos</h2>
+      <section className={CLASE_SECCION}>
+        <h2 className={CLASE_TITULO_SECCION}>Documentos</h2>
         {contrato.documentos.length === 0 ? (
           /*
             A draft has no sealed PDFs and the domain forbids it from having
@@ -118,7 +142,7 @@ export function DetalleDeContrato({
           */
           <p>Todavía no hay documentos firmados. Se generan cuando el contrato se firma.</p>
         ) : (
-          <ul className="detalle-contrato__documentos">
+          <ul className={CLASE_DOCUMENTOS}>
             {contrato.documentos.map((documento) => (
               <li key={documento.documento}>
                 <Boton
@@ -150,17 +174,19 @@ export function DetalleDeContrato({
         A second date format on one screen is worse than an unfamiliar one.
       */}
       {contrato.eventos.length > 0 && (
-        <section className="detalle-contrato__seccion" aria-labelledby="titulo-historial">
-          <h2 id="titulo-historial">Historial</h2>
-          <ol className="detalle-contrato__historial">
+        <section className={CLASE_SECCION} aria-labelledby="titulo-historial">
+          <h2 id="titulo-historial" className={CLASE_TITULO_SECCION}>
+            Historial
+          </h2>
+          <ol className={CLASE_HISTORIAL}>
             {contrato.eventos.map((evento, indice) => (
               // Events are append-only and never reorder, so the position is
               // a stable key — and two events of the same tipo on one
               // contract (two restitutions, say) are exactly why the tipo
               // alone is not.
-              <li key={`${evento.tipo}-${indice}`} className="detalle-contrato__evento">
-                <p className="detalle-contrato__evento-linea">
-                  <span className="detalle-contrato__evento-hecho">
+              <li key={`${evento.tipo}-${indice}`} className={CLASE_EVENTO}>
+                <p className={CLASE_EVENTO_LINEA}>
+                  <span className={CLASE_EVENTO_HECHO}>
                     {/*
                       An unknown tipo means a server newer than this bundle.
                       Showing its raw code is ugly; dropping the event from a
@@ -168,20 +194,18 @@ export function DetalleDeContrato({
                     */}
                     {NOMBRE_EVENTO[evento.tipo] ?? evento.tipo}
                   </span>
-                  {evento.fecha !== null && (
-                    <span className="detalle-contrato__evento-fecha">{evento.fecha}</span>
-                  )}
+                  {evento.fecha !== null && <span className={CLASE_EVENTO_META}>{evento.fecha}</span>}
                   {/*
                     Only where there is a name. `creado` and `firmado` have no
                     author and never will, and "por —" beside them would
                     invent a missing value where nothing is missing.
                   */}
                   {evento.usuario !== null && evento.usuario !== undefined && (
-                    <span className="detalle-contrato__evento-autor">por {evento.usuario}</span>
+                    <span className={CLASE_EVENTO_META}>por {evento.usuario}</span>
                   )}
                 </p>
                 {evento.detalle !== null && evento.detalle !== undefined && (
-                  <p className="detalle-contrato__evento-detalle">{evento.detalle}</p>
+                  <p className={CLASE_EVENTO_DETALLE}>{evento.detalle}</p>
                 )}
               </li>
             ))}

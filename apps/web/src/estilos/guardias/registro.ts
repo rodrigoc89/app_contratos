@@ -117,8 +117,13 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // PR7 — variant half: Boton's destructivo cva variant proves the
     // colour-not-position half plus a fixture composition's >=32px gap.
     // PR13 (task 13.2/13.6) — final confirmation: LienzoDeFirma's real composition proves both hold there too.
+    // PR17b (task 17b.3) — second real-composition confirmation:
+    // AccionesDeContrato's Anular/Dar de baja pair, the office's own
+    // destructive control. No mb-N assertion here (unlike LienzoDeFirma's
+    // Firmar) — the confirmation form the row opens into never co-exists
+    // with it in the DOM, so there is no simultaneous next control to clear.
     numero: 4,
-    protege: "32px gap + destructive colour-not-position (signature actions)",
+    protege: "32px gap + destructive colour-not-position (signature + office actions)",
     disposicion: "JSX",
     pruebas: [
       {
@@ -137,6 +142,16 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
         archivo: UTILIDADES,
         titulo:
           "keeps at least ${SEPARACION_MINIMA_PX}px between Deshacer and Borrar, and below the row before Firmar, in LienzoDeFirma's real composition",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "colours Anular as destructive by its own variant in AccionesDeContrato's real composition, never by position",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "keeps at least ${SEPARACION_MINIMA_PX}px of gap between Dar de baja and Anular in AccionesDeContrato's real composition",
       },
     ],
   },
@@ -426,6 +441,9 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
     // PR17 (task 17.1a) — the técnico organisms confirmed; native
     // radio/checkbox controls resolved against base.css's `@layer base`
     // rule (`esControlNativoDeToque`, D5) rather than flagged.
+    // PR17b (task 17b.1) — the office organisms confirmed: DetalleDeContrato's
+    // downloads and AccionesDeContrato's both states (actions row and the
+    // confirmation form it opens into).
     numero: 20,
     protege: "Universal touch-floor scan over every interactive control",
     disposicion: "JSX",
@@ -439,6 +457,11 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
         archivo: UTILIDADES,
         titulo:
           "anchors esControlNativoDeToque: a hand-authored sheet still sizes native radio/checkbox controls to the touch token",
+      },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "clears AccionesDeContrato's real rendered controls, both the actions row and its confirmation form",
       },
     ],
   },

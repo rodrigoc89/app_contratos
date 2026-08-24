@@ -2,12 +2,12 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import type { DatosContratoResumen, EstadoContrato } from "@contratos/esquemas";
+import type { DatosContratoDetalle, DatosContratoResumen, EstadoContrato } from "@contratos/esquemas";
 
 import { Boton, TAMANOS_BOTON, VARIANTES_BOTON } from "../componentes/atomos/Boton";
 import { CampoTexto } from "../componentes/atomos/CampoTexto";
@@ -17,6 +17,8 @@ import { Spinner } from "../componentes/atomos/Spinner";
 import { BarraDeBusqueda } from "../componentes/moleculas/BarraDeBusqueda";
 import { Paginador } from "../componentes/moleculas/Paginador";
 import { Toast } from "../componentes/moleculas/Toast";
+import { AccionesDeContrato } from "../componentes/organismos/AccionesDeContrato";
+import { DetalleDeContrato } from "../componentes/organismos/DetalleDeContrato";
 import { EscanerDeMac } from "../componentes/organismos/EscanerDeMac";
 import { etiquetaDeEstado, InsigniaDeEstado } from "../componentes/organismos/estadoDeContrato";
 import { FormularioComodatario, type ValoresComodatario } from "../componentes/organismos/FormularioComodatario";
@@ -624,6 +626,81 @@ describe("guard 4 (final confirmation, PR13): LienzoDeFirma's real composition c
         SEPARACION_MINIMA_PX,
       );
     }
+    unmount();
+  });
+});
+
+/** Office-panel fixture shared by the guard 4/20 (PR17b) office blocks below. */
+function contratoOficinaFixture(sobrescrituras: Partial<DatosContratoDetalle> = {}): DatosContratoDetalle {
+  return {
+    id: "c1",
+    estado: "vigente",
+    numero: 42,
+    comodatario: {
+      nombreCompleto: "Ana López",
+      dni: "30.123.456",
+      domicilioCalle: "Belgrano 250",
+      ciudad: "La Banda",
+      provincia: "Santiago del Estero",
+      whatsapp: "+5493854000111",
+    },
+    equipos: { antenaModelo: "LiteBeam", antenaMac: "AA:BB:CC:DD:EE:FF", poe: true, canoMetros: 12 },
+    plazo: null,
+    fechaFirma: "2026-01-05",
+    plantillaVersionId: "v1",
+    documentos: [{ documento: "comodato", sha256: "a".repeat(64), enlace: "/contratos/c1/documentos/comodato" }],
+    eventos: [],
+    equiposPendientesDeRestitucion: false,
+    ...sobrescrituras,
+  };
+}
+
+/**
+ * Guard 4 (task 17b.3), office confirmation — `AccionesDeContrato`'s real
+ * composition, the same PR13 (`LienzoDeFirma`) template applied to the
+ * office's own destructive pair (Anular, marked destructive by name per the
+ * component's own docstring). The confirmation form that follows never
+ * co-exists with the actions row in the DOM (the `abierto` state ternary is
+ * either/or), so unlike `LienzoDeFirma`'s `mb-8` there is no simultaneous
+ * next control to clear — only the gap between the pair is asserted.
+ */
+describe("guard 4 (office composition, PR17b): AccionesDeContrato colours Anular destructive by its own variant, at >=32px gap from Dar de baja", () => {
+  const SEPARACION_MINIMA_PX = 32;
+
+  function renderizarAcciones() {
+    return render(
+      createElement(AccionesDeContrato, {
+        contrato: contratoOficinaFixture(),
+        onDarDeBaja: () => {},
+        onAnular: () => {},
+        onRegistrarRestitucion: () => {},
+      }),
+    );
+  }
+
+  it("colours Anular as destructive by its own variant in AccionesDeContrato's real composition, never by position", () => {
+    const { getByRole, unmount } = renderizarAcciones();
+
+    const anular = getByRole("button", { name: "Anular" });
+    const darDeBaja = getByRole("button", { name: "Dar de baja" });
+    expect(anular).toHaveClass("bg-error");
+    expect(darDeBaja).not.toHaveClass("bg-error");
+    unmount();
+  });
+
+  it(`keeps at least ${SEPARACION_MINIMA_PX}px of gap between Dar de baja and Anular in AccionesDeContrato's real composition`, () => {
+    const { getByRole, unmount } = renderizarAcciones();
+
+    const acciones = getByRole("button", { name: "Dar de baja" }).parentElement;
+    expect(acciones, "actions wrapper not found").not.toBeNull();
+    const clases = acciones?.className ?? "";
+
+    const gap = /\bgap-(\d+)\b/.exec(clases);
+    expect(gap, `AccionesDeContrato's real actions row has no gap-N utility: ${clases}`).not.toBeNull();
+    expect(
+      Number(gap?.[1]) * 4,
+      `gap-${gap?.[1]} resolves below ${SEPARACION_MINIMA_PX}px`,
+    ).toBeGreaterThanOrEqual(SEPARACION_MINIMA_PX);
     unmount();
   });
 });
@@ -1843,6 +1920,38 @@ describe("guard 20 (PR17, task 17.1a): the técnico organisms meet the touch flo
 });
 
 /**
+ * Guard 20 (PR17b, task 17b.1): the office half of the panel D5 confirms —
+ * `DetalleDeContrato`'s document downloads and `AccionesDeContrato`'s both
+ * states (the actions row AND the confirmation form it opens into, since
+ * they never render simultaneously).
+ */
+describe("guard 20 (PR17b, task 17b.1): the office organisms meet the touch floor on every non-exempt interactive control (D5)", () => {
+  it("clears DetalleDeContrato's real rendered controls", () => {
+    const { container, unmount } = render(
+      createElement(DetalleDeContrato, { contrato: contratoOficinaFixture(), onDescargar: () => {} }),
+    );
+    esperaControlesDelPanelEnElPiso(container, "DetalleDeContrato");
+    unmount();
+  });
+
+  it("clears AccionesDeContrato's real rendered controls, both the actions row and its confirmation form", () => {
+    const { container, getByRole, unmount } = render(
+      createElement(AccionesDeContrato, {
+        contrato: contratoOficinaFixture(),
+        onDarDeBaja: () => {},
+        onAnular: () => {},
+        onRegistrarRestitucion: () => {},
+      }),
+    );
+    esperaControlesDelPanelEnElPiso(container, "AccionesDeContrato (actions)");
+
+    fireEvent.click(getByRole("button", { name: "Dar de baja" }));
+    esperaControlesDelPanelEnElPiso(container, "AccionesDeContrato (confirmation form)");
+    unmount();
+  });
+});
+
+/**
  * Guard 8, técnico component-level confirmation (task 17.1b, D4) — the path
  * axis (`PREFIJOS_RUTA_PANEL`, above) exempts `componentes/organismos/`
  * wholesale, which blinds it to `FormularioComodatario`/`FormularioEquipos`:
@@ -1898,25 +2007,28 @@ describe("guard 8 (técnico organisms, task 17.1b, D4): FormularioComodatario/Fo
 });
 
 /**
- * Guard endpoint (task 17.1c, D2) — the técnico organisms + `PaginaLogin`
+ * Guard endpoint (task 17.1c/17b.1, D2) — the técnico organisms + `PaginaLogin`
  * (which shares the retired `.formulario` shape) carry zero hand-authored
  * BEM classNames, same mechanism as PR16's `componentes/plantillas/` block
  * above, over an explicit file list instead of a directory prefix.
- * `DetalleDeContrato`/`AccionesDeContrato` join this list in PR17b.
+ * PR17b widens the list to the office pair, `DetalleDeContrato`/
+ * `AccionesDeContrato`, rather than writing a fourth scan.
  */
-describe("guard endpoint (task 17.1c, D2): the técnico organisms + PaginaLogin carry no hand-authored BEM className", () => {
+describe("guard endpoint (task 17.1c/17b.1, D2): the técnico organisms + PaginaLogin + the office organisms carry no hand-authored BEM className", () => {
   const RUTAS_OBJETIVO = [
     "componentes/organismos/FormularioComodatario.tsx",
     "componentes/organismos/FormularioEquipos.tsx",
     "funcionalidades/auth/contenedores/PaginaLogin.tsx",
+    "componentes/organismos/DetalleDeContrato.tsx",
+    "componentes/organismos/AccionesDeContrato.tsx",
   ];
 
-  it("rejects every real .tsx file among the técnico organisms and PaginaLogin that carries a hand-authored BEM className", () => {
+  it("rejects every real .tsx file among the técnico organisms, PaginaLogin and the office organisms that carries a hand-authored BEM className", () => {
     const clasesBem = clasesBemDeclaradas();
     const fuentes = archivosFuente(DIRECTORIO_SRC).filter((archivo) =>
       RUTAS_OBJETIVO.includes(relative(DIRECTORIO_SRC, archivo.ruta).replaceAll("\\", "/")),
     );
-    expect(fuentes.length, "expected exactly 3 target files — the scan matched a different set").toBe(RUTAS_OBJETIVO.length);
+    expect(fuentes.length, "expected exactly 5 target files — the scan matched a different set").toBe(RUTAS_OBJETIVO.length);
 
     const ofensores: string[] = [];
     for (const { ruta, contenido } of fuentes) {
