@@ -15,7 +15,7 @@ describe("Toast", () => {
     vi.useRealTimers();
   });
 
-  it("announces the message via role=status — a toast without a live region is invisible to a screen reader", () => {
+  it("announces the message via role=status — a toast without a live region goes unnoticed by a screen reader", () => {
     render(<Toast mensaje="Borrador creado. ID: c1" onDescartar={() => {}} />);
 
     expect(screen.getByRole("status")).toHaveTextContent("Borrador creado. ID: c1");

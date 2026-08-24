@@ -7,9 +7,15 @@ import { describe, expect, it } from "vitest";
 /**
  * design-system-migration PR1 (D3) — `tema.css` moves `tokens.css`'s custom
  * properties into Tailwind's `@theme` namespace. No real `vite build` runs
- * in this suite (the `dist/` harness lands PR4/PR5), so — same convention
- * as `convencionesDeEstilos.spec.ts` — every assertion is a text-level check
- * of the shipped `tema.css` source.
+ * in this suite (the `dist/` harness lands PR4/PR5), so every assertion is
+ * a text-level check of the shipped `tema.css` source.
+ *
+ * PR19 (task 19.2) deletes `tokens.css` itself along with the rest of the
+ * hand-authored BEM sheets — the migration it was the source of truth for
+ * is complete. The first test below no longer compares `tema.css` against
+ * `tokens.css` at runtime; the 18 `--color-*` pairs are frozen here instead,
+ * read from `tokens.css`'s last committed content before deletion, so the
+ * byte-for-byte regression protection survives its source file.
  *
  * The breakpoint scenario is asserted at the mechanism level: Tailwind v4
  * derives every generated `@media (min-width: …)` prelude deterministically
@@ -17,6 +23,28 @@ import { describe, expect, it } from "vitest";
  * survive the `initial` reset is what makes "only 640/1024 resolve" true of
  * whatever Tailwind later compiles.
  */
+
+/** `tokens.css`'s 18 `--color-*` properties, frozen at their last value before PR19 deleted the file. */
+const COLORES_CONGELADOS_DE_TOKENS_CSS: ReadonlyMap<string, string> = new Map([
+  ["--color-primario", "#0b634a"],
+  ["--color-primario-oscuro", "#094f3b"],
+  ["--color-marca-azul", "#0076d9"],
+  ["--color-fondo", "#ffffff"],
+  ["--color-texto", "#14181b"],
+  ["--color-texto-suave", "#3f4b52"],
+  ["--color-borde", "#4b5563"],
+  ["--color-borde-suave", "#d0d7dc"],
+  ["--color-error", "#b3261e"],
+  ["--color-foco", "#0b634a"],
+  ["--color-estado-vigente-fondo", "#d7f0e4"],
+  ["--color-estado-vigente-texto", "#08533e"],
+  ["--color-estado-borrador-fondo", "#e9edf0"],
+  ["--color-estado-borrador-texto", "#39454c"],
+  ["--color-estado-baja-fondo", "#fdecd2"],
+  ["--color-estado-baja-texto", "#6d4106"],
+  ["--color-estado-anulado-fondo", "#fbe0de"],
+  ["--color-estado-anulado-texto", "#8c1d18"],
+]);
 
 const DIRECTORIO_ESTILOS = dirname(fileURLToPath(import.meta.url));
 
@@ -47,14 +75,13 @@ function propiedadesDeColor(contenidoCss: string): ReadonlyMap<string, string> {
 }
 
 describe("estilos/tema.css — @theme token layer (D3)", () => {
-  it("carries every --color-* property from tokens.css into @theme, byte-for-byte", () => {
-    const colorsDeOrigen = propiedadesDeColor(leerEstilo("tokens.css"));
-    expect(colorsDeOrigen.size).toBe(18);
+  it("carries every --color-* property from tokens.css into @theme, byte-for-byte (frozen, tokens.css deleted PR19)", () => {
+    expect(COLORES_CONGELADOS_DE_TOKENS_CSS.size).toBe(18);
 
     const tema = bloqueTheme(leerEstilo("tema.css"));
     const colorsDeTema = propiedadesDeColor(tema);
 
-    for (const [nombre, valor] of colorsDeOrigen) {
+    for (const [nombre, valor] of COLORES_CONGELADOS_DE_TOKENS_CSS) {
       expect(colorsDeTema.get(nombre), `@theme is missing ${nombre}`).toBe(valor);
     }
   });

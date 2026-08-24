@@ -1,7 +1,10 @@
 /**
  * design-system-migration PR1 (D3) — Tailwind v4's `@theme` token layer,
- * mapped from `tokens.css`, which stays untouched and live for the
- * still-BEM stylesheets until PR16 deletes it.
+ * originally mapped from `tokens.css`. PR19 (task 19.2) deletes every
+ * hand-authored BEM sheet (`tokens.css`, `base.css`, `atomos.css`,
+ * `organismos.css`, `panel.css`, `index.css`) now that nothing references
+ * them; this file absorbs `index.css`'s former role as the single
+ * stylesheet entry point, imported once from `main.tsx`.
  *
  * `--breakpoint-*: initial;` resets the default `sm/md/lg/xl/2xl` tiers
  * before the two named ones, so `md:`/`lg:` compile to nothing rather than
@@ -12,6 +15,22 @@
  * requires a suffix, and this project keeps its own token layer rather
  * than shadcn's `@theme inline`/`--radius` convention.
  */
+@import "tailwindcss";
+
+/**
+ * design.md's slice B collision cluster, found while implementing it: this
+ * directory's own English prose (e.g. "...using the sr-only recipe...",
+ * "...the overflow-hidden / `[hidden]` / `sr-only` collision cluster...")
+ * contains bare words that are *shaped* like Tailwind utility class names.
+ * Tailwind's candidate scanner is a dumb lexical match over raw file text —
+ * it has no idea these are sentences, not `className`s — so it speculatively
+ * compiled `.sr-only` and `.overflow-hidden` into real `dist/` output before
+ * any component ever used them. `estilos/` holds no `.tsx`, so it can never
+ * contribute a real utility candidate; excluding it removes this whole class
+ * of false positive rather than policing every future comment's word choice.
+ */
+@source not "./";
+
 @theme {
   /* Brand */
   --color-primario: #0b634a;
@@ -56,8 +75,9 @@
 }
 
 /**
- * `@layer base` — rules rebound from `base.css` (D3's rule-by-rule table),
- * which stays untouched and live until PR16 deletes it.
+ * `@layer base` — rules rebound from `base.css` (D3's rule-by-rule table).
+ * `base.css` itself is deleted by PR19 (task 19.2); these rules are its
+ * only surviving descendants.
  */
 @layer base {
   :root {

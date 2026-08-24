@@ -15,7 +15,7 @@ const DURACION_MS = 5_000;
  * Tailwind, `bg-primario`/`text-white`, the same pairing PR7's `Boton`
  * already proved at 7.25:1).
  * `role="status"` is what makes this announced at all — a toast without a
- * live region is invisible to a screen reader, and it is `status` (polite),
+ * live region goes unnoticed by a screen reader, and it is `status` (polite),
  * never `alert`, because nothing breaks if one of these three is missed.
  *
  * Mount-only timer, read through a ref: a caller re-rendering with a fresh
