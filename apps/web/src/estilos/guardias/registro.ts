@@ -435,6 +435,11 @@ export const REGISTRO: readonly EntradaDeRegistro[] = [
         archivo: UTILIDADES,
         titulo: "clears every non-exempt interactive control, and every EXENCIONES entry corresponds to a real scanned candidate",
       },
+      {
+        archivo: UTILIDADES,
+        titulo:
+          "anchors esControlNativoDeToque: a hand-authored sheet still sizes native radio/checkbox controls to the touch token",
+      },
     ],
   },
   {

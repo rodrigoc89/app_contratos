@@ -1684,9 +1684,10 @@ export function clasesBemDeclaradas(): ReadonlySet<string> {
   const clases = new Set<string>();
   for (const nombre of readdirSync(DIRECTORIO_ESTILOS)) {
     if (!nombre.endsWith(".css")) continue;
-    const contenido = readFileSync(join(DIRECTORIO_ESTILOS, nombre), "utf8");
+    // Comments first: `base.css` names the Tailwind import in prose (PR17's gate).
+    const contenido = quitarComentariosCss(readFileSync(join(DIRECTORIO_ESTILOS, nombre), "utf8"));
     if (esPuntoDeEntradaTailwind(contenido)) continue;
-    for (const clase of clasesDeclaradasComoSelector(quitarComentariosCss(contenido))) {
+    for (const clase of clasesDeclaradasComoSelector(contenido)) {
       clases.add(clase);
     }
   }
@@ -1788,6 +1789,26 @@ function esperaControlesDelPanelEnElPiso(contenedor: HTMLElement, componente: st
 }
 
 describe("guard 20 (PR17, task 17.1a): the técnico organisms meet the touch floor on every non-exempt interactive control (D5)", () => {
+  // `esControlNativoDeToque` trusts one stylesheet rule; a guard that trusts
+  // a rule must watch it — deleted, every radio would still "pass" here.
+  it("anchors esControlNativoDeToque: a hand-authored sheet still sizes native radio/checkbox controls to the touch token", () => {
+    const hojas = readdirSync(DIRECTORIO_ESTILOS)
+      .filter((nombre) => nombre.endsWith(".css"))
+      .map((nombre) => quitarComentariosCss(readFileSync(join(DIRECTORIO_ESTILOS, nombre), "utf8")));
+    const reglas = hojas.flatMap((css) => css.match(/[^{}]+\{[^}]*\}/g) ?? []);
+    const reglaNativa = reglas.find(
+      (regla) =>
+        /input\[type="radio"\]/.test(regla) &&
+        /input\[type="checkbox"\]/.test(regla) &&
+        /\bwidth\s*:\s*var\(--tamano-toque-minimo\)/.test(regla) &&
+        /\bheight\s*:\s*var\(--tamano-toque-minimo\)/.test(regla),
+    );
+    expect(
+      reglaNativa,
+      "no sheet sizes input[type=radio]/input[type=checkbox] to var(--tamano-toque-minimo) any more — esControlNativoDeToque now exempts controls nothing sizes",
+    ).toBeDefined();
+  });
+
   it("clears FormularioComodatario's real rendered controls", () => {
     const { container, unmount } = render(
       createElement(FormularioComodatario, {
