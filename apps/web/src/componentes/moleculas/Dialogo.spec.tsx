@@ -50,7 +50,15 @@ describe("Dialogo", () => {
     expect(dialogo?.open).toBe(false);
   });
 
-  it("reports the native close event through onCerrar, so React state follows the browser", () => {
+  /**
+   * A bare `close` event is never user intent: the browser fires it for
+   * every `close()` call, including the component's own mirror/unmount
+   * closes. Under StrictMode's mount-unmount-mount the unmount cleanup
+   * closed the just-opened dialog and the queued `close` event then reset
+   * the caller's state — the modal flashed and vanished (PR23 fix). Only
+   * `cancel` (Esc) carries intent.
+   */
+  it("ignores the native close event — only cancel (Esc) reports through onCerrar", () => {
     const onCerrar = vi.fn();
     const { container } = render(<Dialogo {...props({ onCerrar })} />);
 
@@ -59,7 +67,19 @@ describe("Dialogo", () => {
     if (dialogo === null) return;
     fireEvent(dialogo, new Event("close"));
 
-    expect(onCerrar).toHaveBeenCalledTimes(1);
+    expect(onCerrar).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Tailwind v4's Preflight resets `margin: 0` on `*`, which overrides the
+   * user-agent `margin: auto` that centres a modal `<dialog>` in the top
+   * layer — without `m-auto` the modal sits in the viewport's top-left
+   * corner (PR23 fix).
+   */
+  it("restores the user-agent centring Preflight's margin reset removes", () => {
+    const { container } = render(<Dialogo {...props()} />);
+
+    expect(container.querySelector("dialog")?.className).toMatch(/\bm-auto\b/);
   });
 
   it("reports Esc — the native cancel event — through onCerrar", () => {
