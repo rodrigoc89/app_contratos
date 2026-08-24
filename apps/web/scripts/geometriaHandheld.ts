@@ -189,7 +189,7 @@ async function completarVisitaTecnica(pagina: Page): Promise<void> {
   for (const campo of ["nombreCompleto", "dni", "domicilioCalle", "ciudad", "whatsapp"] as const) {
     await pagina.type(`#${campo}`, DATOS_VISITA_S3[campo]);
   }
-  await pagina.click('form.formulario button[type="submit"]');
+  await pagina.click('form[data-formulario] button[type="submit"]');
 
   await pagina.waitForSelector("#antenaModelo", { timeout: 10_000 });
   await pagina.type("#antenaModelo", DATOS_VISITA_S3.antenaModelo);
@@ -197,14 +197,14 @@ async function completarVisitaTecnica(pagina: Page): Promise<void> {
   await pagina.click('input[name="poe"]');
   await pagina.type("#canoMetros", DATOS_VISITA_S3.canoMetros);
   // "Crear borrador" — POST /contratos, intercepted below.
-  await pagina.click('form.formulario button[type="submit"]');
+  await pagina.click('form[data-formulario] button[type="submit"]');
 
   // The same submit button re-renders as "Continuar" once the draft exists
   // (`FormularioBorrador`'s `etiquetaEnvio`) — waited for by content, not by
   // a fixed delay, since the POST's own round trip is what changes it.
   await pagina.waitForFunction(
     () => {
-      const boton = document.querySelector('form.formulario button[type="submit"]');
+      const boton = document.querySelector('form[data-formulario] button[type="submit"]');
       return boton !== null && boton.textContent?.trim() === "Continuar";
     },
     { timeout: 10_000 },
@@ -219,20 +219,20 @@ async function completarVisitaTecnica(pagina: Page): Promise<void> {
     await cerrarAviso.click();
   }
 
-  await pagina.click('form.formulario button[type="submit"]');
+  await pagina.click('form[data-formulario] button[type="submit"]');
   await pagina.waitForSelector('iframe[title="Condiciones Generales de Uso"]', { timeout: 10_000 });
 }
 
 const ESTADOS: readonly EstadoTecnico[] = [
-  { id: "S1", ruta: "/login", sesion: "ninguna", selectorListo: "form.formulario" },
-  { id: "S2", ruta: "/", sesion: "tecnico", selectorListo: "form.formulario" },
-  { id: "S4", ruta: "/panel-no-disponible", sesion: "tecnico", selectorListo: ".panel-no-disponible" },
-  { id: "S5", ruta: "/panel", sesion: "oficina", selectorListo: ".pagina-lista-contratos" },
+  { id: "S1", ruta: "/login", sesion: "ninguna", selectorListo: "form[data-formulario]" },
+  { id: "S2", ruta: "/", sesion: "tecnico", selectorListo: "form[data-formulario]" },
+  { id: "S4", ruta: "/panel-no-disponible", sesion: "tecnico", selectorListo: "[data-panel-no-disponible]" },
+  { id: "S5", ruta: "/panel", sesion: "oficina", selectorListo: "[data-pagina-lista-contratos]" },
   {
     id: "S6",
     ruta: `/panel/contratos/${ID_CONTRATO_FIXTURE}`,
     sesion: "oficina",
-    selectorListo: ".pagina-detalle-contrato",
+    selectorListo: "[data-pagina-detalle-contrato]",
   },
   {
     // Appended last, matching design.md D8's committed ordering — not
@@ -482,7 +482,7 @@ async function intentarAlcanzarEstado(
       await estado.visitar(pagina);
     }
     await pagina.waitForSelector(estado.selectorListo, { timeout: 10_000 });
-    await pagina.waitForFunction(() => document.querySelector(".progreso") === null, { timeout: 10_000 });
+    await pagina.waitForFunction(() => document.querySelector("[data-progreso]") === null, { timeout: 10_000 });
     return { exito: true };
   } catch (motivo) {
     return { exito: false, motivo: motivo instanceof Error ? motivo.message : String(motivo) };

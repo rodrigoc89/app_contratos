@@ -128,6 +128,20 @@ describe("DetalleDeContrato — historial", () => {
     expect(within(seccionDeHistorial()).getByText(/Anulado/)).toBeInTheDocument();
   });
 
+  /**
+   * PR21 change 3 — measured at 1280x800 (puppeteer, dev server): the last
+   * section's `mb-5` (20px) does not collapse through `main`'s bottom
+   * padding (`p-4 escritorio:p-6`), so it pushed the article's 924.5px
+   * bottom edge to a 968.5px main bottom — 20px of dead scroll past the
+   * 24px of padding the container already provides. `last:mb-0` drops the
+   * margin exactly on the section that is the article's last child.
+   */
+  it("drops the trailing margin on the last section, so the scroll ends at the container's own padding", () => {
+    render(<DetalleDeContrato contrato={historia()} onDescargar={vi.fn()} />);
+
+    expect(seccionDeHistorial().className).toMatch(/\blast:mb-0\b/);
+  });
+
   /** A draft that has only just been created still has one event. */
   it("is absent entirely when there is nothing to tell", () => {
     render(<DetalleDeContrato contrato={contrato({ eventos: [] })} onDescargar={vi.fn()} />);
@@ -185,6 +199,46 @@ describe("DetalleDeContrato", () => {
     expect(onDescargar).toHaveBeenCalledWith(
       expect.objectContaining({ documento: "condiciones_generales" }),
     );
+  });
+
+  /**
+   * PR21 — the contract actions sit in the same row as the downloads: one
+   * `flex flex-wrap items-center` container, downloads first. The slot is a
+   * ReactNode so this half stays ignorant of transitions
+   * (container-presentational, `convencionDeCapas.spec.ts`).
+   */
+  it("seats the acciones slot in the same row as the download buttons, downloads first", () => {
+    render(
+      <DetalleDeContrato
+        contrato={contrato()}
+        onDescargar={vi.fn()}
+        acciones={<button type="button">Dar de baja</button>}
+      />,
+    );
+
+    const lista = screen.getByRole("button", { name: "Descargar Comodato" }).closest("ul");
+    const accion = screen.getByRole("button", { name: "Dar de baja" });
+    expect(lista).not.toBeNull();
+
+    const fila = accion.parentElement;
+    expect(lista?.parentElement).toBe(fila);
+    expect(fila?.className).toMatch(/\bflex\b/);
+    expect(fila?.className).toMatch(/\bflex-wrap\b/);
+    expect(fila?.className).toMatch(/\bitems-center\b/);
+    expect(fila?.firstElementChild).toBe(lista);
+  });
+
+  it("still renders the acciones slot when a draft has no documents to download", () => {
+    render(
+      <DetalleDeContrato
+        contrato={contrato({ numero: null, estado: "borrador", documentos: [] })}
+        onDescargar={vi.fn()}
+        acciones={<p>Este contrato todavía no se firmó.</p>}
+      />,
+    );
+
+    expect(screen.getByText(/Todavía no hay documentos firmados/)).toBeInTheDocument();
+    expect(screen.getByText("Este contrato todavía no se firmó.")).toBeInTheDocument();
   });
 
   /**

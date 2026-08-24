@@ -174,3 +174,47 @@ describe("guard 1/16: compiled output declares no overflow: hidden / overflow: c
     ).toEqual([]);
   });
 });
+
+const PATRON_SELECTOR_INVISIBLE = /(?:^|[\s,>+~])\.invisible(?=[\s,.:#[{]|$)/;
+
+/**
+ * Ban list entry (task 19.2/PR19 deferred cleanup) — `.invisible` is a real
+ * Tailwind utility (`visibility: hidden`) that no first-party component
+ * ever uses. Tailwind's candidate scanner lexes comments too (the PR6
+ * finding, `index.css`'s/`tema.css`'s `@source not "./"` fix), so six
+ * pre-existing English prose comments containing the standalone word
+ * "invisible" outside `estilos/` compiled a dead ~30 B rule into every
+ * build. Reworded (task deferred to PR19's final pass); this ban list entry
+ * makes a reintroduced one a build failure instead of a silent byte cost.
+ */
+export function reglasInvisibles(css: string): ReglaEncontrada[] {
+  return reglasCss(css)
+    .filter(({ selector }) => PATRON_SELECTOR_INVISIBLE.test(selector))
+    .map(({ selector, cuerpo }) => ({ selector, declaracion: cuerpo.trim() }));
+}
+
+describe("compiled output ships no dead .invisible utility (task 19.2 deferred cleanup)", () => {
+  it("fails when a compiled rule targets the .invisible selector", () => {
+    const compiladoSimulado = ".invisible{visibility:hidden}";
+    const encontradas = reglasInvisibles(compiladoSimulado);
+
+    expect(encontradas).toHaveLength(1);
+    expect(encontradas[0]?.selector).toBe(".invisible");
+  });
+
+  it("does not flag an unrelated selector that merely contains the substring", () => {
+    const compiladoSimulado = ".is-invisible-wrapper{color:red}";
+    expect(reglasInvisibles(compiladoSimulado)).toEqual([]);
+  });
+
+  it("finds no .invisible rule in the real compiled dist/ output", () => {
+    const hojas = archivosCssCompilados(DIRECTORIO_DIST);
+    expect(hojas.length, "no compiled CSS found under dist/ — run `vite build` first").toBeGreaterThan(0);
+
+    const todas = hojas.flatMap((hoja) => reglasInvisibles(hoja.contenido));
+    expect(
+      todas.map((regla) => regla.selector),
+      "compiled output ships a dead .invisible utility — a stray prose comment fed Tailwind's candidate scanner",
+    ).toEqual([]);
+  });
+});
