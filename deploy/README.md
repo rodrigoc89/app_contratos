@@ -223,7 +223,13 @@ on a tofu render, not the default mechanism.
 project dependencies (same status `pdftotext` already had in
 `GeneradorDeDocumentosPuppeteer.integration.spec.ts`). A tool missing on
 PATH is reported plainly as a failed layer, never silently skipped and never
-faked.
+faked — which is exactly what the fresh host did: `verify:render` came back
+`RECHAZADO` with both PDF layers reporting a missing tool, and `APROBADO`
+right after `apt-get install poppler-utils`. Opportunistic for the
+*verifier*, required for the *checklist*: `provision.sh` installs
+`poppler-utils` (`pdffonts`, `pdftotext`) in its package list, so the
+verdict below can pass on a host it provisioned; `fc-match` comes with
+`fontconfig`, already there.
 
 **Pre-VPS caveat, stated explicitly:** `verify:render`'s pure parser
 (`apps/api/scripts/renderVerdict.ts`) is unit-tested from fixtures, and its

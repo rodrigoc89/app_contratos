@@ -451,6 +451,21 @@ describe("provision.sh --dry-run", () => {
     expect(aptPlan).toContain("unzip");
   });
 
+  it("installs poppler-utils so the render verdict's pdffonts/pdftotext layers can run", async () => {
+    // On the fresh host `pnpm --filter @contratos/api verify:render` came
+    // back RECHAZADO with both PDF layers reporting a missing tool, and
+    // APROBADO right after `apt-get install poppler-utils`. The README calls
+    // those tools opportunistic; the post-VPS checklist requires the verdict
+    // to pass, so the host has to ship them.
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: join(scratch, "opt-contratos") },
+    });
+
+    const aptPlan = stdout.split("\n").find((line) => line.includes("apt-get install -y"));
+
+    expect(aptPlan?.split(" ")).toContain("poppler-utils");
+  });
+
   it("skips Puppeteer's postinstall download in the root Chromium step", async () => {
     // The explicit `browsers install chrome` is the download `--install-deps`
     // resolves libraries against; letting the postinstall fetch the same

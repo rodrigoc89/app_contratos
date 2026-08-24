@@ -105,6 +105,10 @@ provision_packages() {
     fontconfig
     fonts-dejavu-core
     fonts-liberation
+    # pdffonts + pdftotext: the render verdict's two PDF layers (D2), which
+    # the post-VPS checklist requires to pass — RECHAZADO on the fresh host
+    # until this was installed by hand.
+    poppler-utils
   )
 
   if [ "$DRY_RUN" = true ]; then
