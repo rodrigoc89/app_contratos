@@ -57,8 +57,10 @@ describe("IndicadorDePaso", () => {
     render(<IndicadorDePaso pasos={PASOS} actual={2} />);
 
     const elementos = within(screen.getByRole("list")).getAllByRole("listitem");
-    expect(elementos[0]?.className).toContain("indicador-de-paso__paso--cumplido");
-    expect(elementos[1]?.className).not.toContain("indicador-de-paso__paso--cumplido");
+    // Completed (step 1): outlined, never filled. Live/actual (step 2): filled.
+    expect(elementos[0]?.className).toContain("border-primario");
+    expect(elementos[0]?.className).not.toContain("bg-primario");
+    expect(elementos[1]?.className).toContain("bg-primario");
   });
 
   /**

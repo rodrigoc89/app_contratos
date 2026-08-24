@@ -1,4 +1,5 @@
 import type { EstadoContrato } from "@contratos/esquemas";
+import { cva } from "class-variance-authority";
 
 /**
  * The one place a storage enum becomes something a person reads, shared by
@@ -21,14 +22,32 @@ export function etiquetaDeEstado(estado: EstadoContrato): string {
 }
 
 /**
- * The badge. Colour is the second channel and never the only one — the
- * Spanish label always renders inside it, because the four tints differ in
- * hue and barely in luminance and carry nothing on their own to a
- * colour-blind reader. `panel.css` paints from `data-estado`.
+ * design-system-migration PR11 (guard 14) — visual redesign, `[data-estado=...]`
+ * attribute strategy kept verbatim (design.md D1 singles it out as the guard
+ * that survives this migration best). Colour is the second channel and never
+ * the only one — the Spanish label always renders inside the badge, because
+ * the four tints differ in hue and barely in luminance and carry nothing on
+ * their own to a colour-blind reader. `border-current` matches the border to
+ * each tint's own foreground, same as the retired `border: 1px solid
+ * currentcolor` rule.
  */
+const insigniaDeEstado = cva(
+  "inline-block whitespace-nowrap rounded-full border border-current px-2 py-0.5 text-sm font-semibold leading-relaxed",
+  {
+    variants: {
+      estado: {
+        vigente: "bg-estado-vigente-fondo text-estado-vigente-texto",
+        borrador: "bg-estado-borrador-fondo text-estado-borrador-texto",
+        dado_de_baja: "bg-estado-baja-fondo text-estado-baja-texto",
+        anulado: "bg-estado-anulado-fondo text-estado-anulado-texto",
+      },
+    },
+  },
+);
+
 export function InsigniaDeEstado({ estado }: { readonly estado: EstadoContrato }) {
   return (
-    <span className="insignia-estado" data-estado={estado}>
+    <span className={insigniaDeEstado({ estado })} data-estado={estado}>
       {etiquetaDeEstado(estado)}
     </span>
   );
