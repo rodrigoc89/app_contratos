@@ -466,6 +466,22 @@ describe("provision.sh --dry-run", () => {
     expect(aptPlan?.split(" ")).toContain("poppler-utils");
   });
 
+  it("installs rclone and age, which backup.sh needs to push and encrypt offsite", async () => {
+    // Both were absent on the real host and had to be apt-installed by hand
+    // (age 1.0.0, rclone 1.53.3 from jammy's universe). backup.sh resolves
+    // them at runtime and falls back to gpg for encryption, but nothing
+    // falls back for the push — a scheduled backup with no rclone fails
+    // every night with the journal as its only witness.
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: join(scratch, "opt-contratos") },
+    });
+
+    const aptPlan = stdout.split("\n").find((line) => line.includes("apt-get install -y"));
+
+    expect(aptPlan?.split(" ")).toContain("rclone");
+    expect(aptPlan?.split(" ")).toContain("age");
+  });
+
   it("skips Puppeteer's postinstall download in the root Chromium step", async () => {
     // The explicit `browsers install chrome` is the download `--install-deps`
     // resolves libraries against; letting the postinstall fetch the same

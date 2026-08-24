@@ -720,6 +720,14 @@ needs only the recipient's public key string (`age1...`) to encrypt; the
 VPS never needs a local keyring or an import step, and the matching secret
 key never has to exist anywhere the backup pipeline touches.
 
+Packaged is not installed: on the real host neither `age` nor `rclone` was
+present, and the first backup attempt stopped at the tool lookup until both
+were apt-installed by hand (`age 1.0.0`, `rclone v1.53.3`, jammy's
+`universe`). `provision.sh` now installs both in its package list — `rclone`
+for the offsite push, `age` for the encryption — so a host it provisioned
+can run `backup.sh` without that detour; the `gpg --recipient` fallback
+below stays exactly as it is.
+
 **Fallback: `gpg --recipient` (asymmetric — not `gpg --symmetric`).** If
 `age` is ever absent from `$PATH` at runtime, `encrypt-backup-archive.sh`
 falls back to gpg's own asymmetric mode. This still satisfies D7: `gpg
@@ -731,7 +739,9 @@ rejected, only judged less convenient than `age`.
 
 **Honesty about what ran for real here.** `age` itself is not an installed
 binary on the machine this PR was implemented on (only `gpg` is present),
-and this apply run does not install system packages. `encrypt-backup-archive.spec.ts`'s
+and this apply run does not install system packages — on the VPS it is now
+`provision.sh`'s job (see above), which changes nothing about what this
+development machine can prove. `encrypt-backup-archive.spec.ts`'s
 round-trip test therefore exercises the **gpg fallback** for real: a
 throwaway keypair generated in the test's own temp `$GNUPGHOME`, a real
 encrypt, a real decrypt proving byte-identical output, and a real decrypt
@@ -1224,14 +1234,14 @@ why `age` itself did not run on this machine). What none of that proves:
   invoked in a spec — `pg_dump` is not installed on this machine, and there
   is no live database to dump from pre-VPS.
 - **A real `rclone` push to a real offsite remote.** `rclone` itself is not
-  installed on this machine either; `backup.spec.ts`'s retention tests mock
-  it entirely. The credentialed remote is blocked on the
+  installed on this machine either (`provision.sh` installs it on the VPS;
+  here `backup.spec.ts`'s retention tests mock it entirely). The credentialed remote is blocked on the
   `offsite-backup-destination` external dependency (`state.yaml`), same as
   the full restore drill (task 9.8, below).
 - **The real `age` binary, encrypting for real.** Confirmed packaged for
-  the target Ubuntu release (see "Backup (D7)"), but not installed on this
-  development machine — the real round-trip proof here used the `gpg`
-  fallback path instead. Both paths satisfy design D7's property
+  the target Ubuntu release and installed there by `provision.sh` (see
+  "Backup (D7)"), but not installed on this development machine — the real
+  round-trip proof here used the `gpg` fallback path instead. Both paths satisfy design D7's property
   identically; only one was cryptographically exercised on this machine.
 - **A scheduled, unattended run against a live backup.** `contratos-backup.service`/`.timer`
   are installed and their unit files verify (see "Scheduled backups"

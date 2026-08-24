@@ -109,6 +109,11 @@ provision_packages() {
     # the post-VPS checklist requires to pass — RECHAZADO on the fresh host
     # until this was installed by hand.
     poppler-utils
+    # backup.sh (D7): rclone pushes the archive offsite, age encrypts it to
+    # the operator's public key (the gpg fallback stays) — both absent on
+    # the real host until installed by hand.
+    rclone
+    age
   )
 
   if [ "$DRY_RUN" = true ]; then
