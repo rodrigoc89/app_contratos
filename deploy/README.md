@@ -382,9 +382,11 @@ only a weaker credential on an equally exposed door.
 Every row of that table depends on `NODE_ENV` being `production` in the
 seed's own process, and nothing sets it for you. `prisma:seed` runs outside
 systemd, so it inherits nothing from the unit's `EnvironmentFile=`;
-`deploy.sh`'s `load_env_file_into_environment` exports an explicit whitelist
-and `run_as_service_user` passes an explicit `--preserve-env` list, neither
-of which carries it; and `dotenv/config` in `prisma/seed.ts` loads
+`deploy.sh`'s `load_env_file_into_environment` exports every key it finds in
+`$ENV_FILE` and `run_as_service_user` preserves exactly that set across
+`sudo -u contratos` (see "Deploy sequence (D5)" below), neither of which
+carries `NODE_ENV` — it is not a line in `$ENV_FILE` at all; and
+`dotenv/config` in `prisma/seed.ts` loads
 `apps/api/.env`, which does not exist on this server — the configuration
 lives in `/etc/contratos/api.env`. Writing `NODE_ENV=production` into that
 file changes nothing for the seed.
@@ -481,6 +483,38 @@ the service and poll `GET /salud` with retries. A failed health check prints
 a rollback recipe to stderr and exits non-zero — `deploy.sh` never attempts
 an automatic rollback on its own.
 
+### Outage record: an enumerated allowlist cannot survive its own next release
+
+**What happened.** Deploying the tag that introduced `SEED_OFICINA_PASSWORD`
+failed at the seed step *after the service was already stopped* — production
+served 502 until an operator ran `systemctl start` by hand. `/etc/contratos/api.env`
+already had the six new `SEED_OFICINA*`/`SEED_OFICINA2*` variables; the
+outage was not a missing operator step. The running `deploy.sh` was the copy
+already on disk and executing at invocation time — the *previous* tag's
+version — whose `load_env_file_into_environment` and
+`run_as_service_user`'s `--preserve-env` list were hardcoded enumerations of
+variable names that did not yet know those six keys existed. It never
+exported them, so the seed step saw them unset and its production
+fail-closed gate (D3, above) threw — correctly, on its own terms, but far
+too late: the service was already down. `deploy.sh`'s own `[plan:checkout]`
+step swaps the script file mid-run, which is always too late for the bash
+process already executing the old one.
+
+**The rule this leaves standing.** A release that introduces a new
+environment variable cannot be carried by the *previous* version of
+`deploy.sh`, because the running process is whatever was on disk when the
+shell started reading it, not whatever the checkout step is about to fetch.
+**Until this fix (the export/preserve-env change described below) is itself
+deployed, the operator must run the deploy twice**: once with the OLD
+`deploy.sh` (which stops the service, but may fail the seed step exactly as
+above if the release added a variable no list here yet names — recover with
+`systemctl start` and a manual `pnpm --filter @contratos/api prisma:seed`,
+same recovery path the seed gate's own section above documents), and once
+more immediately after, now running the NEW `deploy.sh` the first deploy's
+checkout step just placed on disk. After this fix ships, a single deploy is
+enough again: any key present in `$ENV_FILE` reaches the child steps without
+`deploy.sh` needing to know its name in advance — see below.
+
 ### The env-var preflight, and the seed-password design decision
 
 `deploy.sh` reads `$ENV_FILE` (default `/etc/contratos/api.env`, the same
@@ -489,12 +523,34 @@ sourcing it, the same "supplying the environment is the operator's job"
 posture `configuracion.ts` documents for the application itself.
 `DATABASE_URL` and `JWT_SECRET` are always required. **`SEED_ADMIN_PASSWORD`,
 `SEED_TECNICO_PASSWORD`, `SEED_OFICINA_PASSWORD`, and `SEED_OFICINA2_PASSWORD`
-are required only when `FIRST_DEPLOY=true` is set explicitly.** The same four
-account variable groups (`SEED_ADMIN_*`, `SEED_TECNICO_*`, `SEED_OFICINA_*`,
-`SEED_OFICINA2_*`) are also exported into the environment by
-`load_env_file_into_environment` and preserved across `sudo -u contratos` by
-`run_as_service_user`'s `--preserve-env` list, so the seed step sees them
-regardless of which account they configure.
+are required only when `FIRST_DEPLOY=true` is set explicitly.** This
+preflight check keeps its own explicit list on purpose — those four
+variables are a deliberate contract (task 5.4's "required when seeding"),
+distinct from the question below of what gets exported.
+
+**Exporting the loaded environment (the outage fix, above).**
+`load_env_file_into_environment` exports **every** `KEY=value` line found in
+`$ENV_FILE` — skipping blank lines and `#` comments, splitting on the first
+`=` only so a value that itself contains `=` survives, never sourcing or
+`eval`-ing a line so a value survives verbatim — instead of naming variables
+one by one. This mirrors `backup.sh`'s `load_backup_env_into_environment`,
+which solved the identical problem for `backup.env`: the operator chooses
+the key names (there, `RCLONE_CONFIG_<REMOTE>_*`; here, whichever `SEED_*`
+or config variable a future release adds), so a hardcoded list can never
+keep up. `--dry-run` now prints a `[plan:env]` line naming exactly how many
+keys were loaded and their names — the same audit trail an operator would
+want by hand, and the seam `deploy.spec.ts` uses to prove a variable named in
+no list here still reaches the environment the seed step would run with.
+
+`run_as_service_user`'s `sudo -u contratos --preserve-env=<list>` builds
+that list dynamically from the same loaded keys, rather than either a
+hardcoded name list (the bug) or `sudo -E` (which would carry the invoking
+**root** shell's entire environment across the privilege boundary — every
+variable in root's own session, not just the operator-supplied contents of
+`$ENV_FILE`). `sudo`'s env-filtering stays exactly as strict either way:
+only names explicitly passed to `--preserve-env` cross the boundary — the
+list is simply computed instead of typed out, and it can never drift behind
+`$ENV_FILE` again.
 
 This is a deliberate design decision, not an oversight: the
 deployment-configuration spec asks for seed credentials to be required "when

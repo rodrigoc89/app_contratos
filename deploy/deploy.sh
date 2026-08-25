@@ -59,9 +59,33 @@ PRE_MIGRATION_DUMP_DIR="${PRE_MIGRATION_DUMP_DIR:-/var/backups/contratos}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/salud}"
 HEALTH_MAX_ATTEMPTS="${HEALTH_MAX_ATTEMPTS:-10}"
 HEALTH_RETRY_DELAY_SECONDS="${HEALTH_RETRY_DELAY_SECONDS:-3}"
+# Populated by load_env_file_into_environment(), below — every key name it
+# actually loaded from $ENV_FILE, in file order. Read by run_as_service_user
+# to build sudo's --preserve-env list dynamically, and by print_plan to show
+# the operator exactly what was loaded, without hardcoding either.
+LOADED_ENV_KEYS=()
 
 log() {
   printf '%s\n' "$*"
+}
+
+# Joins zero or more arguments with $1 as separator. Used instead of
+# `IFS=,; echo "${arr[*]}"` so an empty array (no keys loaded, e.g. an
+# empty $ENV_FILE) never trips `set -u` on older bash, where
+# `"${arr[@]}"` on an empty array can itself report an unbound variable.
+join_by() {
+  local separator="$1"
+  shift
+  local result="" item first=true
+  for item in "$@"; do
+    if [ "$first" = true ]; then
+      result="$item"
+      first=false
+    else
+      result="$result$separator$item"
+    fi
+  done
+  printf '%s' "$result"
 }
 
 # --------------------------------------------------------------- guard: git
@@ -154,30 +178,46 @@ check_deploy_configuration() {
   fi
 }
 
-# Exports the variables the real (non-dry-run) steps below need into this
-# script's own environment, so `pg_dump`, `prisma migrate deploy`, and
-# `prisma:seed` (run outside systemd, which is the only other place that
-# reads $ENV_FILE) see the same configuration the running service does.
+# Exports EVERY `KEY=value` line of $ENV_FILE into this script's own
+# environment, so `pg_dump`, `prisma migrate deploy`, and `prisma:seed` (run
+# outside systemd, which is the only other place that reads $ENV_FILE) see
+# the same configuration the running service does.
+#
+# This deliberately does NOT enumerate variable names (an earlier version of
+# this script did, and that is exactly what caused the outage this fixes): a
+# release that adds a new environment variable is invisible to whatever copy
+# of deploy.sh is already on disk and executing — the checkout step swaps
+# the file far too late for a bash process already running it — so an
+# enumerated allowlist here always lags the operator's actual env file by
+# one release. `backup.sh`'s `load_backup_env_into_environment` already
+# solved exactly this problem for backup.env (the operator chooses the key
+# names there too, e.g. `RCLONE_CONFIG_<REMOTE>_*`); this follows the same
+# shape.
+#
+# Split on the FIRST '=' only — a value may itself contain '=' — and never
+# sourced or eval'd, so a value survives verbatim (including one that looks
+# like JSON or contains shell metacharacters). Blank lines and '#' comments
+# are skipped, matching backup.sh's convention.
 load_env_file_into_environment() {
-  local var_name value
-  for var_name in \
-    DATABASE_URL JWT_SECRET CONFIAR_EN_PROXY ALMACEN_DOCUMENTOS_RUTA PORT \
-    SEED_ADMIN_USERNAME SEED_ADMIN_NOMBRE SEED_ADMIN_PASSWORD \
-    SEED_TECNICO_USERNAME SEED_TECNICO_NOMBRE SEED_TECNICO_PASSWORD \
-    SEED_OFICINA_USERNAME SEED_OFICINA_NOMBRE SEED_OFICINA_PASSWORD \
-    SEED_OFICINA2_USERNAME SEED_OFICINA2_NOMBRE SEED_OFICINA2_PASSWORD
-  do
-    value="$(env_value "$var_name")"
-    if [ -n "$value" ]; then
-      export "$var_name=$value"
-    fi
-  done
+  LOADED_ENV_KEYS=()
+  local line key value
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      '' | '#'*) continue ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    [ -z "$key" ] && continue
+    export "$key=$value"
+    LOADED_ENV_KEYS+=("$key")
+  done < "$ENV_FILE"
 }
 
 # ------------------------------------------------------------------- plan
 
 print_plan() {
   log "== deploy.sh plan for $APP_DIR (dry-run=$DRY_RUN, tag='${TAG:-<unset>}') =="
+  log "[plan:env] loaded ${#LOADED_ENV_KEYS[@]} variable(s) from $ENV_FILE: $(join_by "," "${LOADED_ENV_KEYS[@]}")"
   log "[plan:stop] stop the $SERVICE_NAME service"
   log "[plan:dump] pg_dump -Fc the database to $PRE_MIGRATION_DUMP_DIR before touching the checkout (quiescent — service already stopped)"
   log "[plan:checkout] git fetch --tags && git checkout --detach '${TAG:-<unset>}'"
@@ -213,8 +253,17 @@ do_checkout() {
 # unprivileged `contratos` user, into $SERVICE_USER's own cache — the same
 # command `.github/workflows/ci.yml` runs for the same reason: a warm pnpm
 # store does not re-run Puppeteer's postinstall.
+#
+# `--preserve-env` is built from $LOADED_ENV_KEYS — exactly the keys
+# load_env_file_into_environment() just loaded from $ENV_FILE — rather than
+# a hardcoded name list (the outage's root cause) or `sudo -E` (which would
+# carry the INVOKING root shell's entire environment across the privilege
+# boundary, not just the operator-supplied config this script itself read;
+# `sudo`'s env filtering stays honest either way, since only variables this
+# script explicitly loaded cross into the service user's process).
 run_as_service_user() {
-  local preserve_env="DATABASE_URL,JWT_SECRET,CONFIAR_EN_PROXY,ALMACEN_DOCUMENTOS_RUTA,PORT,SEED_ADMIN_USERNAME,SEED_ADMIN_NOMBRE,SEED_ADMIN_PASSWORD,SEED_TECNICO_USERNAME,SEED_TECNICO_NOMBRE,SEED_TECNICO_PASSWORD,SEED_OFICINA_USERNAME,SEED_OFICINA_NOMBRE,SEED_OFICINA_PASSWORD,SEED_OFICINA2_USERNAME,SEED_OFICINA2_NOMBRE,SEED_OFICINA2_PASSWORD"
+  local preserve_env
+  preserve_env="$(join_by "," "${LOADED_ENV_KEYS[@]}")"
   if [ "$(id -un)" = "$SERVICE_USER" ]; then
     bash -c "$1"
   else
@@ -327,6 +376,10 @@ main() {
   check_git_repository
   check_clean_worktree
   check_deploy_configuration
+  # Loaded before the --dry-run branch too, so the plan's [plan:env] line
+  # reflects the real, unenumerated export set — not a hardcoded preview
+  # that could itself drift from what a real run actually does.
+  load_env_file_into_environment
 
   if [ "$DRY_RUN" = true ]; then
     print_plan
@@ -337,8 +390,6 @@ main() {
     echo "deploy.sh: \$TAG must be set to the git tag to deploy (e.g. TAG=v1.2.3 deploy/deploy.sh)" >&2
     exit 1
   fi
-
-  load_env_file_into_environment
 
   do_stop
 
