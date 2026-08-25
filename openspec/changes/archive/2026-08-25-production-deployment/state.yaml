@@ -8,29 +8,16 @@ change: production-deployment
 project: app_contratos
 artifactStore: hybrid
 createdAt: 2026-08-22
-updatedAt: 2026-08-22
-lastPhaseCompleted: apply
-# apply is IN PROGRESS, through PR5 of 8 (feature-branch-chain):
-#   PR1 (Phase 1+1B, env/provisioning)  — feat/pd-01-env-provisioning — done, PR #78/#79
-#   PR2 (Phase 2+2B, render verdict D2) — feat/pd-02-render-verdict   — done, opened as PR #80 + PR #81
-#   PR3 (Phase 4+4B, seed gate D3)      — feat/pd-03-seed-fail-closed — done, PR #82
-#   PR4 (Phase 5+5B, deploy sequence D5)— feat/pd-04-deploy-sequence  — done, PR #83
-#   PR5 (Phase 5C+5D, asset publish D4) — feat/pd-05-asset-publish    — done, this batch
-# Each PR's own close-out "open PR" task (1B.3/4B.3/5B.3/5D.3) is
-# deliberately NOT done by sdd-apply — the orchestrator opens PRs. See
-# sdd/production-deployment/apply-progress (Engram, canonical) and
-# apply-progress.md for the full per-batch record, including deviations
-# recorded at apply time (e.g. task 1.1's `.env.example` premise, task 5.4's
-# FIRST_DEPLOY design decision, task 5.8's atomic-swap-via-temp-rename
-# decision).
-# tasks.md was re-sliced on 2026-08-22 after ask-on-risk delivery guard:
-# user chose "split further into smaller PRs, keeping all tests intact"
-# (rejected the alternative of thinning the execFile Vitest specs).
-# Pass 2 produced 6 PRs. Pass 3 (same day): orchestrator corrected its own
-# earlier "roughly 6" framing as an approximation, not the user's actual
-# target ("genuinely reviewable against 400 while keeping every test
-# intact"), and directed applying 2 of the 3 previously-named-but-unapplied
-# seams inside old-PR3. Now 8 PRs. See tasks.md "Re-slicing notes".
+updatedAt: 2026-08-25
+lastPhaseCompleted: archive
+# Completed: All 8 chained PRs (#78, #80-#89) merged to master as of 2026-08-22.
+# No open PRs. All 73 implementation tasks complete. Real VPS in production
+# since 2026-08-24, serving https://contratos.iesnet.com.ar on Ubuntu 22.04.5.
+# Releases v1.0.0 through v1.0.4 deployed via deploy.sh. Go-live gate (backup
+# + restore drill) passed on real host with production data. Fourteen runbook
+# gaps found during provisioning drills fixed in follow-up PRs #123-#131.
+# For full per-batch record see apply-progress.md and Engram
+# sdd/production-deployment/apply-progress (canonical).
 
 phases:
   explore:
@@ -69,11 +56,15 @@ phases:
     artifact: tasks.md
     engramTopicKey: sdd/production-deployment/apply-progress
   verify:
-    status: pending
+    status: done
     artifact: verify-report.md
+    engramTopicKey: sdd/production-deployment/verify-report
+    engramObservationId: 614
   archive:
-    status: pending
-    artifact: null
+    status: done
+    artifact: archive-report.md
+    engramTopicKey: sdd/production-deployment/archive-report
+    engramObservationId: 782
 
 artifacts:
   exploration: done
@@ -82,20 +73,21 @@ artifacts:
   design: done
   tasks: done
   applyProgress: done # all batches; canonical record in Engram (sdd/production-deployment/apply-progress) + apply-progress.md
-  verifyReport: missing
+  verifyReport: done
+  archiveReport: done
 
 taskProgress:
   total: 73 # 58 original tasks unchanged in content/RED-GREEN pairing/order + 15 net new close-out tasks (8 PRs need 8 close-outs)
-  completed: 73 # ALL TASKS COMPLETE. Eleven chained PRs, #78 through #89. What remains is not implementation: the VPS is unpurchased, the offsite destination does not exist, and the real backup-then-restore drill that gates go-live cannot run until both do — external dependencies from the proposal onward, never tasks in this file.
+  completed: 73 # ALL TASKS COMPLETE (8 chained PRs, #78 and #80-#89). The three external dependencies this note used to describe as unmet — the VPS, the offsite destination, and the backup-then-restore drill that gates go-live — were all resolved on 2026-08-24/25; the drill passed on the real host with production data. Nine follow-up PRs (#123-#131) closed fourteen runbook gaps that only running against that host could reveal.
   pending: 0
   allComplete: true
 
-nextRecommended: verify # ALL work merged to master as of 2026-08-22:
-# nine chained PRs (#78, #80-#89) reviewed and merged into the tracker, then
-# tracker PR #90 merged to master (2582a19), then PR #91 (shellcheck in CI,
-# 13e18ad). Zero PRs open. Review of the chain found and fixed nine defects,
-# each with a failing test first — see Engram for the per-PR record. The
-# superseded note below described the state before that review began: next sdd-apply batch was PR6 (Phase 6 + 6B: TLS bootstrap, D6), on a new branch off feat/pd-05-asset-publish, after the orchestrator opens PR #5 (task 5D.3)
+nextRecommended: none # Cycle closed 2026-08-25. Verify: 0 CRITICAL, 0 WARNING
+# (api 793/793, deploy 83/83, web 748/748, esquemas 125/125, typecheck 0, lint 0).
+# Go-live gate passed: real backup → Google Drive → separate host → age-decrypt →
+# restore → "Documentos verificados: 2 totales, 2 coinciden con su sha256".
+# The two scenarios still undrilled at verify time (deliberately-broken-env abort,
+# forced TLS renewal) were drilled afterwards and recorded in deploy/README.md.
 blockedReasons: []
 
 # External sequencing dependencies recorded by the proposal. These are NOT
@@ -104,16 +96,19 @@ blockedReasons: []
 externalDependencies:
   - id: vps-purchase
     description: HostGator VPS NVMe 4 (2 vCPU / 4 GB / 100 GB) with root SSH
-    status: pending
-    blocks: [verify]
+    status: resolved
+    note: Ubuntu 22.04.5, provisioned and in service
+    blocks: []
   - id: domain-dns
     description: contratos.iesnet.com.ar registered with an A/AAAA record on the VPS
-    status: pending
-    blocks: [verify]
+    status: resolved
+    note: contratos.iesnet.com.ar → 143.95.162.46 in Vercel DNS, no AAAA
+    blocks: []
   - id: offsite-backup-destination
     description: Object store outside HostGator, chosen and credentialed
-    status: pending
-    blocks: [verify]
+    status: resolved
+    note: Google Drive via rclone drive.file + age recipient, daily timer enabled
+    blocks: []
 
 sizeForecast:
   estimatedChangedLines: 900-1300 # design.md's figure, superseded by tasks.md's own estimate below
