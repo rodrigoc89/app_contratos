@@ -347,15 +347,35 @@ and `fc-cache` would then fail mid-run, after PostgreSQL is already installed.
 
 **Answer first:** in `NODE_ENV=production`, `apps/api/src/seed/seedDatabase.ts`
 now refuses to finish seeding — it throws, naming the missing environment
-variable — when either the `admin` or `tecnico` account cannot be created
-because its password variable was never set. It does **not** throw when the
-account already exists. That distinction is the entire point:
+variable — when the `admin`, `tecnico`, `oficina`, or `oficina2` account
+cannot be created because its password variable was never set. It does
+**not** throw when the account already exists. That distinction is the
+entire point:
 
 | Account result | Meaning | Production behaviour |
 |---|---|---|
-| `omitido` | No `SEED_ADMIN_PASSWORD` / `SEED_TECNICO_PASSWORD` was set, so the account was never created | **Throws** — deploy fails loudly, before reporting success |
+| `omitido` | No `SEED_ADMIN_PASSWORD` / `SEED_TECNICO_PASSWORD` / `SEED_OFICINA_PASSWORD` / `SEED_OFICINA2_PASSWORD` was set, so the account was never created | **Throws** — deploy fails loudly, before reporting success |
 | `already-present` | The account already exists (from an earlier seed run) | **Never throws** — nothing needed to happen, so nothing did |
 | `created` | The password was set and the account did not exist yet | Seeds normally |
+
+### The `oficina` and `oficina2` accounts
+
+`ContratosController` marks dar de baja, anular, and registrar restitución
+as `@Roles("oficina")`-only, and there is no user-management endpoint
+anywhere in this application — the seed is the *only* way an account can
+exist — so an office account is not optional: without one, those three
+post-signature operations are unreachable in production exactly the way a
+skipped técnico leaves signing unreachable. `oficina2` is a spare login,
+provisioned through the exact same `sembrarCuenta` path as `oficina`, so a
+second person does not have to share the first account's credentials.
+`SEED_OFICINA_USERNAME` (default `oficina`), `SEED_OFICINA_NOMBRE` (default
+`Oficina`), and `SEED_OFICINA_PASSWORD` configure the first; the same trio
+with an `SEED_OFICINA2_*` prefix (defaults `oficina2` / `Oficina 2`)
+configures the spare. Both share `LARGO_MINIMO_CONTRASENA_OFICINA` (12
+characters) — the same floor as `admin` and `tecnico`, for the same reason:
+`POST /auth/login` is the same internet-facing, same-origin endpoint for
+every role, so a shorter office password is not a smaller attack surface,
+only a weaker credential on an equally exposed door.
 
 ### How `NODE_ENV=production` actually reaches the seed
 
@@ -467,9 +487,14 @@ an automatic rollback on its own.
 file `contratos-api.service`'s `EnvironmentFile=` points at) without
 sourcing it, the same "supplying the environment is the operator's job"
 posture `configuracion.ts` documents for the application itself.
-`DATABASE_URL` and `JWT_SECRET` are always required. **`SEED_ADMIN_PASSWORD`
-and `SEED_TECNICO_PASSWORD` are required only when `FIRST_DEPLOY=true` is
-set explicitly.**
+`DATABASE_URL` and `JWT_SECRET` are always required. **`SEED_ADMIN_PASSWORD`,
+`SEED_TECNICO_PASSWORD`, `SEED_OFICINA_PASSWORD`, and `SEED_OFICINA2_PASSWORD`
+are required only when `FIRST_DEPLOY=true` is set explicitly.** The same four
+account variable groups (`SEED_ADMIN_*`, `SEED_TECNICO_*`, `SEED_OFICINA_*`,
+`SEED_OFICINA2_*`) are also exported into the environment by
+`load_env_file_into_environment` and preserved across `sudo -u contratos` by
+`run_as_service_user`'s `--preserve-env` list, so the seed step sees them
+regardless of which account they configure.
 
 This is a deliberate design decision, not an oversight: the
 deployment-configuration spec asks for seed credentials to be required "when
