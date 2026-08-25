@@ -1422,37 +1422,42 @@ real `backup.sh` run, pushed to the real remote, decrypted and restored by
 `verify-restore.sh`. That drill is task 9.8, and it is also the **go-live
 gate** — see "Next step" below.
 
-## Checklist (post-VPS, not yet actionable)
+## Checklist (post-VPS)
 
-- [ ] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
-- [ ] Re-running it exits 0 with every guard reporting `[skip]`
-- [ ] `sudo -u postgres psql -tAc "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'contratos'"` prints `t`, `sudo -u postgres psql -tAc "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = 'contratos'"` prints `contratos`, and `sudo stat -c '%U:%G %a' /etc/contratos/db.password` prints `root:root 600`
-- [ ] With `DATABASE_URL` in `/etc/contratos/api.env` composed from that file, `psql "$(sudo grep '^DATABASE_URL=' /etc/contratos/api.env | cut -d= -f2-)" -c 'SELECT 1'` connects as `contratos`
-- [ ] After cloning into `/opt/contratos` and re-running it, `systemctl is-enabled contratos-api` prints `enabled`, `systemctl is-active contratos-api` prints `inactive` (provision never starts it), and `cmp /opt/contratos/deploy/contratos-api.service /etc/systemd/system/contratos-api.service` is silent
-- [ ] `sudo git -C /opt/contratos status --porcelain` runs as root without a "dubious ownership" refusal and prints nothing (skeleton dotfiles excluded)
-- [ ] `node --version` ≥ 22 and `pnpm --version` = 11.11.0 as the `contratos` user after provision (`sudo -u contratos -- bash -lc 'node --version; pnpm --version'`)
-- [ ] Headless Chromium launches with `--no-sandbox --disable-setuid-sandbox` and no missing-library error
-- [ ] `pnpm --filter @contratos/api verify:render` prints `Veredicto final: APROBADO` (all three layers, see "Render verdict" above)
-- [ ] `free -h` shows the 2 GB swapfile active, and it survives a reboot
-- [ ] `TAG=<first tag> FIRST_DEPLOY=true deploy/deploy.sh` completes the full stop→…→start sequence and reports `GET /salud` healthy
-- [ ] A subsequent `TAG=<next tag> deploy/deploy.sh` (no `FIRST_DEPLOY`) redeploys successfully with both seed passwords already rotated out of `/etc/contratos/api.env`
-- [ ] A deliberately broken `/etc/contratos/api.env` (missing `DATABASE_URL`) is refused before the service stops, and the previous version is still serving traffic afterward
-- [ ] During a real `TAG=<next tag> deploy/deploy.sh`, a tablet with the PWA open on the previous release keeps loading every hashed asset it references throughout the publish step (no mid-visit 404)
-- [ ] After that same deploy, a tab that has NOT yet accepted the update prompt still functions on the previous shell, and a tab that reloads receives the new shell cleanly — never a mismatched `index.html`/`sw.js` pair
-- [ ] `ls /var/www/contratos/.releases` shows at most 2 manifests after two consecutive real deploys, and the previous release's hashed assets are gone only after the deploy that supersedes them a second time
-- [ ] `sudo CONTRATOS_HOST=<real hostname> deploy/tls-bootstrap.sh` completes the full sequence and `curl -I https://<real hostname>/salud` returns a response over TLS
-- [ ] `nginx -t` reports `syntax is ok` / `test is successful` against the real, rendered `/etc/nginx/sites-available/contratos` — the first time this file has ever been parsed by a real nginx
-- [ ] `certbot renew --force-renewal --cert-name <real hostname>` followed by `openssl s_client -connect <real hostname>:443 -servername <real hostname> </dev/null 2>/dev/null | openssl x509 -noout -dates` shows a **new** `notBefore`, proving `renewal-hook-nginx.sh` actually reloaded nginx and not just that certbot wrote a new file to disk
-- [ ] A deliberately broken rendered conf (temporarily corrupt `/etc/nginx/sites-available/contratos` by hand, then re-run `tls-bootstrap.sh`) exercises the hard-gate rollback: `nginx -t` fails, the symlink repoints back to the bootstrap conf, nginx reloads successfully, and the script still exits `1`
-- [ ] `sudo deploy/backup.sh` completes a real dump → copy → archive → encrypt → push cycle against the live database and `ALMACEN_DOCUMENTOS_RUTA`, and the encrypted archive lands on the real offsite remote (needs the `offsite-backup-destination` credential — `state.yaml`)
-- [ ] `age -d -i <the real recipient's identity file>` (kept off the VPS entirely) decrypts a real pushed archive byte-identical to the pre-encryption tar
-- [ ] After 31+ real daily runs, exactly 30 remote copies remain and the 31st-oldest is gone
-- [ ] `deploy/backup.sh --prune-only` run by hand against the real remote behaves identically to its mocked-`rclone` test — same head/tail split, no accidental deletion of a retained copy
-- [ ] `sudo stat -c '%U:%G %a %n' /etc/contratos /etc/contratos/gnupg /var/backups/contratos-offsite` prints `root:root 700` for all three, and `systemctl list-timers contratos-backup.timer` shows the timer `provision.sh` enabled with a next firing
-- [ ] Before `/etc/contratos/backup.env` exists, `sudo systemctl start contratos-backup.service` fails and `journalctl -u contratos-backup.service` shows `backup.sh: configuration file '/etc/contratos/backup.env' does not exist` — a loud refusal, never `226/NAMESPACE` and never silence
-- [ ] After `backup.env` is written and the public key imported, `journalctl -u contratos-backup.service` shows a clean exit on the next scheduled firing (or after `sudo systemctl start contratos-backup.service` run by hand)
-- [ ] **The real backup-then-restore drill (task 9.8, and the go-live gate — task 10.4):** on a genuinely separate scratch host, `ARCHIVE_FILE=<the real pushed archive> AGE_IDENTITY_FILE=<the real identity, kept off the VPS> DATABASE_URL=<scratch> ALMACEN_DOCUMENTOS_RUTA=<scratch> deploy/restore.sh` completes, `verify-restore.sh` reports every real document `verificados` with zero `faltantes`/`desajustados`, and the exit code is `0`
-- [ ] The above drill has been run **at least once** and passed before any real customer *comodato* is signed on this server — see the go-live gate below
+Run against the real HostGator VPS on 2026-08-24/25 while bringing `v1.0.0` → `v1.0.4`
+into service. A box is ticked only where the command was actually run on that
+host and its stated output observed; every unticked box below carries the reason
+it is still open, so this list stays a record rather than an aspiration.
+
+- [x] `sudo deploy/provision.sh` exits 0 on a fresh Ubuntu host
+- [x] Re-running it exits 0 with every guard reporting `[skip]`
+- [ ] `sudo -u postgres psql -tAc "SELECT rolcanlogin FROM pg_roles WHERE rolname = 'contratos'"` prints `t`, `sudo -u postgres psql -tAc "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = 'contratos'"` prints `contratos`, and `sudo stat -c '%U:%G %a' /etc/contratos/db.password` prints `root:root 600` — **partially observed**: `rolcanlogin` prints `t` and the database owner prints `contratos`, but `/etc/contratos/db.password` is absent on this host because the role was created by hand before `provision_database` existed, so provision reported `[skip] … (password left untouched)`. The file half is only exercised on the next fresh host.
+- [x] With `DATABASE_URL` in `/etc/contratos/api.env` composed from that file, `psql "$(sudo grep '^DATABASE_URL=' /etc/contratos/api.env | cut -d= -f2-)" -c 'SELECT 1'` connects as `contratos`
+- [ ] After cloning into `/opt/contratos` and re-running it, `systemctl is-enabled contratos-api` prints `enabled`, `systemctl is-active contratos-api` prints `inactive` (provision never starts it), and `cmp /opt/contratos/deploy/contratos-api.service /etc/systemd/system/contratos-api.service` is silent — **partially observed**: `is-enabled` prints `enabled` and `cmp` is silent; `is-active` now prints `active` because `deploy.sh` has since started the service. Provision's own "not started — deploy.sh starts it" line was observed on installation.
+- [x] `sudo git -C /opt/contratos status --porcelain` runs as root without a "dubious ownership" refusal and prints nothing (skeleton dotfiles excluded)
+- [x] `node --version` ≥ 22 and `pnpm --version` = 11.11.0 as the `contratos` user after provision (`sudo -u contratos -- bash -lc 'node --version; pnpm --version'`)
+- [x] Headless Chromium launches with `--no-sandbox --disable-setuid-sandbox` and no missing-library error
+- [x] `pnpm --filter @contratos/api verify:render` prints `Veredicto final: APROBADO` (all three layers, see "Render verdict" above)
+- [ ] `free -h` shows the 2 GB swapfile active, and it survives a reboot — active confirmed (`Swap: 2.0Gi`); the reboot half is untested, the host has not been rebooted since provisioning.
+- [x] `TAG=<first tag> FIRST_DEPLOY=true deploy/deploy.sh` completes the full stop→…→start sequence and reports `GET /salud` healthy
+- [x] A subsequent `TAG=<next tag> deploy/deploy.sh` (no `FIRST_DEPLOY`) redeploys successfully with both seed passwords already rotated out of `/etc/contratos/api.env`
+- [ ] A deliberately broken `/etc/contratos/api.env` (missing `DATABASE_URL`) is refused before the service stops, and the previous version is still serving traffic afterward — not exercised deliberately. (A different failure did prove the general shape: the `v1.0.3` seed step failed *after* the stop, which is exactly why gap #14's env-export fix landed — see "Outage record" above.)
+- [ ] During a real `TAG=<next tag> deploy/deploy.sh`, a tablet with the PWA open on the previous release keeps loading every hashed asset it references throughout the publish step (no mid-visit 404) — needs a real tablet held on the previous release across a deploy; not observed.
+- [ ] After that same deploy, a tab that has NOT yet accepted the update prompt still functions on the previous shell, and a tab that reloads receives the new shell cleanly — never a mismatched `index.html`/`sw.js` pair — same, not observed.
+- [x] `ls /var/www/contratos/.releases` shows at most 2 manifests after two consecutive real deploys, and the previous release's hashed assets are gone only after the deploy that supersedes them a second time
+- [x] `sudo CONTRATOS_HOST=<real hostname> deploy/tls-bootstrap.sh` completes the full sequence and `curl -I https://<real hostname>/salud` returns a response over TLS — the first run rolled back at the hard gate (`http2 on;`, unknown to nginx 1.18 — fixed in `v1.0.2`); re-run end to end on `v1.0.4`: exit 0, certificate kept, full conf installed, and `curl -I` returns `HTTP/2 200`.
+- [x] `nginx -t` reports `syntax is ok` / `test is successful` against the real, rendered `/etc/nginx/sites-available/contratos` — the first time this file has ever been parsed by a real nginx — reported by the re-run above against the template-rendered conf, not a hand-edited one.
+- [ ] `certbot renew --force-renewal --cert-name <real hostname>` followed by `openssl s_client -connect <real hostname>:443 -servername <real hostname> </dev/null 2>/dev/null | openssl x509 -noout -dates` shows a **new** `notBefore`, proving `renewal-hook-nginx.sh` actually reloaded nginx and not just that certbot wrote a new file to disk — not run: a forced renewal spends a Let's Encrypt rate-limit slot, and the certificate is valid until 2026-11-22. Worth doing once, deliberately, well before expiry.
+- [x] A deliberately broken rendered conf (temporarily corrupt `/etc/nginx/sites-available/contratos` by hand, then re-run `tls-bootstrap.sh`) exercises the hard-gate rollback: `nginx -t` fails, the symlink repoints back to the bootstrap conf, nginx reloads successfully, and the script still exits `1`
+- [x] `sudo deploy/backup.sh` completes a real dump → copy → archive → encrypt → push cycle against the live database and `ALMACEN_DOCUMENTOS_RUTA`, and the encrypted archive lands on the real offsite remote (needs the `offsite-backup-destination` credential — `state.yaml`)
+- [x] `age -d -i <the real recipient's identity file>` (kept off the VPS entirely) decrypts a real pushed archive byte-identical to the pre-encryption tar
+- [ ] After 31+ real daily runs, exactly 30 remote copies remain and the 31st-oldest is gone — three runs so far; this one is a matter of time.
+- [ ] `deploy/backup.sh --prune-only` run by hand against the real remote behaves identically to its mocked-`rclone` test — same head/tail split, no accidental deletion of a retained copy — not run.
+- [ ] `sudo stat -c '%U:%G %a %n' /etc/contratos /etc/contratos/gnupg /var/backups/contratos-offsite` prints `root:root 700` for all three, and `systemctl list-timers contratos-backup.timer` shows the timer `provision.sh` enabled with a next firing — **partially observed**: `/etc/contratos/gnupg` and `/var/backups/contratos-offsite` are `root:root 700` (the latter was found `755`, created by `backup.sh`'s own `mkdir -p` before `provision_backup_units` existed, and was tightened by hand), and the timer lists a next firing. `/etc/contratos` itself is `root:contratos 750` on this host because it was created by hand before provision made it; a fresh host gets `root:root 700`.
+- [ ] Before `/etc/contratos/backup.env` exists, `sudo systemctl start contratos-backup.service` fails and `journalctl -u contratos-backup.service` shows `backup.sh: configuration file '/etc/contratos/backup.env' does not exist` — a loud refusal, never `226/NAMESPACE` and never silence — not observed: `backup.env` was written before the unit was first started, so the loud refusal never had its chance here.
+- [x] After `backup.env` is written and the public key imported, `journalctl -u contratos-backup.service` shows a clean exit on the next scheduled firing (or after `sudo systemctl start contratos-backup.service` run by hand)
+- [x] **The real backup-then-restore drill (task 9.8, and the go-live gate — task 10.4):** on a genuinely separate scratch host, `ARCHIVE_FILE=<the real pushed archive> AGE_IDENTITY_FILE=<the real identity, kept off the VPS> DATABASE_URL=<scratch> ALMACEN_DOCUMENTOS_RUTA=<scratch> deploy/restore.sh` completes, `verify-restore.sh` reports every real document `verificados` with zero `faltantes`/`desajustados`, and the exit code is `0`
+- [x] The above drill has been run **at least once** and passed before any real customer *comodato* is signed on this server — see the go-live gate below
 
 ## Go-live gate (task 10.4) — read this before signing anything real
 
