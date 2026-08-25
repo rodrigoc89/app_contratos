@@ -56,6 +56,22 @@ export const LARGO_MINIMO_CONTRASENA_ADMIN = 12;
  */
 export const LARGO_MINIMO_CONTRASENA_TECNICO = 12;
 
+/**
+ * Shortest password the seed will accept for the `oficina` accounts —
+ * `oficina` and `oficina2` both use this floor.
+ *
+ * Same reasoning as `LARGO_MINIMO_CONTRASENA_TECNICO`, restated because it
+ * generalises rather than being lowered for a third role: `POST /auth/login`
+ * is the same internet-facing, same-origin endpoint regardless of which role
+ * authenticates against it, so an office password is not a smaller attack
+ * surface than a técnico's — only a weaker credential on an equally exposed
+ * door. What an office account can do — dar de baja, anular, and register a
+ * restitución on an already-signed comodato (`ContratosController`'s
+ * `@Roles("oficina")` endpoints) — is consequential enough that this floor
+ * stays at the same 12 characters as admin and técnico, not a lesser one.
+ */
+export const LARGO_MINIMO_CONTRASENA_OFICINA = 12;
+
 export interface AdminSeedInput {
   readonly id: string;
   readonly nombreUsuario: string;
@@ -75,6 +91,13 @@ export interface AdminSeedInput {
  */
 export type TecnicoSeedInput = AdminSeedInput;
 
+/**
+ * Same shape again, for the office role. Two accounts share this type —
+ * `oficina` and `oficina2`, a spare so a second person is not forced to
+ * share one login — provisioned through the same `sembrarCuenta` path.
+ */
+export type OficinaSeedInput = AdminSeedInput;
+
 export type SeedAction = "created" | "already-present" | "omitido";
 
 interface EstadoDeCuenta {
@@ -89,6 +112,14 @@ export interface SeedReport {
   readonly administrador: EstadoDeCuenta | null;
   /** `null` when the caller did not ask for a técnico at all. */
   readonly tecnico: EstadoDeCuenta | null;
+  /** `null` when the caller did not ask for the `oficina` account at all. */
+  readonly oficina: EstadoDeCuenta | null;
+  /**
+   * `null` when the caller did not ask for the `oficina2` spare account at
+   * all. Same role (`"oficina"`) as `oficina` above — a second login so two
+   * people can work without sharing one account.
+   */
+  readonly oficina2: EstadoDeCuenta | null;
 }
 
 export interface SeedDatabaseInput {
@@ -101,6 +132,13 @@ export interface SeedDatabaseInput {
   readonly administrador?: AdminSeedInput;
   /** Optional: omitting it leaves the signing flow unreachable — see README.md. */
   readonly tecnico?: TecnicoSeedInput;
+  /**
+   * Optional: omitting it leaves dar-de-baja/anular/registrar-restitución
+   * unreachable in production — see README.md.
+   */
+  readonly oficina?: OficinaSeedInput;
+  /** Optional: the spare `oficina2` login — same role, same gate as `oficina`. */
+  readonly oficina2?: OficinaSeedInput;
 }
 
 /**
@@ -160,6 +198,26 @@ export async function seedDatabase(
           descripcionParaError:
             "firma contratos vinculantes en nombre de la empresa desde el dispositivo de campo.",
         });
+  const oficina =
+    input.oficina === undefined
+      ? null
+      : await sembrarCuenta(input.oficina, {
+          rol: "oficina",
+          variableContrasena: "SEED_OFICINA_PASSWORD",
+          largoMinimoContrasena: LARGO_MINIMO_CONTRASENA_OFICINA,
+          descripcionParaError:
+            "da de baja, anula y registra restituciones de contratos ya firmados.",
+        });
+  const oficina2 =
+    input.oficina2 === undefined
+      ? null
+      : await sembrarCuenta(input.oficina2, {
+          rol: "oficina",
+          variableContrasena: "SEED_OFICINA2_PASSWORD",
+          largoMinimoContrasena: LARGO_MINIMO_CONTRASENA_OFICINA,
+          descripcionParaError:
+            "es la segunda cuenta de oficina, para que dos personas no compartan un mismo inicio de sesión.",
+        });
 
   // Fail-closed seed gate (D3). A production seed that reports success while
   // an account it was asked to create is unreachable is a process lying
@@ -182,9 +240,21 @@ export async function seedDatabase(
         `No se puede sembrar la base de datos de producción sin el usuario técnico "${tecnico.nombreUsuario}": no se definió SEED_TECNICO_PASSWORD. Nadie podría firmar un contrato: la aplicación solo implementa el flujo del técnico, así que sin esta cuenta el flujo de firma es inalcanzable. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`,
       );
     }
+
+    if (oficina !== null && oficina.action === "omitido") {
+      throw new Error(
+        `No se puede sembrar la base de datos de producción sin el usuario de oficina "${oficina.nombreUsuario}": no se definió SEED_OFICINA_PASSWORD. Las operaciones de dar de baja, anular y registrar la restitución de un contrato ya firmado quedarían inalcanzables. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`,
+      );
+    }
+
+    if (oficina2 !== null && oficina2.action === "omitido") {
+      throw new Error(
+        `No se puede sembrar la base de datos de producción sin el segundo usuario de oficina "${oficina2.nombreUsuario}": no se definió SEED_OFICINA2_PASSWORD. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`,
+      );
+    }
   }
 
-  return { plantilla, firmante, administrador, tecnico };
+  return { plantilla, firmante, administrador, tecnico, oficina, oficina2 };
 }
 
 /** What distinguishes one seedable account (admin, técnico) from another. */
@@ -304,6 +374,24 @@ export function describeSeedReport(reporte: SeedReport): string {
       tecnico.action === "omitido"
         ? `ATENCION: no se creó el usuario técnico "${tecnico.nombreUsuario}" porque no se definió SEED_TECNICO_PASSWORD. Nadie puede firmar un contrato todavía: la aplicación solo implementa el flujo del técnico, así que sin esta cuenta el flujo de firma es inalcanzable. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`
         : `Usuario técnico "${tecnico.nombreUsuario}": ${frase(tecnico.action)}.`,
+    );
+  }
+
+  const oficina = reporte.oficina;
+  if (oficina !== null) {
+    lineas.push(
+      oficina.action === "omitido"
+        ? `ATENCION: no se creó el usuario de oficina "${oficina.nombreUsuario}" porque no se definió SEED_OFICINA_PASSWORD. Las operaciones de dar de baja, anular y registrar la restitución de un contrato ya firmado quedarían inalcanzables. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`
+        : `Usuario de oficina "${oficina.nombreUsuario}": ${frase(oficina.action)}.`,
+    );
+  }
+
+  const oficina2 = reporte.oficina2;
+  if (oficina2 !== null) {
+    lineas.push(
+      oficina2.action === "omitido"
+        ? `ATENCION: no se creó el segundo usuario de oficina "${oficina2.nombreUsuario}" porque no se definió SEED_OFICINA2_PASSWORD. Defina esa variable con una contraseña elegida por usted y vuelva a ejecutar la semilla; esta aplicación no inventa contraseñas por defecto.`
+        : `Usuario de oficina "${oficina2.nombreUsuario}": ${frase(oficina2.action)}.`,
     );
   }
 

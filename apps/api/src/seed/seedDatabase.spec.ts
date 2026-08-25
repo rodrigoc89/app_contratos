@@ -191,6 +191,28 @@ describe("seedDatabase — production seed gate over admin/técnico accounts (D3
     ).rejects.toThrow(/SEED_ADMIN_PASSWORD/);
   });
 
+  // The two office accounts (oficina, oficina2 — a spare, so a second person
+  // does not have to share one login) reach the same fail-closed gate as
+  // admin/técnico: `ContratosController`'s dar-de-baja/anular/registrar-
+  // restitución endpoints are `@Roles("oficina")`-only, so a production
+  // deploy that silently skips both accounts leaves those three operations
+  // unreachable exactly like a skipped técnico leaves signing unreachable.
+  it("refuses to seed production when the oficina account resolves to omitido", async () => {
+    const partes = entrada("v1", "production");
+
+    await expect(
+      seedDatabase({ ...partes, oficina: cuenta("oficina", undefined) }),
+    ).rejects.toThrow(/SEED_OFICINA_PASSWORD/);
+  });
+
+  it("refuses to seed production when the oficina2 account resolves to omitido", async () => {
+    const partes = entrada("v1", "production");
+
+    await expect(
+      seedDatabase({ ...partes, oficina2: cuenta("oficina2", undefined) }),
+    ).rejects.toThrow(/SEED_OFICINA2_PASSWORD/);
+  });
+
   // This is the load-bearing regression guard (design.md D3, tasks.md 4.3):
   // once an account already exists, its password is correctly rotated out
   // of the environment file, and every routine redeploy resolves that
@@ -200,9 +222,11 @@ describe("seedDatabase — production seed gate over admin/técnico accounts (D3
   it("never blocks a routine production redeploy once the seed accounts already exist", async () => {
     const usuariosAdmin = new UsuariosFalsos();
     const usuariosTecnico = new UsuariosFalsos();
+    const usuariosOficina = new UsuariosFalsos();
+    const usuariosOficina2 = new UsuariosFalsos();
 
-    // First run (e.g. provisioning), with both passwords set — creates
-    // both accounts.
+    // First run (e.g. provisioning), with every password set — creates all
+    // four accounts.
     const primeraEjecucion = entrada("v1", "development");
     await seedDatabase({
       ...primeraEjecucion,
@@ -212,19 +236,29 @@ describe("seedDatabase — production seed gate over admin/técnico accounts (D3
         usuariosAdmin,
       ),
       tecnico: cuenta("tecnico", "una-contrasena-de-tecnico", usuariosTecnico),
+      oficina: cuenta("oficina", "una-contrasena-de-oficina", usuariosOficina),
+      oficina2: cuenta(
+        "oficina2",
+        "una-contrasena-de-oficina2",
+        usuariosOficina2,
+      ),
     });
 
-    // Routine redeploy: both passwords were correctly rotated out of the
-    // environment after the accounts already exist, so both resolve to
+    // Routine redeploy: every password was correctly rotated out of the
+    // environment after the accounts already exist, so all four resolve to
     // "already-present". Production must seed cleanly and must not throw.
     const redeploy = entrada("v1", "production");
     const reporte = await seedDatabase({
       ...redeploy,
       administrador: cuenta("admin", undefined, usuariosAdmin),
       tecnico: cuenta("tecnico", undefined, usuariosTecnico),
+      oficina: cuenta("oficina", undefined, usuariosOficina),
+      oficina2: cuenta("oficina2", undefined, usuariosOficina2),
     });
 
     expect(reporte.administrador?.action).toBe("already-present");
     expect(reporte.tecnico?.action).toBe("already-present");
+    expect(reporte.oficina?.action).toBe("already-present");
+    expect(reporte.oficina2?.action).toBe("already-present");
   });
 });

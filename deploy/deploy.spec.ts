@@ -249,7 +249,51 @@ describe("deploy.sh --dry-run", () => {
     );
 
     expect(error.code).toBe(1);
-    expect(error.stderr).toMatch(/SEED_ADMIN_PASSWORD|SEED_TECNICO_PASSWORD/);
+    expect(error.stderr).toMatch(
+      /SEED_ADMIN_PASSWORD|SEED_TECNICO_PASSWORD|SEED_OFICINA_PASSWORD|SEED_OFICINA2_PASSWORD/,
+    );
+    expect(error.stdout).not.toContain("[plan:stop]");
+  });
+
+  it("aborts before stopping the service when SEED_OFICINA_PASSWORD is missing on a first deploy (FIRST_DEPLOY=true), naming the variable", async () => {
+    const appDir = await makeValidAppDir();
+    // Admin and técnico passwords present — this test isolates the oficina
+    // requirement specifically, so it must reach that check rather than
+    // failing earlier on a sibling variable.
+    const envFile = await makeValidEnvFile({
+      SEED_ADMIN_PASSWORD: "a-fake-admin-password-12ch",
+      SEED_TECNICO_PASSWORD: "a-fake-tecnico-password-12ch",
+    });
+
+    const error = await expectToFail(
+      execFileAsync(SCRIPT, ["--dry-run"], {
+        env: { ...process.env, APP_DIR: appDir, ENV_FILE: envFile, FIRST_DEPLOY: "true" },
+      }),
+    );
+
+    expect(error.code).toBe(1);
+    expect(error.stderr).toContain("SEED_OFICINA_PASSWORD");
+    expect(error.stdout).not.toContain("[plan:stop]");
+  });
+
+  it("aborts before stopping the service when SEED_OFICINA2_PASSWORD is missing on a first deploy (FIRST_DEPLOY=true), naming the variable", async () => {
+    const appDir = await makeValidAppDir();
+    // Admin, técnico and oficina passwords present — isolates the oficina2
+    // requirement specifically.
+    const envFile = await makeValidEnvFile({
+      SEED_ADMIN_PASSWORD: "a-fake-admin-password-12ch",
+      SEED_TECNICO_PASSWORD: "a-fake-tecnico-password-12ch",
+      SEED_OFICINA_PASSWORD: "a-fake-oficina-password-12ch",
+    });
+
+    const error = await expectToFail(
+      execFileAsync(SCRIPT, ["--dry-run"], {
+        env: { ...process.env, APP_DIR: appDir, ENV_FILE: envFile, FIRST_DEPLOY: "true" },
+      }),
+    );
+
+    expect(error.code).toBe(1);
+    expect(error.stderr).toContain("SEED_OFICINA2_PASSWORD");
     expect(error.stdout).not.toContain("[plan:stop]");
   });
 

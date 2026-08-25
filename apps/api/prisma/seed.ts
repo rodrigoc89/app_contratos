@@ -39,6 +39,12 @@ const ADMIN_ID = "usuario-admin-inicial";
 /** Same reasoning as `ADMIN_ID`, for the técnico account. */
 const TECNICO_ID = "usuario-tecnico-inicial";
 
+/** Same reasoning as `ADMIN_ID`, for the `oficina` account. */
+const OFICINA_ID = "usuario-oficina-inicial";
+
+/** Same reasoning as `ADMIN_ID`, for the spare `oficina2` account. */
+const OFICINA2_ID = "usuario-oficina2-inicial";
+
 const prisma = crearPrismaClient();
 
 try {
@@ -67,6 +73,26 @@ try {
       nombreCompleto: process.env.SEED_TECNICO_NOMBRE ?? "Técnico",
       // Same deliberate absence of a fallback as the admin's — see `sembrarCuenta`.
       contrasena: process.env.SEED_TECNICO_PASSWORD,
+      usuarios: new PrismaUsuarioRepository(prisma),
+      hasher: new HashDeContrasenaArgon2(),
+    },
+    oficina: {
+      id: OFICINA_ID,
+      nombreUsuario: process.env.SEED_OFICINA_USERNAME ?? "oficina",
+      nombreCompleto: process.env.SEED_OFICINA_NOMBRE ?? "Oficina",
+      // Same deliberate absence of a fallback as the admin's — see `sembrarCuenta`.
+      contrasena: process.env.SEED_OFICINA_PASSWORD,
+      usuarios: new PrismaUsuarioRepository(prisma),
+      hasher: new HashDeContrasenaArgon2(),
+    },
+    // A spare login, so a second person does not have to share the first
+    // `oficina` account.
+    oficina2: {
+      id: OFICINA2_ID,
+      nombreUsuario: process.env.SEED_OFICINA2_USERNAME ?? "oficina2",
+      nombreCompleto: process.env.SEED_OFICINA2_NOMBRE ?? "Oficina 2",
+      // Same deliberate absence of a fallback as the admin's — see `sembrarCuenta`.
+      contrasena: process.env.SEED_OFICINA2_PASSWORD,
       usuarios: new PrismaUsuarioRepository(prisma),
       hasher: new HashDeContrasenaArgon2(),
     },
