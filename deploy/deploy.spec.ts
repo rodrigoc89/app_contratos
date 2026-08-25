@@ -308,6 +308,73 @@ describe("deploy.sh --dry-run", () => {
     expect(stdout).toContain("[plan:seed]");
   });
 
+  // ------------------------------------------------------- task: env export
+
+  /**
+   * Regression coverage for the outage this fixes: `load_env_file_into_environment`
+   * used to export a hardcoded, enumerated list of variable names. A release
+   * that adds a new `SEED_*` variable to `$ENV_FILE` is invisible to the
+   * `deploy.sh` copy already on disk and executing — the checkout step swaps
+   * the file far too late for a bash process already running it — so the
+   * seed step never sees the new variable and fails closed AFTER the service
+   * was already stopped. These specs assert every key present in
+   * `$ENV_FILE` is exported, named in no hardcoded allowlist here or in this
+   * spec, via the `[plan:env]` line `--dry-run` now prints (the same seam an
+   * operator would want anyway — an audit trail of exactly which
+   * configuration keys this run picked up).
+   */
+  it("exports a variable that appears in NO hardcoded list in the script (regression: the outage's root cause)", async () => {
+    const appDir = await makeValidAppDir();
+    const envFile = await makeValidEnvFile({
+      SEED_FUTURO_PASSWORD: "a-fake-not-yet-invented-password",
+    });
+
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: appDir, ENV_FILE: envFile },
+    });
+
+    expect(stdout).toMatch(/\[plan:env\].*SEED_FUTURO_PASSWORD/);
+  });
+
+  it("exports a second, differently-named unlisted variable too — not a coincidence tied to one key name", async () => {
+    const appDir = await makeValidAppDir();
+    const envFile = await makeValidEnvFile({
+      ALGUN_OTRO_VALOR_INVENTADO: "a-fake-value-no-list-names",
+    });
+
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: appDir, ENV_FILE: envFile },
+    });
+
+    expect(stdout).toMatch(/\[plan:env\].*ALGUN_OTRO_VALOR_INVENTADO/);
+  });
+
+  it("does not export a key from a comment or blank line in $ENV_FILE", async () => {
+    const appDir = await makeValidAppDir();
+    const envFile = join(scratch, "api.env");
+    await writeFile(
+      envFile,
+      [
+        "DATABASE_URL=postgresql://user:pass@localhost:5432/contratos",
+        "JWT_SECRET=a-fake-secret-at-least-32-characters-long",
+        "",
+        "# SEED_COMENTADO_PASSWORD=this-is-a-comment-not-a-value",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const { stdout } = await execFileAsync(SCRIPT, ["--dry-run"], {
+      env: { ...process.env, APP_DIR: appDir, ENV_FILE: envFile },
+    });
+
+    const planEnvLine = stdout.split("\n").find((line) => line.includes("[plan:env]"));
+    expect(planEnvLine).toBeDefined();
+    expect(planEnvLine).not.toContain("SEED_COMENTADO_PASSWORD");
+    expect(planEnvLine).toContain("DATABASE_URL");
+    expect(planEnvLine).toContain("JWT_SECRET");
+  });
+
   // --------------------------------------------------------- housekeeping
 
   it("rejects an unrecognized flag instead of silently proceeding", async () => {
