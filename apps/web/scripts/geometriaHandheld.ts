@@ -785,7 +785,15 @@ async function ejecutar(): Promise<void> {
     console.log(`states reached: ${mediciones.length}/${ESTADOS_ESPERADOS}`);
     console.log("verdict: PASS");
   } finally {
+    // design.md D6 — load-bearing for the fail-closed requirement, not
+    // hygiene: reportarFalla only sets process.exitCode, delivered only
+    // once the event loop drains. A surviving descendant holding the piped
+    // stdout/stderr's write end keeps the loop alive and the exit code
+    // undelivered, so a 10-second honest failure becomes a CI timeout kill
+    // instead of a named failure.
     proceso.kill();
+    proceso.stdout?.destroy();
+    proceso.stderr?.destroy();
   }
 }
 

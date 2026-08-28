@@ -68,8 +68,8 @@ Chain strategy: pending
 
 ## Phase 5: D6 — process teardown safety (highest-risk item — sequenced ahead of CI/close-out)
 
-- [ ] 5.1 In `ejecutar`'s `finally`, alongside `proceso.kill()`, add `proceso.stdout?.destroy()` and `proceso.stderr?.destroy()` per D6.
-- [ ] 5.2 Verification — D6 has no unit test and cannot have one (runtime teardown property). Run `pnpm --filter @contratos/web handheld` locally and confirm the process exits promptly; record the observed exit behavior as the only proof.
+- [x] 5.1 In `ejecutar`'s `finally`, alongside `proceso.kill()`, add `proceso.stdout?.destroy()` and `proceso.stderr?.destroy()` per D6.
+- [x] 5.2 Verification — D6 has no unit test and cannot have one (runtime teardown property). Run `pnpm --filter @contratos/web handheld` locally and confirm the process exits promptly; record the observed exit behavior as the only proof. **Observed**: exit code 0, wall time ~24.4s (real 0m24.394s), reported `preview reachable: ➜  Local:   http://127.0.0.1:4174/ (attempts: 5, elapsed: 1071ms)`, `states reached: 6/6`, `verdict: PASS`. The process terminated promptly with no lingering handle — confirms D6 releases the parent's event loop instead of leaving a 15-minute CI timeout.
 
 ## Phase 6: D7 — CI job rename
 
