@@ -15,6 +15,7 @@ import {
   esperarPreview,
   excedeAlturaDeCabecera,
   hayDesbordeHorizontal,
+  SIN_DIRECCION_INFORMADA,
   type DiagnosticoDePreview,
   type MedicionDeEstado,
   type ResultadoDePreview,
@@ -326,6 +327,28 @@ describe("esperarPreview", () => {
       expect(resultado.diagnostico.intentos).toBeLessThan(40);
       expect(resultado.diagnostico.finDelProceso).toBe("exit 1");
     }
+  });
+
+  it("reports the honest no-address fallback when the Local: banner is never captured through the full grace period (R2c)", async () => {
+    const reloj = crearRelojFake();
+    const sonda: SondaDePreview = {
+      sondear: async () => 200,
+      dormir: reloj.dormir,
+      ahora: reloj.ahora,
+      estadoDelProceso: () => null,
+      // The banner never arrives — unlike the D3b test above, salida() stays
+      // empty for the entire grace window, not just the first poll.
+      salida: () => "",
+    };
+
+    const resultado = await esperarPreview("http://127.0.0.1:4174", sonda);
+
+    expect(resultado).toEqual({
+      exito: true,
+      direccion: SIN_DIRECCION_INFORMADA,
+      intentos: 1,
+      transcurridoMs: 500,
+    });
   });
 });
 
