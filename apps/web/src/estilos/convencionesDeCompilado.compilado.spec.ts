@@ -193,6 +193,83 @@ export function reglasInvisibles(css: string): ReglaEncontrada[] {
     .map(({ selector, cuerpo }) => ({ selector, declaracion: cuerpo.trim() }));
 }
 
+/** Every direct-child `.ts` file under `estilos/`, skipping `*.spec.ts` — matches this guard's own scope (`estilos/*.ts`), not a recursive scan into `estilos/guardias/`. */
+function archivosTsDeEstilos(directorio: string): string[] {
+  return readdirSync(directorio).filter((nombre) => nombre.endsWith(".ts") && !nombre.endsWith(".spec.ts"));
+}
+
+export interface ClaseDeclarada {
+  readonly archivo: string;
+  readonly constante: string;
+  readonly clase: string;
+}
+
+/** Every individual class token named by an `export const NAME = "…"` string literal in `contenido`, one entry per token. A token carrying `${` is a template interpolation, never a literal class name, and is skipped. */
+function clasesDeclaradas(archivo: string, contenido: string): ClaseDeclarada[] {
+  const declaradas: ClaseDeclarada[] = [];
+  for (const coincidencia of contenido.matchAll(/export const (\w+)\s*=\s*"([^"]*)"/g)) {
+    const constante = coincidencia[1] ?? "";
+    const valor = coincidencia[2] ?? "";
+    for (const clase of valor.split(/\s+/).filter(Boolean)) {
+      if (clase.includes("${")) continue;
+      declaradas.push({ archivo, constante, clase });
+    }
+  }
+  return declaradas;
+}
+
+/** Tailwind's own selector escaping for arbitrary-value utilities — confirmed against real `dist/` output (`.max-w-\[640px\]`, `.w-\[calc\(100\%-2rem\)\]`): every character outside `[a-zA-Z0-9_-]` gets a backslash prefix. */
+function escapaClaseCss(clase: string): string {
+  return clase.replace(/[^a-zA-Z0-9_-]/g, (caracter) => `\\${caracter}`);
+}
+
+/** Escapes regex metacharacters — including the backslashes `escapaClaseCss` just inserted — so the escaped class can be matched as a literal string inside a `RegExp`. */
+function escapaCaracteresRegExp(texto: string): string {
+  return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Whether `clase` compiles somewhere in `css`: escaped the way Tailwind escapes it, immediately after a `.`, and not followed by another selector-identifier character — so `.my-4` cannot falsely match a hypothetical `.my-40`. */
+function claseCompilada(css: string, clase: string): boolean {
+  const patron = new RegExp(`\\.${escapaCaracteresRegExp(escapaClaseCss(clase))}(?![a-zA-Z0-9_-])`);
+  return patron.test(css);
+}
+
+/**
+ * Guard 22 — `estilos/*.ts` exported constants name Tailwind utility classes
+ * a component *consumes* through the constant, never as a literal className
+ * Tailwind's own candidate scanner can see; `tema.css`'s `@source not "./"`
+ * exclusion (this file's own header comment) means `estilos/` contributes NO
+ * candidate text at all. A class named ONLY here therefore compiles by pure
+ * coincidence — only if some unrelated `.tsx` happens to spell the identical
+ * literal — or not at all. Found this way: `CLASE_FORMULARIO`'s
+ * `max-w-[640px]` and `CLASE_FIELDSET_FORMULARIO`'s `my-4` were named only
+ * in `formulario.ts`, so both silently never compiled. The fix is
+ * `tema.css`'s `@source inline(...)` safelist, not narrowing the exclusion —
+ * this guard is the durable half that catches the next one.
+ */
+describe("guard 22: every class named by an estilos/*.ts exported constant actually compiles", () => {
+  it("finds a compiled rule for every class token declared by an export const in estilos/*.ts, naming the file, constant and class on failure", () => {
+    const hojas = archivosCssCompilados(DIRECTORIO_DIST);
+    expect(hojas.length, "no compiled CSS found under dist/ — run `vite build` first").toBeGreaterThan(0);
+    const cssCompleto = hojas.map((hoja) => hoja.contenido).join("\n");
+
+    const declaradas = archivosTsDeEstilos(DIRECTORIO_ESTILOS).flatMap((nombre) =>
+      clasesDeclaradas(nombre, readFileSync(join(DIRECTORIO_ESTILOS, nombre), "utf8")),
+    );
+    expect(
+      declaradas.length,
+      "no export const string literals found under estilos/*.ts — the scan itself is broken",
+    ).toBeGreaterThan(0);
+
+    const faltantes = declaradas.filter(({ clase }) => !claseCompilada(cssCompleto, clase));
+
+    expect(
+      faltantes.map(({ archivo, constante, clase }) => `${archivo}'s ${constante} names "${clase}", which never compiles`),
+      'a class declared under estilos/*.ts never compiles into dist/ — tema.css\'s @source not "./" exclusion means it can never self-compile; add it to the @source inline(...) safelist',
+    ).toEqual([]);
+  });
+});
+
 describe("compiled output ships no dead .invisible utility (task 19.2 deferred cleanup)", () => {
   it("fails when a compiled rule targets the .invisible selector", () => {
     const compiladoSimulado = ".invisible{visibility:hidden}";

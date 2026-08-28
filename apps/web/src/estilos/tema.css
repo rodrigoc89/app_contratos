@@ -31,6 +31,17 @@
  */
 @source not "./";
 
+/**
+ * The deliberate counterpart to the exclusion above: `estilos/*.ts` files
+ * declare class-name constants a component consumes (e.g. `formulario.ts`'s
+ * `CLASE_FORMULARIO`), never as a literal `className` Tailwind's scanner can
+ * see. Since the directory stays excluded on purpose, any utility named ONLY
+ * there must be listed here on purpose too, or it silently never compiles —
+ * `max-w-[640px]` and `my-4` did exactly that (guard 22,
+ * `convencionesDeCompilado.compilado.spec.ts`).
+ */
+@source inline("max-w-[640px] my-4");
+
 @theme {
   /* Brand */
   --color-primario: #0b634a;
