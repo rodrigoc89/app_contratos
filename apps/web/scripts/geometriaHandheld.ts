@@ -493,26 +493,119 @@ async function medirCoberturaDeControles(pagina: Page): Promise<readonly Cobertu
   });
 }
 
-function spawnServidorPreview(): ChildProcess {
-  return spawn("pnpm", ["exec", "vite", "preview", "--port", String(PUERTO_PREVIEW), "--strictPort"], {
-    cwd: join(import.meta.dirname, ".."),
-    stdio: "ignore",
-  });
+const CODIGO_ANSI = /\x1b\[[0-9;]*m/g;
+
+/** design.md D3 — the honest fallback `direccionInformada` returns; never invents an address. */
+export const SIN_DIRECCION_INFORMADA = "(vite printed no address before the first successful probe)";
+
+/**
+ * design.md D3 — pure, first `Local:` line with ANSI codes stripped; the
+ * honest fallback when vite has not printed one yet. Never invents an
+ * address — what it proves is narrower than it looks (see design D4): it
+ * confirms the `--host` flag reached vite, not the socket vite bound.
+ */
+export function direccionInformada(salidaCapturada: string): string {
+  for (const linea of salidaCapturada.split("\n")) {
+    const sinAnsi = linea.replace(CODIGO_ANSI, "").trim();
+    if (sinAnsi.includes("Local:")) {
+      return sinAnsi;
+    }
+  }
+  return SIN_DIRECCION_INFORMADA;
 }
 
-async function esperarPreview(url: string, intentos = 40, esperaMs = 250): Promise<boolean> {
-  for (let intento = 0; intento < intentos; intento += 1) {
-    try {
-      const respuesta = await fetch(url);
-      if (respuesta.status < 500) {
-        return true;
-      }
-    } catch {
-      // Not up yet — retried below.
+function spawnServidorPreview(): ChildProcess {
+  // design.md D4 — `--host 127.0.0.1` pins the bind to match the IPv4
+  // literal the probe already uses; ships as correctness regardless of
+  // whether a loopback mismatch was ever the cause of a slow reachability
+  // wait. No unit test — verifiable only by a real CI run (task 3.7).
+  return spawn(
+    "pnpm",
+    ["exec", "vite", "preview", "--host", "127.0.0.1", "--port", String(PUERTO_PREVIEW), "--strictPort"],
+    {
+      cwd: join(import.meta.dirname, ".."),
+      stdio: "ignore",
+    },
+  );
+}
+
+/**
+ * design.md D3 — the seam that lets `esperarPreview` be tested without a
+ * real subprocess or network. `sondear` mirrors `fetch`'s contract (rejects
+ * on connection failure, resolves with a status code); `estadoDelProceso`
+ * mirrors the real child's `"exit"`/`"error"` listeners.
+ */
+export interface SondaDePreview {
+  readonly sondear: (url: string) => Promise<number>;
+  readonly dormir: (ms: number) => Promise<void>;
+  readonly ahora: () => number;
+  readonly estadoDelProceso: () => string | null;
+  readonly salida: () => string;
+}
+
+/** design.md D3(a) — the bounded grace that lets trailing stdout/stderr flush before the diagnostic is built. */
+const GRACIA_CIERRE_MS = 250;
+
+function construirDiagnostico(
+  sonda: SondaDePreview,
+  intentos: number,
+  inicio: number,
+  ultimoErrorDeSondeo: string,
+): DiagnosticoDePreview {
+  return {
+    intentos,
+    transcurridoMs: sonda.ahora() - inicio,
+    finDelProceso: sonda.estadoDelProceso() ?? "still running",
+    ultimoErrorDeSondeo,
+    salidaCapturada: sonda.salida(),
+  };
+}
+
+/**
+ * design.md D3 — polls the child's terminal state at the top of each
+ * attempt instead of racing it against the probe (R1: a crash ends the
+ * wait immediately, without consuming the remaining polling budget).
+ */
+export async function esperarPreview(
+  url: string,
+  sonda: SondaDePreview,
+  intentos = 40,
+  esperaMs = 250,
+): Promise<ResultadoDePreview> {
+  const inicio = sonda.ahora();
+  let ultimoErrorDeSondeo = "(no probe attempted yet)";
+
+  for (let intento = 1; intento <= intentos; intento += 1) {
+    if (sonda.estadoDelProceso() !== null) {
+      await sonda.dormir(GRACIA_CIERRE_MS);
+      return { exito: false, diagnostico: construirDiagnostico(sonda, intento, inicio, ultimoErrorDeSondeo) };
     }
-    await new Promise((resolver) => setTimeout(resolver, esperaMs));
+
+    try {
+      const estado = await sonda.sondear(url);
+      if (estado < 500) {
+        // design.md D3(b) — printUrls() runs after listen, so the banner
+        // print and the first successful probe race; poll briefly for it.
+        const limiteBanner = sonda.ahora() + esperaMs * 2;
+        while (direccionInformada(sonda.salida()) === SIN_DIRECCION_INFORMADA && sonda.ahora() < limiteBanner) {
+          await sonda.dormir(esperaMs);
+        }
+        return {
+          exito: true,
+          direccion: direccionInformada(sonda.salida()),
+          intentos: intento,
+          transcurridoMs: sonda.ahora() - inicio,
+        };
+      }
+      ultimoErrorDeSondeo = `HTTP ${estado}`;
+    } catch (error) {
+      ultimoErrorDeSondeo = error instanceof Error ? error.message : String(error);
+    }
+
+    await sonda.dormir(esperaMs);
   }
-  return false;
+
+  return { exito: false, diagnostico: construirDiagnostico(sonda, intentos, inicio, ultimoErrorDeSondeo) };
 }
 
 function distDisponible(): boolean {

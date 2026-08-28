@@ -8,14 +8,17 @@ import {
   PISO_DE_TOQUE_PX,
   controlTapadoPorOtroElemento,
   crearBufferAcotado,
+  direccionInformada,
   erroresDeCobertura,
   erroresDePrecondicion,
   esControlBajoElPiso,
+  esperarPreview,
   excedeAlturaDeCabecera,
   hayDesbordeHorizontal,
   type DiagnosticoDePreview,
   type MedicionDeEstado,
   type ResultadoDePreview,
+  type SondaDePreview,
 } from "./geometriaHandheld";
 
 /**
@@ -189,6 +192,140 @@ describe("crearBufferAcotado", () => {
     buffer.agregar("world");
 
     expect(buffer.texto()).toBe("hello world");
+  });
+});
+
+/** design.md D3 (task 3.1) — pure address parser, ANSI-stripped, never invents an address. */
+describe("direccionInformada", () => {
+  it("returns the ANSI-stripped Local: line when vite has printed its startup banner (R2b)", () => {
+    const salida =
+      "\n  vite v5.4.11 building for production...\n" +
+      "  \x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   \x1b[36mhttp://127.0.0.1:4174/\x1b[39m\n" +
+      "  \x1b[32m➜\x1b[39m  \x1b[1mNetwork\x1b[22m: use --host to expose\n";
+
+    expect(direccionInformada(salida)).toBe("➜  Local:   http://127.0.0.1:4174/");
+  });
+
+  it("reports honestly that no address was available when vite has not printed its banner yet (R2c)", () => {
+    const salida = "\n  vite v5.4.11 building for production...\n";
+
+    expect(direccionInformada(salida)).toBe("(vite printed no address before the first successful probe)");
+  });
+});
+
+/** Fake-clock helper — `dormir` advances `ahora()` deterministically, no real timers. */
+function crearRelojFake(): { readonly ahora: () => number; readonly dormir: (ms: number) => Promise<void> } {
+  let tiempo = 0;
+  return {
+    ahora: () => tiempo,
+    dormir: async (ms: number) => {
+      tiempo += ms;
+    },
+  };
+}
+
+const BANNER_LOCAL = "\x1b[32m➜\x1b[39m  \x1b[1mLocal\x1b[22m:   \x1b[36mhttp://127.0.0.1:4174/\x1b[39m\n";
+
+/** design.md D3 (tasks 3.3-3.5) — the rewritten reachability wait over `SondaDePreview`. */
+describe("esperarPreview", () => {
+  it("returns exito with the reported address, attempt count and elapsed time once the probe succeeds (task 3.3, R2b)", async () => {
+    const reloj = crearRelojFake();
+    let llamadas = 0;
+    const sonda: SondaDePreview = {
+      sondear: async () => {
+        llamadas += 1;
+        if (llamadas < 3) {
+          throw new Error("ECONNREFUSED");
+        }
+        return 200;
+      },
+      dormir: reloj.dormir,
+      ahora: reloj.ahora,
+      estadoDelProceso: () => null,
+      salida: () => BANNER_LOCAL,
+    };
+
+    const resultado = await esperarPreview("http://127.0.0.1:4174", sonda);
+
+    expect(resultado).toEqual({
+      exito: true,
+      direccion: "➜  Local:   http://127.0.0.1:4174/",
+      intentos: 3,
+      transcurridoMs: 500,
+    });
+  });
+
+  it("polls briefly for the Local: banner when it has not been printed yet at the first successful probe (D3b)", async () => {
+    const reloj = crearRelojFake();
+    let bannerImpreso = false;
+    const sonda: SondaDePreview = {
+      sondear: async () => 200,
+      dormir: async (ms: number) => {
+        bannerImpreso = true;
+        await reloj.dormir(ms);
+      },
+      ahora: reloj.ahora,
+      estadoDelProceso: () => null,
+      salida: () => (bannerImpreso ? BANNER_LOCAL : ""),
+    };
+
+    const resultado = await esperarPreview("http://127.0.0.1:4174", sonda);
+
+    expect(resultado).toEqual({
+      exito: true,
+      direccion: "➜  Local:   http://127.0.0.1:4174/",
+      intentos: 1,
+      transcurridoMs: 250,
+    });
+  });
+
+  it("exhausts all 40 attempts and reports the fake-clock elapsed time when the probe always fails and the child stays alive (task 3.4, R3b)", async () => {
+    const reloj = crearRelojFake();
+    let llamadas = 0;
+    const sonda: SondaDePreview = {
+      sondear: async () => {
+        llamadas += 1;
+        throw new Error("ECONNREFUSED");
+      },
+      dormir: reloj.dormir,
+      ahora: reloj.ahora,
+      estadoDelProceso: () => null,
+      salida: () => "",
+    };
+
+    const resultado = await esperarPreview("http://127.0.0.1:4174", sonda);
+
+    expect(llamadas).toBe(40);
+    expect(resultado.exito).toBe(false);
+    if (!resultado.exito) {
+      expect(resultado.diagnostico.intentos).toBe(40);
+      expect(resultado.diagnostico.transcurridoMs).toBe(40 * 250);
+      expect(resultado.diagnostico.ultimoErrorDeSondeo).toBe("ECONNREFUSED");
+      expect(resultado.diagnostico.finDelProceso).toBe("still running");
+    }
+  });
+
+  it("ends the wait immediately once the child process reports a terminal state, without exhausting the remaining polling budget (task 3.5, R1)", async () => {
+    const reloj = crearRelojFake();
+    let llamadas = 0;
+    const sonda: SondaDePreview = {
+      sondear: async () => {
+        llamadas += 1;
+        throw new Error("ECONNREFUSED");
+      },
+      dormir: reloj.dormir,
+      ahora: reloj.ahora,
+      estadoDelProceso: () => (llamadas >= 1 ? "exit 1" : null),
+      salida: () => "",
+    };
+
+    const resultado = await esperarPreview("http://127.0.0.1:4174", sonda);
+
+    expect(resultado.exito).toBe(false);
+    if (!resultado.exito) {
+      expect(resultado.diagnostico.intentos).toBeLessThan(40);
+      expect(resultado.diagnostico.finDelProceso).toBe("exit 1");
+    }
   });
 });
 

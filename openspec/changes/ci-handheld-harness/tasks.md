@@ -50,13 +50,13 @@ Chain strategy: pending
 
 *Design's RED-test table lists `direccionInformada` as item 7, after the `esperarPreview` items (3-5). Sequenced first here because `esperarPreview`'s GREEN (3.6) calls `direccionInformada` to populate the success branch's `direccion` field — a hard dependency, not a reordering of the design's test content.*
 
-- [ ] 3.1 RED: `geometriaHandheld.spec.ts` — `direccionInformada` on captured text containing an ANSI-coded `Local:` line returns it stripped; on text with none, returns `"(vite printed no address before the first successful probe)"`. Must fail — function does not exist. (R2b, R2c)
-- [ ] 3.2 GREEN: implement `direccionInformada` per D3. Satisfies 3.1.
-- [ ] 3.3 RED: same file — a fake `SondaDePreview` whose `sondear` resolves `200` on the 3rd call, with fake `ahora`/`dormir`, returns `{ exito: true, direccion, intentos: 3, transcurridoMs }`. Must fail — `esperarPreview` still takes a bare `url` and returns `boolean`. (R2b)
-- [ ] 3.4 RED: same file — an always-rejecting `sondear` with `estadoDelProceso` reporting a live child throughout exhausts exactly 40 attempts and reports fake-clock `transcurridoMs`. Must fail — same reason. (R3b)
-- [ ] 3.5 RED: same file — `estadoDelProceso()` returning `"exit 1"` on attempt 2 ends the wait immediately; assert `intentos < 40`. Must fail — current `esperarPreview` has no process-state check. (R1)
-- [ ] 3.6 GREEN: rewrite `esperarPreview(url, sonda: SondaDePreview, intentos = 40, esperaMs = 250): Promise<ResultadoDePreview>` per D3 — poll terminal state at the top of each attempt; on a terminal state wait `"close"` bounded 250 ms; on the first successful probe, poll for a `Local:` line up to `2 × esperaMs`. Satisfies 3.3-3.5.
-- [ ] 3.7 Add `--host 127.0.0.1` to `spawnServidorPreview`'s argv per D4. No unit test — design's verifiability table marks D4 CI-run-only. (R2b)
+- [x] 3.1 RED: `geometriaHandheld.spec.ts` — `direccionInformada` on captured text containing an ANSI-coded `Local:` line returns it stripped; on text with none, returns `"(vite printed no address before the first successful probe)"`. Must fail — function does not exist. (R2b, R2c)
+- [x] 3.2 GREEN: implement `direccionInformada` per D3. Satisfies 3.1.
+- [x] 3.3 RED: same file — a fake `SondaDePreview` whose `sondear` resolves `200` on the 3rd call, with fake `ahora`/`dormir`, returns `{ exito: true, direccion, intentos: 3, transcurridoMs }`. Must fail — `esperarPreview` still takes a bare `url` and returns `boolean`. (R2b)
+- [x] 3.4 RED: same file — an always-rejecting `sondear` with `estadoDelProceso` reporting a live child throughout exhausts exactly 40 attempts and reports fake-clock `transcurridoMs`. Must fail — same reason. (R3b)
+- [x] 3.5 RED: same file — `estadoDelProceso()` returning `"exit 1"` on attempt 2 ends the wait immediately; assert `intentos < 40`. Must fail — current `esperarPreview` has no process-state check. (R1)
+- [x] 3.6 GREEN: rewrite `esperarPreview(url, sonda: SondaDePreview, intentos = 40, esperaMs = 250): Promise<ResultadoDePreview>` per D3 — poll terminal state at the top of each attempt; on a terminal state wait `"close"` bounded 250 ms; on the first successful probe, poll for a `Local:` line up to `2 × esperaMs`. Satisfies 3.3-3.5.
+- [x] 3.7 Add `--host 127.0.0.1` to `spawnServidorPreview`'s argv per D4. No unit test — design's verifiability table marks D4 CI-run-only. (R2b)
 
 ## Phase 4: wire real capture + probe into `ejecutar`
 
