@@ -62,9 +62,9 @@ Chain strategy: pending
 
 *Integration only — no new unit-level RED; proven by 4.3's typecheck and Phase 5's real-process runs.*
 
-- [ ] 4.1 `spawnServidorPreview`: change `stdio` to `["ignore", "pipe", "pipe"]`, attach synchronous `"data"` listeners on `stdout`/`stderr` at spawn into one `crearBufferAcotado()` instance.
-- [ ] 4.2 Implement the real `SondaDePreview` (fetch-based `sondear`, real `dormir`/`ahora`, `estadoDelProceso` from `"exit"`/`"error"` listeners, `salida` reading the buffer); wire it into `ejecutar`'s `esperarPreview` call; branch on `ResultadoDePreview`, report `intentos`/`transcurridoMs`/`direccion` on success. (R2b, R2c, R3b)
-- [ ] 4.3 Type-level proof: run `pnpm --filter @contratos/web typecheck`. `vitest run` does not typecheck — `apps/web/vitest.config.ts` declares no `typecheck` block, specs are transpiled by esbuild — so this command, not `vitest`, is the only proof for 4.1-4.2's wiring.
+- [x] 4.1 `spawnServidorPreview`: change `stdio` to `["ignore", "pipe", "pipe"]`, attach synchronous `"data"` listeners on `stdout`/`stderr` at spawn into one `crearBufferAcotado()` instance.
+- [x] 4.2 Implement the real `SondaDePreview` (fetch-based `sondear`, real `dormir`/`ahora`, `estadoDelProceso` from `"exit"`/`"error"` listeners, `salida` reading the buffer); wire it into `ejecutar`'s `esperarPreview` call; branch on `ResultadoDePreview`, report `intentos`/`transcurridoMs`/`direccion` on success. (R2b, R2c, R3b)
+- [x] 4.3 Type-level proof: run `pnpm --filter @contratos/web typecheck`. `vitest run` does not typecheck — `apps/web/vitest.config.ts` declares no `typecheck` block, specs are transpiled by esbuild — so this command, not `vitest`, is the only proof for 4.1-4.2's wiring.
 
 ## Phase 5: D6 — process teardown safety (highest-risk item — sequenced ahead of CI/close-out)
 

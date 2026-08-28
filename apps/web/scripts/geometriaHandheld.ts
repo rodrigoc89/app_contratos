@@ -514,19 +514,54 @@ export function direccionInformada(salidaCapturada: string): string {
   return SIN_DIRECCION_INFORMADA;
 }
 
-function spawnServidorPreview(): ChildProcess {
-  // design.md D4 — `--host 127.0.0.1` pins the bind to match the IPv4
-  // literal the probe already uses; ships as correctness regardless of
-  // whether a loopback mismatch was ever the cause of a slow reachability
-  // wait. No unit test — verifiable only by a real CI run (task 3.7).
-  return spawn(
+interface ServidorPreview {
+  readonly proceso: ChildProcess;
+  readonly buffer: BufferAcotado;
+}
+
+/**
+ * design.md D2/D4 — stdio piped so stdout/stderr can be captured instead of
+ * discarded; `"data"` listeners attached synchronously at spawn, before any
+ * output can arrive, into one `crearBufferAcotado()` covering both streams.
+ * `--host 127.0.0.1` (task 3.7/D4) pins the bind to match the IPv4 literal
+ * the probe already uses.
+ */
+function spawnServidorPreview(): ServidorPreview {
+  const proceso = spawn(
     "pnpm",
     ["exec", "vite", "preview", "--host", "127.0.0.1", "--port", String(PUERTO_PREVIEW), "--strictPort"],
     {
       cwd: join(import.meta.dirname, ".."),
-      stdio: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
     },
   );
+  const buffer = crearBufferAcotado();
+  proceso.stdout?.on("data", (fragmento: Buffer) => buffer.agregar(fragmento.toString("utf-8")));
+  proceso.stderr?.on("data", (fragmento: Buffer) => buffer.agregar(fragmento.toString("utf-8")));
+  return { proceso, buffer };
+}
+
+/**
+ * design.md D3/D4 — the real `SondaDePreview`: `sondear` is a thin `fetch`
+ * wrapper, `estadoDelProceso` is backed by the child's own `"exit"`/`"error"`
+ * listeners (R1's crash signal), `salida` reads the always-draining buffer.
+ */
+function crearSondaReal(proceso: ChildProcess, buffer: BufferAcotado): SondaDePreview {
+  let estadoProceso: string | null = null;
+  proceso.once("exit", (codigo, señal) => {
+    estadoProceso ??= señal !== null ? `signal ${señal}` : `exit ${codigo ?? 0}`;
+  });
+  proceso.once("error", (error) => {
+    estadoProceso ??= `spawn error: ${error.message}`;
+  });
+
+  return {
+    sondear: async (url: string) => (await fetch(url)).status,
+    dormir: (ms: number) => new Promise((resolver) => setTimeout(resolver, ms)),
+    ahora: () => Date.now(),
+    estadoDelProceso: () => estadoProceso,
+    salida: () => buffer.texto(),
+  };
 }
 
 /**
@@ -717,13 +752,24 @@ async function medirTodo(fixtures: FixturesCargados): Promise<{ mediciones: Medi
 }
 
 async function ejecutar(): Promise<void> {
-  const proceso = spawnServidorPreview();
+  const { proceso, buffer } = spawnServidorPreview();
   try {
-    const previewAlcanzable = await esperarPreview(URL_PREVIEW);
-    const erroresPrecondicion = erroresDePrecondicion({ distDisponible: distDisponible(), previewAlcanzable });
+    const sonda = crearSondaReal(proceso, buffer);
+    const alcanceDelPreview = await esperarPreview(URL_PREVIEW, sonda);
+    const erroresPrecondicion = erroresDePrecondicion({ distDisponible: distDisponible(), alcanceDelPreview });
     if (erroresPrecondicion.length > 0) {
       reportarFalla(erroresPrecondicion);
       return;
+    }
+
+    // R2b/R2c — reported unconditionally: `direccion` already carries
+    // either the real announced address or `direccionInformada`'s honest
+    // "no address available" fallback, so both scenarios are covered here.
+    if (alcanceDelPreview.exito) {
+      console.log(
+        `preview reachable: ${alcanceDelPreview.direccion} ` +
+          `(attempts: ${alcanceDelPreview.intentos}, elapsed: ${alcanceDelPreview.transcurridoMs}ms)`,
+      );
     }
 
     const fixtures = await cargarTodosLosFixtures();
