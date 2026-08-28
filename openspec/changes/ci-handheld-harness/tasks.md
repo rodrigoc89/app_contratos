@@ -77,5 +77,5 @@ Chain strategy: pending
 
 ## Phase 7: close-out
 
-- [ ] 7.1 Run `pnpm --filter @contratos/web test` against the full diff; record pass/fail.
-- [ ] 7.2 Run `pnpm --filter @contratos/web typecheck` against the full diff; record pass/fail — separate proof from 7.1 per the note in 4.3.
+- [x] 7.1 Run `pnpm --filter @contratos/web test` against the full diff; record pass/fail. **Result**: PASS — 86 test files, 758 tests, all passing.
+- [x] 7.2 Run `pnpm --filter @contratos/web typecheck` against the full diff; record pass/fail — separate proof from 7.1 per the note in 4.3. **Result**: PASS — `tsc --noEmit` clean, no errors.

@@ -493,6 +493,7 @@ async function medirCoberturaDeControles(pagina: Page): Promise<readonly Cobertu
   });
 }
 
+// eslint-disable-next-line no-control-regex -- deliberately matches the ESC byte to strip vite's ANSI color codes.
 const CODIGO_ANSI = /\x1b\[[0-9;]*m/g;
 
 /** design.md D3 — the honest fallback `direccionInformada` returns; never invents an address. */
