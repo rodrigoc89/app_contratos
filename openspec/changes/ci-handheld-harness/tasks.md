@@ -73,7 +73,7 @@ Chain strategy: pending
 
 ## Phase 6: D7 — CI job rename
 
-- [ ] 6.1 `.github/workflows/ci.yml:254` — change the `bundle` job's `name:` line to `dist/ size ceiling, compiled-output guards and handheld geometry` (job id `bundle` unchanged).
+- [x] 6.1 `.github/workflows/ci.yml:254` — change the `bundle` job's `name:` line to `dist/ size ceiling, compiled-output guards and handheld geometry` (job id `bundle` unchanged).
 
 ## Phase 7: close-out
 
