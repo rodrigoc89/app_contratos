@@ -251,7 +251,7 @@ jobs:
         run: pnpm --filter @contratos/api test:integration
 
   bundle:
-    name: dist/ size ceiling and compiled-output guards
+    name: dist/ size ceiling, compiled-output guards and handheld geometry
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # No `needs:` — this job is independent of `verify`/`lint`/`integration`

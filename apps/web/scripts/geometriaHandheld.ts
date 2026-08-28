@@ -67,9 +67,24 @@ export const ALTURA_MAXIMA_CABECERA_PX = 72;
 
 // ── Fail-closed assertions (pure — unit-tested on fixtures) ─────────────
 
+/** design.md D1 — the evidence a failed reachability wait carries, so the verdict is diagnosable, not just nameable. */
+export interface DiagnosticoDePreview {
+  readonly intentos: number;
+  readonly transcurridoMs: number;
+  /** `"exit 1"` | `"signal SIGTERM"` | `"spawn error: …"` | `"still running"`. */
+  readonly finDelProceso: string;
+  readonly ultimoErrorDeSondeo: string;
+  readonly salidaCapturada: string;
+}
+
+/** design.md D1 — converges on the same `exito`-discriminated shape `ResultadoAlcance` already uses. */
+export type ResultadoDePreview =
+  | { readonly exito: true; readonly direccion: string; readonly intentos: number; readonly transcurridoMs: number }
+  | { readonly exito: false; readonly diagnostico: DiagnosticoDePreview };
+
 export interface PreflightHandheld {
   readonly distDisponible: boolean;
-  readonly previewAlcanzable: boolean;
+  readonly alcanceDelPreview: ResultadoDePreview;
 }
 
 /** `handheld-readiness`'s "an absent build or dead preview server fails the harness" scenario. */
@@ -78,10 +93,67 @@ export function erroresDePrecondicion(preflight: PreflightHandheld): string[] {
   if (!preflight.distDisponible) {
     errores.push("dist/ is missing or empty — run `pnpm --filter @contratos/web build` before the handheld harness");
   }
-  if (!preflight.previewAlcanzable) {
-    errores.push("the vite preview server never became reachable");
+  if (!preflight.alcanceDelPreview.exito) {
+    const { intentos, transcurridoMs, finDelProceso, ultimoErrorDeSondeo, salidaCapturada } =
+      preflight.alcanceDelPreview.diagnostico;
+    errores.push(
+      `the vite preview server never became reachable — attempts: ${intentos}, elapsed: ${transcurridoMs}ms, ` +
+        `process: ${finDelProceso}, last probe error: ${ultimoErrorDeSondeo}, captured output: ${salidaCapturada}`,
+    );
   }
   return errores;
+}
+
+/**
+ * design.md D2 — the listener always consumes; the buffer is bounded, not
+ * the drain. Both streams write into one instance so the cap covers their
+ * combined total, not each independently.
+ */
+export const LIMITE_CAPTURA_BYTES = 16_384;
+
+export interface BufferAcotado {
+  readonly agregar: (fragmento: string) => void;
+  readonly texto: () => string;
+}
+
+/** Truncates to at most `maxBytes` UTF-8 bytes without assuming ASCII input. */
+function truncarABytes(texto: string, maxBytes: number): string {
+  if (maxBytes <= 0) {
+    return "";
+  }
+  const bytes = Buffer.from(texto, "utf-8");
+  if (bytes.byteLength <= maxBytes) {
+    return texto;
+  }
+  return bytes.subarray(0, maxBytes).toString("utf-8");
+}
+
+/**
+ * design.md D2 — keep-first-bytes eviction: the banner and startup error are
+ * at the beginning, and a request-log flood must not evict them. Overflow
+ * always announces itself with the exact dropped-byte count, never silently.
+ */
+export function crearBufferAcotado(limiteBytes: number = LIMITE_CAPTURA_BYTES): BufferAcotado {
+  let guardado = "";
+  let bytesGuardados = 0;
+  let bytesTotales = 0;
+
+  return {
+    agregar(fragmento: string): void {
+      bytesTotales += Buffer.byteLength(fragmento, "utf-8");
+      if (bytesGuardados >= limiteBytes) {
+        return;
+      }
+      const espacioDisponible = limiteBytes - bytesGuardados;
+      const aGuardar = truncarABytes(fragmento, espacioDisponible);
+      guardado += aGuardar;
+      bytesGuardados += Buffer.byteLength(aGuardar, "utf-8");
+    },
+    texto(): string {
+      const bytesDescartados = bytesTotales - bytesGuardados;
+      return bytesDescartados > 0 ? `${guardado}… (${bytesDescartados} more bytes dropped)` : guardado;
+    },
+  };
 }
 
 export interface MedicionDeEstado {
@@ -421,26 +493,155 @@ async function medirCoberturaDeControles(pagina: Page): Promise<readonly Cobertu
   });
 }
 
-function spawnServidorPreview(): ChildProcess {
-  return spawn("pnpm", ["exec", "vite", "preview", "--port", String(PUERTO_PREVIEW), "--strictPort"], {
-    cwd: join(import.meta.dirname, ".."),
-    stdio: "ignore",
-  });
+// eslint-disable-next-line no-control-regex -- deliberately matches the ESC byte to strip vite's ANSI color codes.
+const CODIGO_ANSI = /\x1b\[[0-9;]*m/g;
+
+/** design.md D3 — the honest fallback `direccionInformada` returns; never invents an address. */
+export const SIN_DIRECCION_INFORMADA = "(vite printed no address before the first successful probe)";
+
+/**
+ * design.md D3 — pure, first `Local:` line with ANSI codes stripped; the
+ * honest fallback when vite has not printed one yet. Never invents an
+ * address — what it proves is narrower than it looks (see design D4): it
+ * confirms the `--host` flag reached vite, not the socket vite bound.
+ */
+export function direccionInformada(salidaCapturada: string): string {
+  for (const linea of salidaCapturada.split("\n")) {
+    const sinAnsi = linea.replace(CODIGO_ANSI, "").trim();
+    if (sinAnsi.includes("Local:")) {
+      return sinAnsi;
+    }
+  }
+  return SIN_DIRECCION_INFORMADA;
 }
 
-async function esperarPreview(url: string, intentos = 40, esperaMs = 250): Promise<boolean> {
-  for (let intento = 0; intento < intentos; intento += 1) {
-    try {
-      const respuesta = await fetch(url);
-      if (respuesta.status < 500) {
-        return true;
-      }
-    } catch {
-      // Not up yet — retried below.
+interface ServidorPreview {
+  readonly proceso: ChildProcess;
+  readonly buffer: BufferAcotado;
+}
+
+/**
+ * design.md D2/D4 — stdio piped so stdout/stderr can be captured instead of
+ * discarded; `"data"` listeners attached synchronously at spawn, before any
+ * output can arrive, into one `crearBufferAcotado()` covering both streams.
+ * `--host 127.0.0.1` (task 3.7/D4) pins the bind to match the IPv4 literal
+ * the probe already uses.
+ */
+function spawnServidorPreview(): ServidorPreview {
+  const proceso = spawn(
+    "pnpm",
+    ["exec", "vite", "preview", "--host", "127.0.0.1", "--port", String(PUERTO_PREVIEW), "--strictPort"],
+    {
+      cwd: join(import.meta.dirname, ".."),
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const buffer = crearBufferAcotado();
+  proceso.stdout?.on("data", (fragmento: Buffer) => buffer.agregar(fragmento.toString("utf-8")));
+  proceso.stderr?.on("data", (fragmento: Buffer) => buffer.agregar(fragmento.toString("utf-8")));
+  return { proceso, buffer };
+}
+
+/**
+ * design.md D3/D4 — the real `SondaDePreview`: `sondear` is a thin `fetch`
+ * wrapper, `estadoDelProceso` is backed by the child's own `"exit"`/`"error"`
+ * listeners (R1's crash signal), `salida` reads the always-draining buffer.
+ */
+function crearSondaReal(proceso: ChildProcess, buffer: BufferAcotado): SondaDePreview {
+  let estadoProceso: string | null = null;
+  proceso.once("exit", (codigo, señal) => {
+    estadoProceso ??= señal !== null ? `signal ${señal}` : `exit ${codigo ?? 0}`;
+  });
+  proceso.once("error", (error) => {
+    estadoProceso ??= `spawn error: ${error.message}`;
+  });
+
+  return {
+    sondear: async (url: string) => (await fetch(url)).status,
+    dormir: (ms: number) => new Promise((resolver) => setTimeout(resolver, ms)),
+    ahora: () => Date.now(),
+    estadoDelProceso: () => estadoProceso,
+    salida: () => buffer.texto(),
+  };
+}
+
+/**
+ * design.md D3 — the seam that lets `esperarPreview` be tested without a
+ * real subprocess or network. `sondear` mirrors `fetch`'s contract (rejects
+ * on connection failure, resolves with a status code); `estadoDelProceso`
+ * mirrors the real child's `"exit"`/`"error"` listeners.
+ */
+export interface SondaDePreview {
+  readonly sondear: (url: string) => Promise<number>;
+  readonly dormir: (ms: number) => Promise<void>;
+  readonly ahora: () => number;
+  readonly estadoDelProceso: () => string | null;
+  readonly salida: () => string;
+}
+
+/** design.md D3(a) — the bounded grace that lets trailing stdout/stderr flush before the diagnostic is built. */
+const GRACIA_CIERRE_MS = 250;
+
+function construirDiagnostico(
+  sonda: SondaDePreview,
+  intentos: number,
+  inicio: number,
+  ultimoErrorDeSondeo: string,
+): DiagnosticoDePreview {
+  return {
+    intentos,
+    transcurridoMs: sonda.ahora() - inicio,
+    finDelProceso: sonda.estadoDelProceso() ?? "still running",
+    ultimoErrorDeSondeo,
+    salidaCapturada: sonda.salida(),
+  };
+}
+
+/**
+ * design.md D3 — polls the child's terminal state at the top of each
+ * attempt instead of racing it against the probe (R1: a crash ends the
+ * wait immediately, without consuming the remaining polling budget).
+ */
+export async function esperarPreview(
+  url: string,
+  sonda: SondaDePreview,
+  intentos = 40,
+  esperaMs = 250,
+): Promise<ResultadoDePreview> {
+  const inicio = sonda.ahora();
+  let ultimoErrorDeSondeo = "(no probe attempted yet)";
+
+  for (let intento = 1; intento <= intentos; intento += 1) {
+    if (sonda.estadoDelProceso() !== null) {
+      await sonda.dormir(GRACIA_CIERRE_MS);
+      return { exito: false, diagnostico: construirDiagnostico(sonda, intento, inicio, ultimoErrorDeSondeo) };
     }
-    await new Promise((resolver) => setTimeout(resolver, esperaMs));
+
+    try {
+      const estado = await sonda.sondear(url);
+      if (estado < 500) {
+        // design.md D3(b) — printUrls() runs after listen, so the banner
+        // print and the first successful probe race; poll briefly for it.
+        const limiteBanner = sonda.ahora() + esperaMs * 2;
+        while (direccionInformada(sonda.salida()) === SIN_DIRECCION_INFORMADA && sonda.ahora() < limiteBanner) {
+          await sonda.dormir(esperaMs);
+        }
+        return {
+          exito: true,
+          direccion: direccionInformada(sonda.salida()),
+          intentos: intento,
+          transcurridoMs: sonda.ahora() - inicio,
+        };
+      }
+      ultimoErrorDeSondeo = `HTTP ${estado}`;
+    } catch (error) {
+      ultimoErrorDeSondeo = error instanceof Error ? error.message : String(error);
+    }
+
+    await sonda.dormir(esperaMs);
   }
-  return false;
+
+  return { exito: false, diagnostico: construirDiagnostico(sonda, intentos, inicio, ultimoErrorDeSondeo) };
 }
 
 function distDisponible(): boolean {
@@ -552,13 +753,24 @@ async function medirTodo(fixtures: FixturesCargados): Promise<{ mediciones: Medi
 }
 
 async function ejecutar(): Promise<void> {
-  const proceso = spawnServidorPreview();
+  const { proceso, buffer } = spawnServidorPreview();
   try {
-    const previewAlcanzable = await esperarPreview(URL_PREVIEW);
-    const erroresPrecondicion = erroresDePrecondicion({ distDisponible: distDisponible(), previewAlcanzable });
+    const sonda = crearSondaReal(proceso, buffer);
+    const alcanceDelPreview = await esperarPreview(URL_PREVIEW, sonda);
+    const erroresPrecondicion = erroresDePrecondicion({ distDisponible: distDisponible(), alcanceDelPreview });
     if (erroresPrecondicion.length > 0) {
       reportarFalla(erroresPrecondicion);
       return;
+    }
+
+    // R2b/R2c — reported unconditionally: `direccion` already carries
+    // either the real announced address or `direccionInformada`'s honest
+    // "no address available" fallback, so both scenarios are covered here.
+    if (alcanceDelPreview.exito) {
+      console.log(
+        `preview reachable: ${alcanceDelPreview.direccion} ` +
+          `(attempts: ${alcanceDelPreview.intentos}, elapsed: ${alcanceDelPreview.transcurridoMs}ms)`,
+      );
     }
 
     const fixtures = await cargarTodosLosFixtures();
@@ -574,7 +786,15 @@ async function ejecutar(): Promise<void> {
     console.log(`states reached: ${mediciones.length}/${ESTADOS_ESPERADOS}`);
     console.log("verdict: PASS");
   } finally {
+    // design.md D6 — load-bearing for the fail-closed requirement, not
+    // hygiene: reportarFalla only sets process.exitCode, delivered only
+    // once the event loop drains. A surviving descendant holding the piped
+    // stdout/stderr's write end keeps the loop alive and the exit code
+    // undelivered, so a 10-second honest failure becomes a CI timeout kill
+    // instead of a named failure.
     proceso.kill();
+    proceso.stdout?.destroy();
+    proceso.stderr?.destroy();
   }
 }
 
