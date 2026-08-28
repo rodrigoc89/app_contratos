@@ -1,6 +1,6 @@
 # Apply progress — ci-handheld-harness
 
-**Status**: ALL 25 tasks complete (Phases 1-7). Ready for `sdd-verify`.
+**Status**: ALL 21 tasks complete (Phases 1-7). Verified with 1 WARNING (closed in a follow-up batch — see below), ready for `sdd-archive`.
 **Branch**: `fix/harness-handheld-diagnosticable` (based on `master@fc3c55c`)
 **Mode**: Strict TDD
 
@@ -71,11 +71,44 @@ All work is already committed as 7 clean, independently-revertible work-unit com
 
 ## Remaining Tasks
 
-None — all 25 tasks complete.
+None — all 21 tasks complete. (An earlier revision of this file said "25 tasks"; `tasks.md` has always had 21 checkboxes, all checked — corrected below in the follow-up batch section.)
 
 ## Workload / PR Boundary
 
 - Mode: single PR (per `tasks.md`'s resolved `ask-on-risk` → No decision needed at forecast time)
 - Actual measured: 484 authored changed lines — **over the 400-line budget** (see Issues Found)
-- Boundary: this batch starts from `master@fc3c55c` and ends at the full 25-task implementation, 7 work-unit commits + 1 docs commit, all on `fix/harness-handheld-diagnosticable`
-- Estimated review budget impact: exceeds budget by ~21%; needs orchestrator/user decision (accept as `size:exception`, or split for review)
+- Boundary: this batch starts from `master@fc3c55c` and ends at the full 21-task implementation, 7 work-unit commits + 1 docs commit, all on `fix/harness-handheld-diagnosticable`
+- Estimated review budget impact: exceeds budget by ~21%; needs orchestrator/user decision (accept as `size:exception`, or split for review) — resolved: `size:exception` explicitly granted by the maintainer per session config (recorded in `verify-report.md`)
+
+## Follow-up batch — closing the sdd-verify WARNING (2026-08-28)
+
+`sdd-verify` (Engram `sdd/ci-handheld-harness/verify-report`, id 795) returned **PASS WITH WARNINGS**: 0 CRITICAL, 1 WARNING, 1 SUGGESTION, all 21 tasks confirmed complete, 758/758 tests + typecheck independently reproduced green.
+
+### WARNING closed
+`esperarPreview`'s success branch had no test where the `Local:` banner is permanently absent through the full grace period (R2c at the integration level, spec scenario "a successful wait with no captured banner reports that honestly, not silently"). The underlying `direccionInformada` fallback was already unit-tested in isolation, but the composing `esperarPreview` success path was not.
+
+- Added one test to `apps/web/scripts/geometriaHandheld.spec.ts`, `describe("esperarPreview")`: a fake `SondaDePreview` whose `sondear` succeeds on the first attempt and whose `salida()` always returns `""` (banner never printed) — driven through the full `2 × esperaMs` grace window — asserts the success result is `{ exito: true, direccion: SIN_DIRECCION_INFORMADA, intentos: 1, transcurridoMs: 500 }`.
+- Confirmed non-vacuous: temporarily mutated the production success branch to return a hardcoded fake address, re-ran the focused test suite, observed the new test fail for the right reason (`expected FAKE_ADDRESS_MUTATION to equal SIN_DIRECCION_INFORMADA`), then reverted the mutation (`git diff --stat` on `geometriaHandheld.ts` confirmed zero change) and re-ran GREEN.
+- No production code changed — the implementation already satisfied R2c; this closes a test-coverage gap only.
+
+### TDD Cycle Evidence (follow-up batch)
+| Task | Test File | Layer | RED | GREEN | Notes |
+|------|-----------|-------|-----|-------|-------|
+| WARNING-1 close | `geometriaHandheld.spec.ts` | Unit (fake `SondaDePreview`) | ✅ Confirmed via temporary production mutation → test failed for the right reason | ✅ Reverted mutation, test passes; production code was already correct, so the test passed on first real run against unmutated code | Coverage-closing test, not new-feature RED/GREEN — implementation already satisfied the spec scenario |
+
+### Work Unit Evidence (follow-up batch)
+| Unit | Focused test command + result | Runtime harness + result | Rollback boundary |
+|------|-------------------------------|---------------------------|--------------------|
+| WARNING-1 test | `pnpm --filter @contratos/web test -- geometriaHandheld` → 29/29 (was 28/28); full suite 759/759 (was 758/758) | N/A — pure fake-`SondaDePreview` unit test, no subprocess | `git revert` the single commit adding this test; independent of all prior work-unit commits |
+| Doc fix | N/A — Markdown only | N/A | `git revert` the single commit fixing the task-count miscount |
+
+### Verification (follow-up batch)
+- `pnpm --filter @contratos/web test` → **PASS** — 86 test files, 759 tests
+- `pnpm --filter @contratos/web typecheck` → **PASS** — `tsc --noEmit` clean
+- `pnpm lint` (repo root) → PASS (see final report to orchestrator for exact output)
+
+### SUGGESTION closed
+This file's status line and "Remaining Tasks" section previously said "ALL 25 tasks complete". `tasks.md` has always had 21 checkboxes, all checked. Corrected above — no functional impact, self-report accuracy only.
+
+### Remaining Tasks (cumulative)
+None. All 21 `tasks.md` items complete; the verify WARNING and SUGGESTION from `sdd/ci-handheld-harness/verify-report` (id 795) are both closed. Ready for `sdd-verify` (re-confirm) or `sdd-archive`.
