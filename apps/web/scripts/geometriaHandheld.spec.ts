@@ -12,7 +12,9 @@ import {
   esControlBajoElPiso,
   excedeAlturaDeCabecera,
   hayDesbordeHorizontal,
+  type DiagnosticoDePreview,
   type MedicionDeEstado,
+  type ResultadoDePreview,
 } from "./geometriaHandheld";
 
 /**
@@ -90,26 +92,83 @@ describe("erroresDeCobertura", () => {
 });
 
 describe("erroresDePrecondicion", () => {
+  /** design.md D1 (task 1.4) — deliberate fallout: `previewAlcanzable: boolean` no longer exists on `PreflightHandheld`. */
+  const alcanceExitoso: ResultadoDePreview = {
+    exito: true,
+    direccion: "http://127.0.0.1:4174/",
+    intentos: 3,
+    transcurridoMs: 750,
+  };
+  const alcanceFallido: ResultadoDePreview = {
+    exito: false,
+    diagnostico: {
+      intentos: 40,
+      transcurridoMs: 10_000,
+      finDelProceso: "still running",
+      ultimoErrorDeSondeo: "ECONNREFUSED",
+      salidaCapturada: "",
+    },
+  };
+
   it("fails closed when dist/ is missing or empty, naming the precondition", () => {
-    const errores = erroresDePrecondicion({ distDisponible: false, previewAlcanzable: true });
+    const errores = erroresDePrecondicion({ distDisponible: false, alcanceDelPreview: alcanceExitoso });
 
     expect(errores).toHaveLength(1);
     expect(errores[0]).toContain("dist/");
   });
 
   it("fails closed when the preview server never becomes reachable, naming the precondition", () => {
-    const errores = erroresDePrecondicion({ distDisponible: true, previewAlcanzable: false });
+    const errores = erroresDePrecondicion({ distDisponible: true, alcanceDelPreview: alcanceFallido });
 
     expect(errores).toHaveLength(1);
     expect(errores[0]).toContain("preview server");
   });
 
   it("reports both preconditions at once when both are broken", () => {
-    expect(erroresDePrecondicion({ distDisponible: false, previewAlcanzable: false })).toHaveLength(2);
+    expect(erroresDePrecondicion({ distDisponible: false, alcanceDelPreview: alcanceFallido })).toHaveLength(2);
   });
 
   it("passes preconditions once dist/ exists and the preview server answers", () => {
-    expect(erroresDePrecondicion({ distDisponible: true, previewAlcanzable: true })).toEqual([]);
+    expect(erroresDePrecondicion({ distDisponible: true, alcanceDelPreview: alcanceExitoso })).toEqual([]);
+  });
+});
+
+/** design.md D1 (task 1.1/1.2) — the rewritten `erroresDePrecondicion` over `ResultadoDePreview`. */
+describe("erroresDePrecondicion (D1 diagnostic evidence)", () => {
+  const diagnosticoFallido: DiagnosticoDePreview = {
+    intentos: 40,
+    transcurridoMs: 10_234,
+    finDelProceso: "still running",
+    ultimoErrorDeSondeo: "ECONNREFUSED 127.0.0.1:4174",
+    salidaCapturada: "vite v5.4.0 building for production...",
+  };
+
+  it("renders attempts, elapsed time, process end state, last probe error and captured output on a failed wait (task 1.1, R2a, R3b)", () => {
+    const errores = erroresDePrecondicion({
+      distDisponible: true,
+      alcanceDelPreview: { exito: false, diagnostico: diagnosticoFallido },
+    });
+
+    expect(errores).toHaveLength(1);
+    expect(errores[0]).toContain("40");
+    expect(errores[0]).toContain("10234");
+    expect(errores[0]).toContain("still running");
+    expect(errores[0]).toContain("ECONNREFUSED 127.0.0.1:4174");
+    expect(errores[0]).toContain("vite v5.4.0 building for production...");
+  });
+
+  it("yields no errors on a successful wait, and exactly two when dist/ is also missing (task 1.2, R3a, R3b)", () => {
+    const exito = erroresDePrecondicion({
+      distDisponible: true,
+      alcanceDelPreview: { exito: true, direccion: "http://127.0.0.1:4174/", intentos: 3, transcurridoMs: 750 },
+    });
+    expect(exito).toEqual([]);
+
+    const fallo = erroresDePrecondicion({
+      distDisponible: false,
+      alcanceDelPreview: { exito: false, diagnostico: diagnosticoFallido },
+    });
+    expect(fallo).toHaveLength(2);
   });
 });
 

@@ -67,9 +67,24 @@ export const ALTURA_MAXIMA_CABECERA_PX = 72;
 
 // ── Fail-closed assertions (pure — unit-tested on fixtures) ─────────────
 
+/** design.md D1 — the evidence a failed reachability wait carries, so the verdict is diagnosable, not just nameable. */
+export interface DiagnosticoDePreview {
+  readonly intentos: number;
+  readonly transcurridoMs: number;
+  /** `"exit 1"` | `"signal SIGTERM"` | `"spawn error: …"` | `"still running"`. */
+  readonly finDelProceso: string;
+  readonly ultimoErrorDeSondeo: string;
+  readonly salidaCapturada: string;
+}
+
+/** design.md D1 — converges on the same `exito`-discriminated shape `ResultadoAlcance` already uses. */
+export type ResultadoDePreview =
+  | { readonly exito: true; readonly direccion: string; readonly intentos: number; readonly transcurridoMs: number }
+  | { readonly exito: false; readonly diagnostico: DiagnosticoDePreview };
+
 export interface PreflightHandheld {
   readonly distDisponible: boolean;
-  readonly previewAlcanzable: boolean;
+  readonly alcanceDelPreview: ResultadoDePreview;
 }
 
 /** `handheld-readiness`'s "an absent build or dead preview server fails the harness" scenario. */
@@ -78,8 +93,13 @@ export function erroresDePrecondicion(preflight: PreflightHandheld): string[] {
   if (!preflight.distDisponible) {
     errores.push("dist/ is missing or empty — run `pnpm --filter @contratos/web build` before the handheld harness");
   }
-  if (!preflight.previewAlcanzable) {
-    errores.push("the vite preview server never became reachable");
+  if (!preflight.alcanceDelPreview.exito) {
+    const { intentos, transcurridoMs, finDelProceso, ultimoErrorDeSondeo, salidaCapturada } =
+      preflight.alcanceDelPreview.diagnostico;
+    errores.push(
+      `the vite preview server never became reachable — attempts: ${intentos}, elapsed: ${transcurridoMs}ms, ` +
+        `process: ${finDelProceso}, last probe error: ${ultimoErrorDeSondeo}, captured output: ${salidaCapturada}`,
+    );
   }
   return errores;
 }
