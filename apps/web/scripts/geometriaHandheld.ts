@@ -104,6 +104,58 @@ export function erroresDePrecondicion(preflight: PreflightHandheld): string[] {
   return errores;
 }
 
+/**
+ * design.md D2 — the listener always consumes; the buffer is bounded, not
+ * the drain. Both streams write into one instance so the cap covers their
+ * combined total, not each independently.
+ */
+export const LIMITE_CAPTURA_BYTES = 16_384;
+
+export interface BufferAcotado {
+  readonly agregar: (fragmento: string) => void;
+  readonly texto: () => string;
+}
+
+/** Truncates to at most `maxBytes` UTF-8 bytes without assuming ASCII input. */
+function truncarABytes(texto: string, maxBytes: number): string {
+  if (maxBytes <= 0) {
+    return "";
+  }
+  const bytes = Buffer.from(texto, "utf-8");
+  if (bytes.byteLength <= maxBytes) {
+    return texto;
+  }
+  return bytes.subarray(0, maxBytes).toString("utf-8");
+}
+
+/**
+ * design.md D2 — keep-first-bytes eviction: the banner and startup error are
+ * at the beginning, and a request-log flood must not evict them. Overflow
+ * always announces itself with the exact dropped-byte count, never silently.
+ */
+export function crearBufferAcotado(limiteBytes: number = LIMITE_CAPTURA_BYTES): BufferAcotado {
+  let guardado = "";
+  let bytesGuardados = 0;
+  let bytesTotales = 0;
+
+  return {
+    agregar(fragmento: string): void {
+      bytesTotales += Buffer.byteLength(fragmento, "utf-8");
+      if (bytesGuardados >= limiteBytes) {
+        return;
+      }
+      const espacioDisponible = limiteBytes - bytesGuardados;
+      const aGuardar = truncarABytes(fragmento, espacioDisponible);
+      guardado += aGuardar;
+      bytesGuardados += Buffer.byteLength(aGuardar, "utf-8");
+    },
+    texto(): string {
+      const bytesDescartados = bytesTotales - bytesGuardados;
+      return bytesDescartados > 0 ? `${guardado}… (${bytesDescartados} more bytes dropped)` : guardado;
+    },
+  };
+}
+
 export interface MedicionDeEstado {
   readonly id: string;
   readonly controlesMedidos: number;

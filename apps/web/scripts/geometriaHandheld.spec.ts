@@ -7,6 +7,7 @@ import {
   PISO_DE_CONTROLES_POR_ESTADO,
   PISO_DE_TOQUE_PX,
   controlTapadoPorOtroElemento,
+  crearBufferAcotado,
   erroresDeCobertura,
   erroresDePrecondicion,
   esControlBajoElPiso,
@@ -169,6 +170,25 @@ describe("erroresDePrecondicion (D1 diagnostic evidence)", () => {
       alcanceDelPreview: { exito: false, diagnostico: diagnosticoFallido },
     });
     expect(fallo).toHaveLength(2);
+  });
+});
+
+/** design.md D2 (task 2.1) — keep-first-bytes eviction, always drained, never merely capped. */
+describe("crearBufferAcotado", () => {
+  it("keeps the first bytes and appends the exact dropped-byte count once the limit is exceeded", () => {
+    const buffer = crearBufferAcotado(10);
+    buffer.agregar("0123456789");
+    buffer.agregar("extra");
+
+    expect(buffer.texto()).toBe("0123456789… (5 more bytes dropped)");
+  });
+
+  it("returns the plain captured text with no marker when nothing was dropped", () => {
+    const buffer = crearBufferAcotado(20);
+    buffer.agregar("hello ");
+    buffer.agregar("world");
+
+    expect(buffer.texto()).toBe("hello world");
   });
 });
 

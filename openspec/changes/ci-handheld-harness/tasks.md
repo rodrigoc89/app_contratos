@@ -43,8 +43,8 @@ Chain strategy: pending
 
 ## Phase 2: D2 — bounded capture buffer
 
-- [ ] 2.1 RED: `geometriaHandheld.spec.ts` — `crearBufferAcotado(limite)` keeps the first bytes past the limit and appends `"… (N more bytes dropped)"` naming the exact dropped-byte count. Must fail — the function does not exist. (R2a)
-- [ ] 2.2 GREEN: implement `crearBufferAcotado`/`BufferAcotado`/`LIMITE_CAPTURA_BYTES` (16 KiB) in `geometriaHandheld.ts` per D2 (keep-first-bytes eviction). Satisfies 2.1.
+- [x] 2.1 RED: `geometriaHandheld.spec.ts` — `crearBufferAcotado(limite)` keeps the first bytes past the limit and appends `"… (N more bytes dropped)"` naming the exact dropped-byte count. Must fail — the function does not exist. (R2a)
+- [x] 2.2 GREEN: implement `crearBufferAcotado`/`BufferAcotado`/`LIMITE_CAPTURA_BYTES` (16 KiB) in `geometriaHandheld.ts` per D2 (keep-first-bytes eviction). Satisfies 2.1.
 
 ## Phase 3: D3/D4 — address parser & reachability wait rewrite
 
