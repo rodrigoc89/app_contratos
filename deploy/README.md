@@ -783,6 +783,39 @@ line: renewal is automatic, so the address only matters once renewal has
 already been failing quietly — which is exactly when an expiry warning is
 the only thing left between the site working and the site going dark.
 
+**Set it on the first run, because re-running this script later will not fix
+it.** `CERTBOT_EMAIL` only reaches `certbot certonly`, and that command is
+invoked with `--keep-until-expiring` — so while the current certificate is
+still valid it exits with `Certificate not yet due for renewal; no action
+taken` and never touches the account. The `[warn]` line keeps appearing on
+every run, the address is never registered, and the script is behaving
+exactly as designed. Measured on this host on 2026-08-28: the certificate
+had 86 days left, so the whole issuance step was a no-op.
+
+The account is a separate object from the certificate, and it is updated
+with a separate command:
+
+```sh
+sudo certbot update_account --email you@example.com --non-interactive --agree-tos
+```
+
+Verifying it is its own trap. `certbot show_account` does not exist in the
+1.21.0 that Ubuntu 22.04 ships, and this version stores
+`{"body": {}, "uri": …}` in `/etc/letsencrypt/accounts/*/*/*/regr.json` — it
+does not cache the contact locally, so an empty `body` there is not evidence
+of failure any more than it is evidence of success. The authoritative record
+lives on the ACME server; what proves the update landed is its response in
+`/var/log/letsencrypt/letsencrypt.log`:
+
+```
+"POST /acme/acct/<id> HTTP/1.1" 200
+"contact": ["mailto:you@example.com"]
+"status": "valid"
+```
+
+The CLI printing `Your e-mail address was updated to …` is what the command
+says. That 200 with the contact echoed back is what Let's Encrypt has.
+
 `CERTBOT_WEBROOT` is overridable, but `nginx-bootstrap.conf` is installed
 as-is and carries the ACME `root` as a literal, so the two must agree. The
 script reads the path out of that conf and refuses a mismatch before
